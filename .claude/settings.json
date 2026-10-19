@@ -21,15 +21,27 @@
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",
-      "Bash(git show:*)"
+      "Bash(git show:*)",
+      "Bash(gh pr view:*)",
+      "Bash(gh pr list:*)",
+      "Bash(gh pr checks:*)",
+      "Bash(gh run list:*)",
+      "Bash(gh run view:*)"
     ],
     "ask": [
       "Bash(git commit:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)",
+      "Bash(gh pr edit:*)",
       "Bash(pnpm add:*)",
       "Bash(pnpm remove:*)"
     ],
     "deny": [
-      "Bash(git push:*)",
+      "Bash(git push --delete:*)",
+      "Bash(git push origin HEAD:main:*)",
+      "Bash(git push origin main:*)",
+      "Bash(git push -f:*)",
+      "Bash(git push --force:*)",
       "Bash(git tag:*)",
       "Bash(git merge:*)",
       "Bash(gh pr merge:*)",
