@@ -1,0 +1,9 @@
+node_modules
+dist
+.astro
+pnpm-lock.yaml
+openspec
+.agents
+.claude
+CHANGELOG.md
+coverage

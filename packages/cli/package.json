@@ -1,0 +1,36 @@
+{
+  "name": "openrouter-langfuse-agent-ts",
+  "version": "0.0.0",
+  "description": "A small CLI that answers questions about OpenRouter, helping users discover the most cost-effective model for their use case.",
+  "license": "MIT",
+  "private": true,
+  "author": "Enrique Javier Amodeo Rubio <eamodeorubio@gmail.com>",
+  "type": "module",
+  "engines": {
+    "node": ">=26"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.5",
+    "@vitest/coverage-v8": "^5.0.5",
+    "nock": "^15.0.2",
+    "tsx": "^4.23.15",
+    "typescript": "^7.0.2",
+    "vitest": "^5.0.5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eamodeorubio/openrouter-langfuse-agent-ts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues"
+  },
+  "homepage": "https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/"
+}

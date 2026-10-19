@@ -1,0 +1,31 @@
+name: Feature or change proposal
+description: Propose new behavior or a change to existing behavior.
+title: 'feat: '
+labels: [enhancement]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Every change to what the product does starts with a spec. Agree on the problem here first, then follow [CONTRIBUTING.md](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/blob/main/CONTRIBUTING.md).
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem do you want to solve?
+      description: Describe the problem before the solution.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What do you have in mind?
+      description: Optional. A sketch of the behavior you want.
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: What else did you consider?
+  - type: checkboxes
+    id: help
+    attributes:
+      label: Taking part
+      options:
+        - label: I would like to write the spec or the code.

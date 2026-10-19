@@ -1,0 +1,25 @@
+# Dependencies and build output
+node_modules
+.pnpm-store/
+dist
+.astro
+coverage
+*.tsbuildinfo
+
+# Secrets: keep the template, ignore everything else
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+
+# Claude Code personal settings
+.claude/settings.local.json
+.claude/worktrees/
+
+# Editors and OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

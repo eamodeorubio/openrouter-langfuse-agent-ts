@@ -1,0 +1,11 @@
+{
+  "version": 1,
+  "skills": {
+    "beautiful-prose": {
+      "source": "SHADOWPR0/beautiful_prose",
+      "sourceType": "github",
+      "skillPath": "SKILL.md",
+      "computedHash": "24333f1b670b844769dfa24eba5f46a426afe484def68bd103893899a52fd546"
+    }
+  }
+}

@@ -1,0 +1,49 @@
+{
+  "name": "openrouter-langfuse-agent-ts-workspace",
+  "description": "A small CLI that answers questions about OpenRouter, helping users discover the most cost-effective model for their use case.",
+  "license": "MIT",
+  "private": true,
+  "author": "Enrique Javier Amodeo Rubio <eamodeorubio@gmail.com>",
+  "type": "module",
+  "engines": {
+    "node": ">=26"
+  },
+  "packageManager": "pnpm@12.14.0",
+  "devDependencies": {
+    "@biomejs/biome": "2.5.15",
+    "@commitlint/cli": "^21.2.4",
+    "@commitlint/config-conventional": "^21.2.4",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.6.0",
+    "prettier": "3.9.10"
+  },
+  "scripts": {
+    "prepare": "husky",
+    "dev": "pnpm --filter openrouter-langfuse-agent-ts run dev",
+    "build": "pnpm --filter \"./packages/*\" run build",
+    "typecheck": "pnpm --filter \"./packages/*\" run typecheck",
+    "lint": "biome lint .",
+    "format": "biome format --write . && prettier --write \"**/*.{md,mdx,yml,yaml}\"",
+    "format:check": "biome format . && prettier --check \"**/*.{md,mdx,yml,yaml}\"",
+    "check": "biome check . && prettier --check \"**/*.{md,mdx,yml,yaml}\"",
+    "test": "pnpm --filter \"./packages/*\" run test",
+    "test:watch": "pnpm --filter openrouter-langfuse-agent-ts run test:watch",
+    "test:coverage": "pnpm --filter \"./packages/*\" run test:coverage",
+    "docs:dev": "pnpm --dir docs dev",
+    "docs:build": "pnpm --dir docs build",
+    "docs:preview": "pnpm --dir docs preview",
+    "docs:preview:stop": "pnpm --dir docs exec astro preview stop"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,mjs,cjs,json,jsonc}": "biome check --write --no-errors-on-unmatched",
+    "*.{md,mdx,yml,yaml}": "prettier --write"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/eamodeorubio/openrouter-langfuse-agent-ts.git"
+  },
+  "bugs": {
+    "url": "https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues"
+  },
+  "homepage": "https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/"
+}

@@ -1,0 +1,65 @@
+schema: spec-driven
+
+context: |
+  This is a small TypeScript CLI that answers users' questions about OpenRouter.
+  Its specialty is helping users discover which model is the most cost-effective
+  for their use case. The agent will be instrumented with Langfuse.
+
+  Read AGENTS.md and QUALITY_RUBRIC.md before writing any artifact. Their stack,
+  engineering constraints and quality rubric apply to specs, designs and tasks.
+  Do not restate them here.
+
+  Write all spec artifacts with the beautiful-prose skill, using the settings
+  given in the per-artifact rules below.
+
+rules:
+  specs:
+    - "Use the beautiful-prose skill with REGISTER: cold_steel, DENSITY: lean, HEAT: cool, LENGTH: short"
+    - "Pick the format that states each requirement most clearly. GIVEN/WHEN/THEN is one option, not the default. Choose from: WHEN/THEN scenarios for behavior over time or across steps; decision tables for input-to-output rules with several cases; rules or invariants (a single SHALL sentence, or a list) for properties that always hold; examples (concrete input and expected output) for formats, parsing and calculations; state or transition tables for lifecycles; error tables (condition, message, exit code) for failure behavior; boundaries and limits as a table of values with the expected result; non-functional constraints as measurable thresholds."
+    - "Mix formats within a spec when the requirements differ. Never pad a requirement with a format that adds nothing. Prefer the shortest format that leaves no room for two readings."
+    - "OpenSpec validation needs each requirement written as '### Requirement: <name>' with a SHALL or MUST statement, plus at least one '#### Scenario: <name>' header. Put a table, rule list or example under the scenario header when WHEN/THEN is not the clearest form. Keep the requirement statement itself to 500 characters or fewer."
+    - "Every requirement must be testable. Write it so a failing test can be derived from it."
+  tasks:
+    - "Use the beautiful-prose skill with REGISTER: cold_steel, DENSITY: lean, HEAT: cool, LENGTH: short"
+    - "Follow the ways of working in AGENTS.md and QUALITY_RUBRIC.md."
+    - "Group tasks into slices. A slice is the smallest change that adds one user-facing increment, and it lands as one commit: `fix`, `feat` or a breaking `feat!`. Name each slice and its commit type. Slices map to commits, never to pull requests. One OpenSpec change is delivered by one or more slices, normally in one pull request (a soft limit), whose title decides the version bump (the largest among its slices). Name the pull request title and the bump it carries. Size each slice for the human reviewer: small enough to review well, large enough to be a meaningful increment, with no numeric limit. If a slice would overload a reviewer, split it so each part still adds something a user can notice. Chores and refactors are commits or pull requests that bump nothing."
+    - "Within a slice, order tasks test first: write the failing integration test that covers the requirements (happy paths and edge cases) before any code. Then, for each piece, write the failing unit test, then the code. State the requirement each test covers. A task never says 'add tests' as a separate step after the code."
+    - "Include a refactor task for each slice only when the rubric calls for it, naming the criterion. At most 3 refactor passes per slice."
+    - "Include a task to update the human-facing docs in any slice that changes how users use the product."
+    - "End every slice with these tasks, in order: run the checks (pnpm check, pnpm typecheck, pnpm test); run the three agent reviewers (reviewer-code-high, reviewer-code-low, reviewer-docs), fix every must-fix finding and run the checks again; write the slice report; wait for user approval; commit with a semantic commit. Never include a push task."
+    - "Do not plan the next slice's work in detail beyond naming it. It starts only after the user approves the current one."
+  proposal:
+    - "Use the beautiful-prose skill with REGISTER: journalistic, DENSITY: standard, HEAT: cool, LENGTH: medium"
+  design:
+    - "Use the beautiful-prose skill with REGISTER: journalistic, DENSITY: standard, HEAT: cool, LENGTH: medium"
+
+# Project context (optional)
+# Add only constraints that should guide OpenSpec artifacts and workflows.
+# Include constraints an agent cannot infer by reading the code.
+# Keep general project documentation and discoverable codebase facts out.
+# Example:
+#   context: |
+#     Designs and tasks must cover Windows, macOS, and Linux
+#     Write all artifacts in Spanish
+
+# Per-artifact rules (optional)
+# Add custom rules for specific artifacts.
+# Example:
+#   rules:
+#     proposal:
+#       - Keep proposals under 500 words
+#       - Always state what is out of scope
+#     tasks:
+#       - Break tasks into chunks of max 2 hours
+
+# Per-operation guidance (optional)
+# Add advisory guidance for how apply and archive work should be conducted.
+# This is separate from artifact rules above.
+# Example:
+#   operations:
+#     apply:
+#       guidance:
+#         - Keep test summaries concise
+#     archive:
+#       guidance:
+#         - Summarize the archive outcome before finishing
