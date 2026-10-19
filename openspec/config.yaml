@@ -26,7 +26,7 @@ rules:
     - "Within a slice, order tasks test first: write the failing integration test that covers the requirements (happy paths and edge cases) before any code. Then, for each piece, write the failing unit test, then the code. State the requirement each test covers. A task never says 'add tests' as a separate step after the code."
     - "Include a refactor task for each slice only when the rubric calls for it, naming the criterion. At most 3 refactor passes per slice."
     - "Include a task to update the human-facing docs in any slice that changes how users use the product."
-    - "End every slice with these tasks, in order: run the checks (pnpm check, pnpm typecheck, pnpm test); run the three agent reviewers (reviewer-code-high, reviewer-code-low, reviewer-docs), fix every must-fix finding and run the checks again; write the slice report; wait for user approval; commit with a semantic commit. Never include a push task."
+    - "End every slice with these tasks, in order: run the checks (pnpm check, pnpm typecheck, pnpm test); run the three agent reviewers (reviewer-code-high, reviewer-code-low, reviewer-docs), fix every must-fix finding and run the checks again; write the slice report; wait for user approval; commit with a semantic commit. Include a push and pull request step only when the user has allowed it, and never merge."
     - "Do not plan the next slice's work in detail beyond naming it. It starts only after the user approves the current one."
   proposal:
     - "Use the beautiful-prose skill with REGISTER: journalistic, DENSITY: standard, HEAT: cool, LENGTH: medium"

@@ -14,7 +14,7 @@ The agent will be instrumented with Langfuse.
 - **Docs:** Starlight (Astro) in `docs/`, published to GitHub Pages by `.github/workflows/docs.yml` when `main` changes.
 - **CI:** GitHub Actions in `.github/workflows/`: Biome check, commit message and PR title lint, OpenSpec validation, typecheck, tests, build and docs build on every push and PR, with the pnpm store cached. On `main`, once the checks pass, the same workflow runs `release-please`.
 - **Security:** `.github/workflows/security.yml` runs CodeQL, dependency review (PRs) and gitleaks. Secrets live in `.env` (git-ignored); `.env.example` lists the variables. Never commit keys.
-- **Claude Code settings:** `.claude/settings.json` is shared. It allows the repo's check scripts and read-only `git` and `openspec` commands, asks before `git commit` and `pnpm add`/`remove`, and denies `git push`, `git tag`, `git merge`, `gh pr merge` and reading `.env` files. Personal overrides go in `.claude/settings.local.json`, which is git-ignored.
+- **Claude Code settings:** `.claude/settings.json` is shared. It allows the repo's check scripts and read-only `git` and `openspec` commands, asks before `git commit`, `git push`, `gh pr create`, `gh pr edit` and `pnpm add`/`remove`, and denies force pushes, pushes to `main`, `git tag`, `git merge`, `gh pr merge` and reading `.env` files. Personal overrides go in `.claude/settings.local.json`, which is git-ignored.
 - **Dependencies:** Dependabot updates npm (root and `docs/`) and Actions weekly.
 
 ## Engineering constraints
@@ -124,10 +124,10 @@ Before saying a slice is done, give the user this report:
 ### Git
 
 - Commit only after the user approves the slice. Never commit on your own.
-- Never push. Pushing is the user's job.
+- You may push a feature branch and open a pull request, but only with the user's permission, and ask first every time. Never push to `main`, never force-push, and never push tags.
 - Use the semantic commit rules in "Commits and versions".
 - Work on a branch named `type/short-name` (`feat/`, `fix/`, `docs/`, `chore/`, `ci/`, `test/`, `refactor/`), never on `main`.
-- Propose the PR title and description to the user. The user pushes, opens and merges the PR. Never merge, tag or release.
+- Propose the PR title and description to the user. With the user's permission you may push the branch and open the PR with `gh pr create`. The user merges it. Never merge, tag or release.
 - Pull requests are squash-merged. The PR title becomes the one commit on `main`, so it must be a Conventional Commit, and it alone sets the version bump. The squash description lists one line per commit squashed (GitHub's "pull request title and commit details" setting does this). Branch commits must still be Conventional Commits. CI lints the title.
 
 ### When uncertain
