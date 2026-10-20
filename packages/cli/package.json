@@ -37,5 +37,8 @@
   "bugs": {
     "url": "https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues"
   },
-  "homepage": "https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/"
+  "homepage": "https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/",
+  "dependencies": {
+    "@openrouter/sdk": "^1.4.25"
+  }
 }

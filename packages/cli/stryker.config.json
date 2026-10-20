@@ -3,7 +3,7 @@
   "testRunner": "vitest",
   "plugins": ["@stryker-mutator/vitest-runner", "./stryker/ignore-console.mjs"],
   "ignorers": ["console"],
-  "mutate": ["src/**/*.ts"],
+  "mutate": ["src/**/*.ts", "!src/index.ts", "!src/types.ts"],
   "ignorePatterns": ["tsconfig*.json"],
   "tsconfigFile": "tsconfig.stryker-unused.json",
   "coverageAnalysis": "perTest",

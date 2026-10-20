@@ -3,5 +3,6 @@ packages:
   - docs
 
 allowBuilds:
+  '@openrouter/sdk': false
   esbuild: true
   sharp: true

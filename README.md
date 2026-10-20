@@ -8,7 +8,7 @@ Ask it what you need to do, and it helps you weigh the options. The agent behind
 
 ## Status
 
-The project has no release yet and is still taking shape. The tooling, the quality checks and the release pipeline are in place. The CLI has not shipped, so there is nothing to install or run yet. When the first feature lands, this page gains a usage section.
+The project has no release yet and is still taking shape. The tooling, the quality checks and the release pipeline are in place, and the CLI can now ask one OpenRouter model one question. The agent that compares models by cost is the next thing to build. See [Usage](#usage) to try what exists.
 
 ## Requirements
 
@@ -32,6 +32,18 @@ pnpm test        # Vitest, with HTTP mocked by nock
 ```
 
 Tests never reach the network. Any call to OpenRouter or Langfuse is mocked.
+
+## Usage
+
+Put your OpenRouter key and a model name in `packages/cli/.env` (the template is `.env.example`), then ask a question:
+
+```sh
+cp .env.example packages/cli/.env   # then fill in the key and the model
+pnpm dev -q "What is a token, and why do providers charge for them?"
+echo "Name one planet." | pnpm dev --model openai/gpt-4o-mini
+```
+
+The answer goes to stdout. The model that served the request and the token usage go to stderr, so pipes stay clean. There is no default model: pass `--model` or set `OPENROUTER_MODEL`. A run exits 0 on success, 1 when the arguments or the settings are wrong, and 2 when the API call fails. The [usage guide](https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/ask-a-question/) covers every case.
 
 ## Releases
 

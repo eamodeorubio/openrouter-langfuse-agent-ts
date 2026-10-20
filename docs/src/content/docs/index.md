@@ -9,7 +9,7 @@ The agent behind the tool will be instrumented with Langfuse, so every run can b
 
 ## Where things stand
 
-The project has no release yet. The tooling, the quality checks and the release pipeline are in place. The CLI has not shipped, so there is nothing to install or run yet. Usage pages will appear here with the first feature.
+The project has no release yet. The tooling, the quality checks and the release pipeline are in place, and the CLI can send one question to an OpenRouter model of your choice. [Ask a question](ask-a-question/) shows how. The part that compares models by cost is still to come.
 
 ## Following along and helping
 
