@@ -13,4 +13,4 @@ The project has no release yet. The tooling, the quality checks and the release 
 
 ## Following along and helping
 
-Every change starts with a written spec and a failing test, and ships as a small, reviewed increment. [How changes are made](how-changes-are-made/) describes the path every change follows. If you want to take part, [CONTRIBUTING.md](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/blob/main/CONTRIBUTING.md) explains the flow from the first spec to the merged pull request.
+Every behavior change starts with a written spec and a failing test, and ships as a small, reviewed increment. [How changes are made](how-changes-are-made/) describes the path every change follows. If you want to take part, [CONTRIBUTING.md](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/blob/main/CONTRIBUTING.md) explains the flow from the first spec to the merged pull request.

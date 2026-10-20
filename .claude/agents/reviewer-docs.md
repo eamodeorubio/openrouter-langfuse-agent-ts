@@ -1,6 +1,6 @@
 ---
 name: reviewer-docs
-description: Read-only reviewer for a finished slice. Checks human-facing docs for prose (beautiful-prose), coherence and completeness. Run after every slice, with the two code reviewers.
+description: Read-only reviewer for a finished change (a product slice or chore work). Checks human-facing docs for prose (beautiful-prose), coherence and completeness. Run on each change that fits it, as AGENTS.md says, with the two code reviewers.
 tools: Read, Grep, Glob, Bash
 ---
 

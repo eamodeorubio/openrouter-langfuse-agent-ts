@@ -1,8 +1,8 @@
 # Contributing
 
-Thanks for wanting to help. Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md). This project is a small CLI that answers questions about OpenRouter and points people to the most cost-effective model for their use case. It stays small on purpose, and the rules below keep it that way.
+Thanks for wanting to help. Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md). The maintainer is the owner listed in [CODEOWNERS](.github/CODEOWNERS), who agrees the direction in issues and merges pull requests. This project is a small CLI that answers questions about OpenRouter and points people to the most cost-effective model for their use case. It stays small on purpose, and the rules below keep it that way.
 
-Write the spec first, write the test first, keep each change small, and let the checks tell you when you are done.
+Write the spec first when the change needs one, write the test first, keep each change small, and let the checks tell you when you are done.
 
 ## Set up
 
@@ -27,58 +27,94 @@ Tests never touch the network. Mock HTTP with `nock`. To run the tool against re
 
 ## Your first change, step by step
 
-This is the whole path from idea to merged pull request.
+This is the whole path from idea to merged pull request. It is one pull request, with the spec inside it.
 
-1. **Talk first.** Open an issue that describes the problem you want to solve. For a bug, say what you ran, what you expected and what happened. Wait for a maintainer to agree on the direction before you invest time.
-2. **Branch.** Branch from `main` with a prefix that matches the kind of change: `feat/`, `fix/`, `docs/`, `chore/`, `ci/`, `test/` or `refactor/`. Nothing else about the name matters.
-3. **Write the spec.** If the change alters what the product does, create an OpenSpec change and get it validated (see "Spec first"). If it alters no behavior, skip to step 5.
-4. **Open a pull request with the spec.** Wait for approval of the spec before you build it. This is the cheapest moment to change your mind.
+1. **Talk first.** Open an issue that describes the problem you want to solve. For a bug, say what you ran, what you expected and what happened. Wait for a maintainer to agree on the direction before you invest time. A trivial chore or a dependency update needs no issue.
+2. **Branch.** Branch from `main`. The branch name is free; only the pull request title matters.
+3. **Write the spec, if the change needs one.** See "Spec first" for when. A small fix or refactor needs none: go to step 5.
+4. **Approve the spec before you build.** You review it, alone or with your agent, and approve it. It is the cheapest moment to change your mind. Link it in the issue if you want the maintainer's early view.
 5. **Write a failing test.** Start with an integration test that covers the requirements, and watch it fail for the right reason.
 6. **Make it pass, one piece at a time.** For each piece, write a failing unit test, then the code. Refactor only when the code falls short of the rubric.
 7. **Update the docs** if users will use the product differently.
 8. **Run the checks.** `pnpm check`, `pnpm typecheck` and `pnpm test` must all pass.
 9. **Review your own work.** Read your diff against the [quality rubric](QUALITY_RUBRIC.md). If you use an AI agent, `.agents/reviewers/` holds the instructions for three read-only reviewers (`reviewer-code-high`, `reviewer-code-low` and `reviewer-docs`, described in [AGENTS.md](AGENTS.md)) that anyone can run. Fix every must-fix finding.
-10. **Commit.** Write commit messages in the Conventional Commits form (see "Commits").
+10. **Commit.** Write commit messages in the Conventional Commits form (see "Commits"). One product slice is one commit.
 11. **Push and ask for review.** Give the pull request a Conventional Commits title (see "Commits"). Describe what changed for the user.
 12. **Respond to review.** Push fixes to the same branch. Only must-fix findings block the merge.
+13. **Archive the spec.** Once review fixes are in, archive the OpenSpec change in a last commit, `chore: archive <change-name>`, just before the merge. If you cannot, the merge is not blocked and the change is archived afterwards.
 
-### A worked example
+### What each kind of change needs
 
-The feature below is invented to show the shape of the work. It is not on the roadmap.
+| Change                            | Spec | Failing test first            | Commit                         | Bump          |
+| --------------------------------- | ---- | ----------------------------- | ------------------------------ | ------------- |
+| New or changed behavior           | yes  | yes                           | `feat:` (`feat!:` if breaking) | minor (major) |
+| Fix that needs a design decision  | yes  | yes                           | `fix:`                         | patch         |
+| Small fix, no design decision     | no   | yes                           | `fix:`                         | patch         |
+| Substantial refactor              | yes  | no, existing tests stay green | `refactor:`                    | none          |
+| Small refactor                    | no   | no, existing tests stay green | `refactor:`                    | none          |
+| Tests only                        | no   | no                            | `test:`                        | none          |
+| Docs only                         | no   | no                            | `docs:`                        | none          |
+| Tooling, CI, dependencies, chores | no   | no                            | `chore:`, `ci:`                | none          |
 
-Say you want the tool to list the cheapest model for a given monthly token budget.
+Steps 3 to 6 above apply as the row says. A technical decision worth remembering needs a spec whatever the row says. When two rows fit, take the stricter one: more required, such as a spec or a failing test. Output wording counts as behavior. The pull request title decides the real bump. Only the title reaches `main`; the branch commits matter for the commit-message check and for the reviewer reading the history. [AGENTS.md](AGENTS.md) adds which agent reviewers run on each row.
 
-- **Issue.** "Let me ask for the cheapest model within a monthly budget." A maintainer agrees.
-- **Spec.** Branch `docs/budget-ranking-spec`. Run `openspec new change budget-ranking`. The proposal names a new capability. The spec holds one requirement, "Rank models by monthly cost", with a decision table under its scenario: token mix and budget in, cheapest model out. Another requirement covers errors in a small table: unknown model, negative budget, missing prices. `openspec validate budget-ranking --strict` passes, and the spec pull request, titled `docs: specify budget ranking`, is approved. It holds no slice and bumps nothing.
-- **Slice 1, `feat:`.** The implementation pull request is on branch `feat/budget-ranking` and delivers the whole spec as two slices, each its own commit. A failing integration test asserts the ranking for three rows of the table. Unit tests drive the cost calculation and the sort. The code makes them pass. The docs gain a usage section. The commit is `feat: rank models by monthly cost`.
-- **Slice 2, `feat:`.** This slice shows the cost breakdown per model, with its own failing tests first. Its commit is `feat: show the cost breakdown per model`.
-- **Supporting commits.** The branch may also carry commits that bump nothing, next to the slice commits, such as `test: cover ties in ranking` or `docs: add budget ranking example`. They are separate commits on the branch, so a reviewer can read them one at a time.
+### Two worked examples
 
-One spec produced two slices, delivered in one pull request. The title is `feat: rank models by monthly cost`, and it sets a minor version bump. The squash merge puts that title on `main` and lists every branch commit, one line each, in the description. The spec pull request before it held no slice and bumped nothing.
+Both features below are invented to show the shape of the work. Neither is on the roadmap.
+
+#### A feature with two specs
+
+Say you want the tool to list the cheapest model for a given monthly token budget, and to export the ranking as CSV.
+
+- **Issue.** "Let me ask for the cheapest model within a monthly budget, and export the result." A maintainer agrees.
+- **Branch.** `budget-ranking`. The whole feature lives on it, spec included.
+- **Specs.** Run `openspec new change budget-ranking`. The proposal names a new capability. The spec holds one requirement, "Rank models by monthly cost", with a decision table under its scenario: token mix and budget in, cheapest model out. A second requirement covers errors in a small table: unknown model, negative budget, missing prices. A second change, `csv-export`, specifies the export. Both pass `openspec validate --strict`, and you approve them before any code. A `docs: specify budget ranking and CSV export` commit may carry them, or they may ride along inside the first product slice. Either is fine.
+- **Product slice 1, `feat:`.** A failing integration test asserts the ranking for three rows of the table. Unit tests drive the cost calculation and the sort. The code makes them pass. The docs gain a usage section. The commit is `feat: rank models by monthly cost`.
+- **Product slice 2, `feat:`.** This product slice shows the cost breakdown per model, with its own failing tests first. Its commit is `feat: show the cost breakdown per model`.
+- **Product slice 3, `feat:`.** This product slice exports the ranking as CSV. Its commit is `feat: export the ranking as CSV`.
+- **Chore work.** Commits that bump nothing sit beside the product slices, such as `test: cover ties in ranking` or `docs: add budget ranking example`. A reviewer can read them one at a time.
+- **Archive.** The last commits are `chore: archive budget-ranking` and `chore: archive csv-export`.
+
+Two specs produced three product slices, delivered in one pull request. The title is `feat: rank models by monthly cost`, and it sets a minor version bump. The squash merge puts that title on `main` and lists every branch commit, one line each, in the description, so the CSV export is recorded there.
+
+#### A small fix with no spec
+
+Say the tool prints a price of `NaN` when a model has no completion price.
+
+- **Issue.** "Show a clear message when a model has no completion price." A maintainer agrees.
+- **Branch.** `missing-completion-price`. There is no OpenSpec change: it is a bug fix with no design decision worth remembering, so the pull request says so.
+- **Product slice, `fix:`.** A failing test feeds the tool a model with no completion price and expects the message. A unit test pins the price formatter. The code makes both pass. The commit is `fix: report models with no completion price`.
+
+The title is `fix: report models with no completion price`, and it sets a patch bump. The pull request has one product slice and no archive commit.
 
 ## Spec first
 
-Every change to what the product does starts with a spec, written with [OpenSpec](https://github.com/Fission-AI/OpenSpec). Code comes after the spec, never before it. A pull request that changes behavior without a matching spec change will be sent back.
+A change needs a spec, written with [OpenSpec](https://github.com/Fission-AI/OpenSpec), when it alters what the product does, makes a substantial refactor, or takes a technical decision worth remembering. A refactor is substantial when it changes the package layout, an interface other code depends on, or a design decision someone will ask about later. If unsure, ask in the issue before you start.
+
+The spec comes before the code it covers and ships in the same pull request. There is no spec-only pull request. A pull request that adds or changes a capability without a spec will be sent back. A pull request normally holds one or two OpenSpec changes; split the work when a reviewer could not take it in.
 
 1. Install the OpenSpec CLI at the version CI uses, with `pnpm add -g @fission-ai/openspec@1.14.3`, or run it ad hoc with `pnpm dlx @fission-ai/openspec@1.14.3 <command>`. Then read `openspec/config.yaml`. It holds the writing rules for each kind of artifact.
 2. Propose the change: `openspec new change <name>`, or `/opsx:propose` if you work with Claude Code.
 3. Fill in the proposal, the spec deltas, the design and the tasks. Requirements may use scenarios, tables, rules, invariants or examples. Pick the form that says the thing most clearly.
 4. Run `openspec validate <name> --strict` until it passes.
-5. Open the pull request with the spec first. Discuss and approve the spec before you build it.
-6. Implement the tasks in a second pull request, as slices. Make its last commit archive the change (`chore: archive <change-name>`).
+5. Approve the spec yourself before you build. The pull request is not where it gets approved.
+6. Implement the tasks as product slices on the same branch. Commit the spec on its own as `docs:` if that helps the reviewer, or let it ride along in another commit.
+7. Once review fixes are in, make the last commit archive the change (`chore: archive <change-name>`). Do this before the merge when you can. If you cannot, the merge goes ahead and the change is archived afterwards in a `chore:` pull request.
 
-Some changes alter no behavior: a refactor, tooling, dependency updates, or a fix to the docs. They need no spec delta. Mark the change with `skip_specs: true` in its `.openspec.yaml`, or skip the change entirely for trivial chores. If you are unsure which side your change falls on, ask in the issue before you start.
+Chores, tooling, dependency updates, docs fixes and small refactors need no spec. A small fix needs none either, but it is still a product slice. If an OpenSpec change already exists but has no spec delta, mark it with `skip_specs: true` in its `.openspec.yaml`.
 
 ## How we build
 
-Work in small slices. A slice is the smallest change that adds one increment of user-facing functionality. Size it for the person who will review it: small enough to review well, large enough to mean something. There is no line count to hit. If your change is growing past what a reviewer can take in, split it so each part still adds something a user can notice. Renames, moves and refactors that prepare the ground can stay in the slice or travel as their own commits that bump nothing, whichever reads more easily. A slice is one `feat:`, `fix:` or breaking (`feat!:`) commit. It maps to a commit, not to a pull request, and supporting `chore:`, `test:` or `docs:` commits sit beside it. A pull request holds the slices that deliver one OpenSpec change, so reviewers can go through it commit by commit.
+Work in small product slices. A product slice is the smallest change that adds one increment of user-facing functionality, and it is one `feat:`, `fix:` or breaking (`feat!:`) commit. Everything else is chore work: `chore:`, `refactor:`, `test:`, `docs:` and `ci:` commits, which bump nothing. Chore work sits beside the product slices, or alone in its own pull request. A pull request of chore work only, such as a substantial refactor, may still carry a spec and its archive commit. Renames, moves and refactors that prepare the ground can stay in a product slice's commit or travel as chore work of their own, whichever reads more easily.
+
+Size a product slice for the person who will review it: small enough to review well, large enough to mean something. There is no line count to hit. If your change is growing past what a reviewer can take in, split it so each part still adds something a user can notice. A pull request holds the product slices that deliver its OpenSpec changes, so reviewers can go through it commit by commit.
 
 - **Test first.** Write a failing test, make it pass, refactor if the code falls short of the [quality rubric](QUALITY_RUBRIC.md), and check again. The test must fail for the right reason before you write any code.
-- **Start wide.** Begin each slice with an integration test that covers the requirements, then add unit tests as the pieces appear.
+- **Start wide.** Begin each product slice with an integration test that covers the requirements, then add unit tests as the pieces appear.
 - **Cover requirements.** Test the happy paths and the edge cases. Skip trivial tests and any test that would pass even if the behavior broke.
 - **Reuse before you write.** Look for existing code first. Extract duplication, but not at the cost of cohesion, readability or clean interfaces.
 - **Refactor with a reason.** Name the rubric criterion the code fails. Do not refactor for taste, and do not overbuild.
-- **Update the docs.** If users will use the product differently, the docs change in the same slice.
+- **Update the docs.** If users will use the product differently, the docs change in the same product slice.
 
 The same rules appear in more detail in [AGENTS.md](AGENTS.md), which AI coding agents read. They apply to people just as much.
 
@@ -93,17 +129,17 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org/). A c
 | `feat!:`, `fix!:`, or a `BREAKING CHANGE:` footer | major (minor while below 1.0) |
 | `docs:`, `chore:`, `ci:`, `test:`, `refactor:`    | none                          |
 
-Pull requests are squash-merged. The pull request title becomes the one commit on `main`, and the title alone sets the version bump. It should carry the largest bump among the slices inside. The squash description lists one line per commit squashed. Your branch commits still have to follow the format, because the hook and CI check them. Keep the title in the same form: `feat: rank models by monthly cost`. CI checks the title with the same rules and re-runs when you edit it.
+Pull requests are squash-merged. The pull request title becomes the one commit on `main`, and the title alone sets the version bump. It should carry the largest bump among the product slices inside. The squash description lists one line per commit squashed. Your branch commits still have to follow the format, because the hook and CI check them. CI checks the title with the same rules and re-runs when you edit it.
 
 Do not edit the version by hand. [release-please](https://github.com/googleapis/release-please) reads the history, opens a release pull request, and bumps the version and the changelog.
 
-Slices exist for review. Releases are decided at the pull request, through its title. The scope of the pull request decides which slices ship together. The title decides what the pull request does to the version: a `fix:`, `feat:` or breaking title puts its slices into the next release with that bump, and a title that bumps nothing ships nothing. Release-please gathers the bumping pull requests into its release pull request, and merging that one cuts the version. A pull request whose changes all sit outside `packages/cli` bumps nothing, whatever its title says.
+Product slices exist for review; releases are decided at the pull request. Its scope decides which product slices ship together, and its title decides the bump: a title that bumps nothing ships nothing. Release-please gathers the pull requests with product slices into its release pull request, and merging that one cuts the version. A pull request whose changes all sit outside `packages/cli` bumps nothing, whatever its title says.
 
 ## Pull requests
 
-- Branch from `main` with the type prefix from step 2 of "Your first change". Pull requests follow the size of one OpenSpec change. A pull request that bumps the version holds one or more slices (`feat:`, `fix:` or breaking commits) plus any supporting commits, and should cover one OpenSpec change as a soft limit. Its title decides the bump. A pull request that bumps nothing (a chore, refactor, docs change or a spec-only change) has no slice, and a chore or refactor has no OpenSpec change. There is no line limit; size it for the reviewer, who can read the branch commit by commit.
+- Branch from `main`. A pull request holds one or more product slices, any chore work, and the OpenSpec changes they deliver. Or it holds chore work only, and bumps nothing. There is no line limit; size it for the reviewer, who can read the branch commit by commit.
 - Give the pull request a Conventional Commits title (see "Commits").
-- Link the OpenSpec change it implements, or say why it has none (a chore or refactor, for example).
+- Link the OpenSpec changes it implements, or say why it has none (a small fix or refactor, for example). Say whether they are archived yet.
 - CI must pass: commit messages, the pull request title, OpenSpec validation, formatting and lint, types, tests, and the docs build.
 - Describe what changed for the user, and list anything you did not verify.
 - Expect a review against the [quality rubric](QUALITY_RUBRIC.md). Findings come in three grades: must fix, should fix and nit. Only must-fix findings block a merge.

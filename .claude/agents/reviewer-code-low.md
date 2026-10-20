@@ -1,6 +1,6 @@
 ---
 name: reviewer-code-low
-description: Read-only reviewer for a finished slice. Checks code detail against QUALITY_RUBRIC.md and cites file and line. Run after every slice, with reviewer-code-high and reviewer-docs.
+description: Read-only reviewer for a finished change (a product slice or chore work). Checks code detail against QUALITY_RUBRIC.md and cites file and line. Run on each change that fits it, as AGENTS.md says, with reviewer-code-high and reviewer-docs.
 tools: Read, Grep, Glob, Bash
 ---
 

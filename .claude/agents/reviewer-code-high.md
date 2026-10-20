@@ -1,6 +1,6 @@
 ---
 name: reviewer-code-high
-description: Read-only reviewer for a finished slice. Checks architecture, module structure and design against QUALITY_RUBRIC.md. Run after every slice, with reviewer-code-low and reviewer-docs.
+description: Read-only reviewer for a finished change (a product slice or chore work). Checks architecture, module structure and design against QUALITY_RUBRIC.md. Run on each change that fits it, as AGENTS.md says, with reviewer-code-low and reviewer-docs.
 tools: Read, Grep, Glob, Bash
 ---
 

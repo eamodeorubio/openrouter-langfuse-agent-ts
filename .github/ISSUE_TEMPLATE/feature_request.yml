@@ -6,7 +6,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Every change to what the product does starts with a spec. Agree on the problem here first, then follow [CONTRIBUTING.md](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/blob/main/CONTRIBUTING.md).
+        A change to what the product does starts with a spec, which ships in the same pull request as the code. Agree on the problem here first, then follow [CONTRIBUTING.md](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/blob/main/CONTRIBUTING.md).
   - type: textarea
     id: problem
     attributes:

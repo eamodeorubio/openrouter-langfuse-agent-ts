@@ -1,6 +1,6 @@
 # Quality rubric
 
-The single yardstick for writing, refactoring and reviewing code in this repo. Implementers use it to decide when to refactor. Reviewers use it to grade a slice.
+The single yardstick for writing, refactoring and reviewing code in this repo. Implementers use it to decide when to refactor. Reviewers use it to grade a change (a product slice or chore work).
 
 ## Criteria
 
@@ -19,14 +19,14 @@ The single yardstick for writing, refactoring and reviewing code in this repo. I
 - Refactor only when the code fails a criterion above. Name the criterion.
 - No trivial refactors and no overengineering. Weigh the complexity a change adds against the quality it buys.
 - Reuse existing code and extract duplication into shared utilities, but never at the cost of cohesion, single responsibility, coupling, abstraction or readability. A refactor that breaks the rubric is not allowed, even to remove duplication.
-- At most 3 refactor passes per slice.
+- At most 3 refactor passes per product slice.
 
 ## Severity
 
 Reviewers classify every finding as one of:
 
-- **must fix:** violates a criterion in a way that blocks the slice (wrong behavior, missing requirement test, security flaw, broken boundary).
+- **must fix:** violates a criterion in a way that blocks the change (wrong behavior, missing requirement test, security flaw, broken boundary).
 - **should fix:** a real weakness that should be addressed unless there is a stated reason not to.
 - **nit:** minor taste or polish. Optional.
 
-Only **must fix** findings block a slice.
+Only **must fix** findings block a change.

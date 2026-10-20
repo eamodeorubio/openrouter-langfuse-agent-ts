@@ -61,7 +61,7 @@ pnpm docs:dev
 
 Everyone taking part follows the [Code of Conduct](CODE_OF_CONDUCT.md). Security problems go through [SECURITY.md](SECURITY.md), not public issues.
 
-Every change to what the product does begins with a spec, written with [OpenSpec](https://github.com/Fission-AI/OpenSpec), and every piece of code begins with a failing test. Changes ship in small slices, each one a [semantic commit](https://www.conventionalcommits.org/). A pull request carries the slices for one change, and its title sets the version bump under [SemVer](https://semver.org/). [CONTRIBUTING.md](CONTRIBUTING.md) walks through the whole flow.
+A change that alters what the product does, or takes a decision worth remembering, begins with a spec written with [OpenSpec](https://github.com/Fission-AI/OpenSpec); so does a substantial refactor. A small fix or refactor needs none. Every behavior change begins with a failing test. Work ships in small product slices, each one a [semantic commit](https://www.conventionalcommits.org/). One pull request carries the spec, all its product slices and any chore work, and its title sets the version bump under [SemVer](https://semver.org/). [CONTRIBUTING.md](CONTRIBUTING.md) walks through the whole flow.
 
 ## License
 
