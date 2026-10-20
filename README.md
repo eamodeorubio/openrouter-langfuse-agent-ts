@@ -49,7 +49,7 @@ The answer goes to stdout. The model that served the request and the token usage
 
 Nobody tags or releases by hand. Versions follow [SemVer](https://semver.org/) and come from the commit history: a `fix:` raises the patch number, a `feat:` raises the minor number, and a breaking change raises the major number. On every push to `main`, once the checks pass, [release-please](https://github.com/googleapis/release-please) opens or updates a release pull request with the next version and the changelog. Merging that pull request creates the tag (`v0.1.0` and so on) and the GitHub release.
 
-Nothing has shipped yet, so the version is `0.0.0`. The first `feat:` that lands will become `v0.1.0`.
+Nothing has shipped yet, so the version is `0.0.0`. The first release will be `v0.1.0`.
 
 ## Documentation
 
