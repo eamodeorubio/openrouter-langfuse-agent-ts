@@ -23,3 +23,6 @@ coverage
 .idea/
 .DS_Store
 Thumbs.db
+
+# Stryker mutation testing: results, report and sandbox
+.stryker/

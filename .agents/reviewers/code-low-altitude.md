@@ -19,6 +19,8 @@ Grade the code and tests against every criterion in `QUALITY_RUBRIC.md`, in deta
 
 - Does each function behave as the requirements say? Look for off-by-one errors, unhandled edge cases, wrong error paths.
 - Do the tests cover the requirements, happy paths and edge cases? Flag trivial tests and tests that would still pass if the behavior broke.
+- Do invariants have property tests (`fast-check`) where a rule holds for every input? Are the generators able to reach the edge cases?
+- If a mutation report is given, is each survivor killed, or disabled with a named mutator and a real "equivalent because" reason? A `Stryker disable` that hides a missing test is a must fix. Do not run `pnpm mutation` yourself unless asked: it is slow and rewrites the incremental state in `.stryker/`. The author supplies the result in the product slice report.
 - Are names, control flow and error messages clear?
 - Is untrusted input validated at the boundary? Are errors handled in one place?
 - Any security problem: secrets, injection, unsafe paths, unchecked network data?

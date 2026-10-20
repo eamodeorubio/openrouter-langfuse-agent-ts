@@ -15,15 +15,20 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "mutation": "stryker run",
+    "mutation:full": "stryker run --force"
   },
   "devDependencies": {
+    "@stryker-mutator/core": "^10.0.0",
+    "@stryker-mutator/vitest-runner": "^10.0.0",
     "@types/node": "^26.6.5",
-    "@vitest/coverage-v8": "^5.0.5",
+    "@vitest/coverage-v8": "4.1.12",
+    "fast-check": "^4.10.2",
     "nock": "^15.0.2",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
-    "vitest": "^5.0.5"
+    "vitest": "4.1.12"
   },
   "repository": {
     "type": "git",
