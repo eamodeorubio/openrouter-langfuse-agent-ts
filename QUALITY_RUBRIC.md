@@ -5,7 +5,7 @@ The single yardstick for writing, refactoring and reviewing code in this repo. I
 ## Criteria
 
 1. **Correctness.** The code behaves as the requirements say, and tests prove it.
-2. **Test coverage of requirements.** Tests cover the happy paths and the edge cases. No trivial tests. No test that passes without really testing anything: each one must fail when the behavior it guards breaks.
+2. **Test coverage of requirements.** Tests cover the happy paths and the edge cases. No trivial tests. No test that passes without really testing anything: each one must fail when the behavior it guards breaks. Where a rule holds for every input, a property test pins it, and surviving mutants are either killed or justified as equivalent.
 3. **Readability.** Code and names are easy to understand and easy to review.
 4. **Single responsibility.** Each function, class and package has one responsibility at its own level.
 5. **High cohesion.** Code that changes together sits together. Code for the same responsibility sits together.

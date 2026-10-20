@@ -16,6 +16,8 @@ pnpm typecheck     # tsc --noEmit
 pnpm test          # Vitest, with HTTP mocked by nock
 pnpm test:watch    # rerun tests on every change
 pnpm test:coverage # tests with a coverage report
+pnpm mutation      # Stryker mutation testing, incremental
+pnpm mutation:full # retest every mutant
 pnpm build         # compile the CLI with tsc
 pnpm docs:dev      # the documentation site, live
 pnpm docs:build    # build it into docs/dist
@@ -36,7 +38,7 @@ This is the whole path from idea to merged pull request. It is one pull request,
 5. **Write a failing test.** Start with an integration test that covers the requirements, and watch it fail for the right reason.
 6. **Make it pass, one piece at a time.** For each piece, write a failing unit test, then the code. Refactor only when the code falls short of the rubric.
 7. **Update the docs** if users will use the product differently.
-8. **Run the checks.** `pnpm check`, `pnpm typecheck` and `pnpm test` must all pass.
+8. **Run the checks.** `pnpm check`, `pnpm typecheck` and `pnpm test` must all pass. When you change `src/` logic, run `pnpm mutation` too and deal with every surviving mutant (see "How we build"). CI does not run it yet.
 9. **Review your own work.** Read your diff against the [quality rubric](QUALITY_RUBRIC.md). If you use an AI agent, `.agents/reviewers/` holds the instructions for three read-only reviewers (`reviewer-code-high`, `reviewer-code-low` and `reviewer-docs`, described in [AGENTS.md](AGENTS.md)) that anyone can run. Fix every must-fix finding.
 10. **Commit.** Write commit messages in the Conventional Commits form (see "Commits"). One product slice is one commit.
 11. **Push and ask for review.** Give the pull request a Conventional Commits title (see "Commits"). Describe what changed for the user.
@@ -112,6 +114,9 @@ Size a product slice for the person who will review it: small enough to review w
 - **Test first.** Write a failing test, make it pass, refactor if the code falls short of the [quality rubric](QUALITY_RUBRIC.md), and check again. The test must fail for the right reason before you write any code.
 - **Start wide.** Begin each product slice with an integration test that covers the requirements, then add unit tests as the pieces appear.
 - **Cover requirements.** Test the happy paths and the edge cases. Skip trivial tests and any test that would pass even if the behavior broke.
+- **Pin invariants with properties.** Use [fast-check](https://fast-check.dev) for rules that hold for every input (round trips, ordering, bounds), and plain examples for named requirements and exact wording. When fast-check finds a counterexample, keep it as an example test.
+- **Mutate to check the tests.** `pnpm mutation` ([Stryker](https://stryker-mutator.io)) breaks the code in small ways and checks that a test fails. It is incremental, so it only retests what changed. Kill each survivor with a better test, often a property.
+- **Equivalent mutants.** Some changes cannot alter behavior (for example `>` to `>=` where both branches return the same value). Try to rewrite the code first. Otherwise disable the mutant with `// Stryker disable next-line <Mutator>: equivalent because <reason>`. Never disable a mutant to hide a missing test. `console` calls, trivial code and static mutants are not mutated; the exact rules are in [AGENTS.md](AGENTS.md) under "Mutation testing". vitest stays pinned until [stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210) is fixed.
 - **Reuse before you write.** Look for existing code first. Extract duplication, but not at the cost of cohesion, readability or clean interfaces.
 - **Refactor with a reason.** Name the rubric criterion the code fails. Do not refactor for taste, and do not overbuild.
 - **Update the docs.** If users will use the product differently, the docs change in the same product slice.

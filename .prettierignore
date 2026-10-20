@@ -7,3 +7,4 @@ openspec
 .claude
 CHANGELOG.md
 coverage
+.stryker

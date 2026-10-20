@@ -13,6 +13,14 @@ updates:
     groups:
       dev-dependencies:
         dependency-type: development
+    # Stryker's vitest runner finds no tests under vitest 5
+    # (https://github.com/stryker-mutator/stryker-js/issues/6210).
+    # Remove this rule and unpin vitest once that issue is fixed.
+    ignore:
+      - dependency-name: vitest
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@vitest/coverage-v8'
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule:

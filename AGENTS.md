@@ -9,7 +9,9 @@ The agent will be instrumented with Langfuse.
 - **Package manager:** `pnpm` (workspace: the CLI in `packages/cli/`, the docs site in `docs/`, and the repo tooling at the root). Never use npm or yarn.
 - **Language:** TypeScript (latest) on Node 26 (see `.nvmrc`), ESM, strict mode.
 - **Format and lint:** `biome` (config in `biome.json`) for TypeScript, JavaScript and JSON. `prettier` (config in `.prettierrc.json`) only for Markdown and YAML. Each file type has one owner. Indentation, line endings and charset come from `.editorconfig`, which both tools read. `.gitattributes` forces LF line endings in Git.
-- **Tests:** `vitest`, in `packages/cli/test/`. Mock HTTP with `nock`; tests must not hit the network.
+- **Tests:** `vitest`, in `packages/cli/test/`. Mock HTTP with `nock`; tests must not hit the network. `fast-check` for property tests of invariants. `stryker` (`@stryker-mutator/core` with the vitest runner) for mutation testing.
+  - `vitest` and `@vitest/coverage-v8` are pinned to 4.1.12, because Stryker's vitest runner finds no tests under vitest 5 ([stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210)). Dependabot ignores their major versions. Remove the pin and the Dependabot ignore rule when that issue is fixed.
+  - We do not use Stryker's TypeScript checker, which does not support TypeScript 7.
 - **Running TypeScript:** `tsx`.
 - **Docs:** Starlight (Astro) in `docs/`, published to GitHub Pages by `.github/workflows/docs.yml` when `main` changes.
 - **CI:** GitHub Actions in `.github/workflows/`: Biome check, commit message and PR title lint, OpenSpec validation, typecheck, tests, build and docs build on every push and PR, with the pnpm store cached. On `main`, once the checks pass, the same workflow runs `release-please`.
@@ -35,6 +37,7 @@ These bind every spec, design and implementation.
 - `pnpm format`: apply Biome and Prettier formatting. `pnpm format:check` only checks formatting.
 - `pnpm typecheck`: `tsc --noEmit`.
 - `pnpm test`: run tests once. `pnpm test:watch` watches. `pnpm test:coverage` reports coverage.
+- `pnpm mutation`: Stryker mutation testing, always in incremental mode: only mutants whose code or tests changed since the last run are retested (state in `packages/cli/.stryker/`, git-ignored). `pnpm mutation:full` ignores that state and retests every mutant. Config in `packages/cli/stryker.config.json`.
 - `pnpm build`: compile `packages/cli/src/` to `packages/cli/dist/` with `tsc`.
 - `pnpm docs:dev`: serve the docs site with live reload (add `-- --open` to open the browser). `pnpm docs:build`: build it into `docs/dist`. `pnpm docs:preview`: serve the built site, so run `docs:build` first. In a terminal it runs in the foreground and Ctrl+C stops it. Astro detaches the server into the background when it detects an agent session (for example `AI_AGENT` or `CLAUDECODE` is set) or has no terminal, and `pnpm docs:preview:stop` stops it. The docs scripts use `pnpm --dir docs`, not `--filter`, because `--filter` prints `ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL` on Ctrl+C.
 
@@ -97,7 +100,18 @@ The path through any row:
 - Always TDD for behavior (see "Change types" for what is exempt): write a failing test, write the code that makes it pass, refactor if the code fails the rubric, then check again.
 - A new test must fail first, and it must fail for the right reason.
 - Tests cover the requirements: happy paths and edge cases. No trivial tests. No tests that pass without really testing anything.
+- Use property tests (`fast-check`) for invariants: round trips, idempotence, ordering, bounds, monotonicity, "never throws on any input". Use example tests for named requirements, exact output wording and specific error cases. A property test must state the invariant in its name, use generators that reach the edge cases (empty, zero, negative, huge, duplicates), and stay offline and fast. When `fast-check` finds a counterexample, keep it as an explicit example test so the regression is named and permanent.
+- Mutation testing (Stryker) checks that the tests would notice a bug. Run `pnpm mutation` whenever you change `src/` logic, product slice or refactor. It is incremental, so it costs only what changed. The score must stay at or above the `break` threshold in `stryker.config.json`. CI does not run it yet, so the author runs it and reports the result in the product slice report.
 - Start each product slice with a failing integration test (in the wide sense) that covers the requirements. Then implement the pieces with failing unit tests where code is added. The integration test may stay red until the small pieces are done.
+
+### Mutation testing
+
+- Read every survivor. Kill it with a better test, which is often a property test. If the invariant was too weak (for example "result is in range" does not pin which value), strengthen the property or add an example.
+- **Equivalent mutants** (a change that cannot alter observable behavior, such as `>` to `>=` where both branches return the same value) are not test failures. First try to rewrite the code so the mutant is no longer equivalent or no longer exists. Only if that harms readability, disable it with `// Stryker disable next-line <MutatorName>: equivalent because <reason>`. Name the mutator and state the reason. Never use a bare `all`, and never disable a mutant to hide a missing test.
+- **No type checker in the loop.** Stryker's TypeScript checker does not support TypeScript 7, so a mutant that no longer compiles still runs, and vitest (which does not type-check) may let it survive. Treat such a survivor as equivalent and disable it with the mutator name and "does not type-check" as the reason. `tsconfigFile` in `stryker.config.json` deliberately names a file that does not exist and `ignorePatterns` keeps the repo's tsconfig files out of the sandbox: both stop Stryker's core from loading the TypeScript API that TS 7 lacks. Remove both when stryker-js#6210 and TS 7 support land.
+- **Static mutants** (mutants in module-level constants, which run only when the file loads) are ignored through `ignoreStatic`. The tests of the code that uses those constants cover them.
+- **No mutation for `console` calls or trivial code.** The `console` ignore plugin in `packages/cli/stryker/` skips `console.*` statements. Trivial code (type declarations, re-exports, constant tables, thin wiring with no logic) is excluded with a `!` glob in `mutate` or a `// Stryker disable` comment with a reason. Do not write tests whose only purpose is to kill a mutant in such code.
+- Do not lower `thresholds` to make a run pass.
 
 ### Refactoring
 
@@ -139,6 +153,7 @@ Before saying a product slice is done, give the user this report:
 - Files changed, and how big the change is, so the human reviewer can judge the load
 - Tests added (names) and their results
 - Format, lint and typecheck results, with the commands used
+- Mutation score (CI does not run mutation testing), the survivors and what was done with each (killed, disabled as equivalent with the reason, or left)
 - Checks left to CI
 - Anything not verified
 - Reviewer findings, and what you did with each

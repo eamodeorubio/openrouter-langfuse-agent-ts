@@ -29,6 +29,8 @@
     "test": "pnpm --filter \"./packages/*\" run test",
     "test:watch": "pnpm --filter openrouter-langfuse-agent-ts run test:watch",
     "test:coverage": "pnpm --filter \"./packages/*\" run test:coverage",
+    "mutation": "pnpm --filter openrouter-langfuse-agent-ts run mutation",
+    "mutation:full": "pnpm --filter openrouter-langfuse-agent-ts run mutation:full",
     "docs:dev": "pnpm --dir docs dev",
     "docs:build": "pnpm --dir docs build",
     "docs:preview": "pnpm --dir docs preview",
