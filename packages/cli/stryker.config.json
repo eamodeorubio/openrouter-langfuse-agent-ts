@@ -8,6 +8,7 @@
   "tsconfigFile": "tsconfig.stryker-unused.json",
   "coverageAnalysis": "perTest",
   "ignoreStatic": true,
+  "concurrency": 2,
   "incremental": true,
   "incrementalFile": ".stryker/incremental.json",
   "reporters": ["clear-text", "progress", "html"],

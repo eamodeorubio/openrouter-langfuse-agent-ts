@@ -2,7 +2,6 @@ import {
   ConnectionError,
   HTTPClientError,
   OpenRouterError,
-  ResponseValidationError,
   SDKValidationError,
 } from '@openrouter/sdk/models/errors';
 import { ApiError } from './errors.js';
@@ -33,7 +32,7 @@ const oneLine = (text: string): string => {
 };
 
 export const isShapeError = (error: unknown): boolean =>
-  error instanceof ResponseValidationError ||
+  // The SDK makes `instanceof SDKValidationError` match a ResponseValidationError too.
   error instanceof SDKValidationError ||
   // A malformed chunk in a stream escapes the SDK as a bare ZodError, which
   // is not one of its classes and whose message is a long validation dump.

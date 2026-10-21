@@ -157,6 +157,21 @@ describe('ask: HTTP and network failures', () => {
     );
   });
 
+  it('collapses runs of whitespace in the API message and trims its ends', async () => {
+    serveAlways(500, {
+      error: { code: 500, message: '  one\n\n  two   three\t ' },
+    });
+    expect((await failure()).message).toBe('API error 500: one two three');
+  });
+
+  it.each([
+    ['exactly 200 characters is kept whole', 200, 'x'.repeat(200)],
+    ['201 characters is cut to 200 and marked', 201, `${'x'.repeat(200)}…`],
+  ])('a message of %s', async (_name, length, expected) => {
+    serveAlways(500, { error: { code: 500, message: 'x'.repeat(length) } });
+    expect((await failure()).message).toBe(`API error 500: ${expected}`);
+  });
+
   it('turns a plain-text server error into an ApiError with the status', async () => {
     serveAlways(500, 'upstream exploded' as unknown as nock.Body);
     expect((await failure()).message).toMatch(/^API error 500: /);

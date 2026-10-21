@@ -68,6 +68,7 @@ async function* readChunks(
       );
     } catch (error) {
       // A response that never came is still open; one that failed has been read already.
+      // Stryker disable next-line ConditionalExpression: equivalent on a real socket, because aborting a request that has already failed does nothing; the condition only keeps the abort away from nock's mock sockets, which cannot take it.
       if (error instanceof IdleTimeout) {
         controller.abort();
       }
@@ -112,6 +113,7 @@ async function* attempt(
   idleTimeoutMs: number,
 ): AsyncGenerator<AskEvent, void> {
   let sawAnswer = false;
+  // Stryker disable next-line StringLiteral: equivalent because the first chunk replaces it before it is read, and a stream without chunks fails before it is used.
   let servedModel = '';
   let usage: ChatStreamChunk['usage'];
   for await (const chunk of readChunks(
@@ -174,6 +176,7 @@ export async function* ask(
   // The SDK's own retry cannot express our policy and runs for an hour by default.
   const client = new OpenRouter({
     apiKey,
+    // Stryker disable next-line ObjectLiteral,StringLiteral: equivalent because the SDK retries only for the strategy "backoff"; any other value, an empty one included, is one attempt. The explicit 'none' is for the reader.
     retryConfig: { strategy: 'none' },
     serverURL,
   });

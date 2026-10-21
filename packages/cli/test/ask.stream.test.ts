@@ -215,30 +215,51 @@ describe('ask: the events', () => {
 });
 
 describe('ask: housekeeping', () => {
-  it('leaves no timer running once the stream has ended', async () => {
-    const timers = () =>
-      process.getActiveResourcesInfo().filter((name) => name === 'Timeout')
-        .length;
-    reply(200, good);
-    const before = timers();
-    const { error } = await collect();
-    expect(error).toBeUndefined();
-    await new Promise((resolve) => setImmediate(resolve));
-    expect(timers()).toBeLessThanOrEqual(before);
-  });
-
-  it('leaves no timer running once the stream has failed either', async () => {
-    const timers = () =>
-      process.getActiveResourcesInfo().filter((name) => name === 'Timeout')
-        .length;
-    reply(
-      200,
-      sseBody(contentChunk('Hel'), errorChunk(500, 'provider failed')),
-    );
-    const before = timers();
-    await failure();
-    await new Promise((resolve) => setImmediate(resolve));
-    expect(timers()).toBeLessThanOrEqual(before);
+  // A timer left running holds the process open after the answer is done. The
+  // idle timers are told apart by a duration nothing else uses, and each one
+  // must be cleared however the wait ends.
+  it.each([
+    ['the stream has ended', () => reply(200, good)],
+    [
+      'the request has failed',
+      () => reply(401, { error: { code: 401, message: 'no' } }),
+    ],
+    [
+      'the stream has failed',
+      () =>
+        reply(
+          200,
+          sseBody(contentChunk('Hel'), errorChunk(500, 'provider failed')),
+        ),
+    ],
+  ])('clears every idle timer it starts once %s', async (_name, arrange) => {
+    const idle = 54_321;
+    const started: unknown[] = [];
+    const cleared: unknown[] = [];
+    const realSet = globalThis.setTimeout;
+    const realClear = globalThis.clearTimeout;
+    vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
+      callback: () => void,
+      ms?: number,
+    ) => {
+      const handle = realSet(callback, ms);
+      if (ms === idle) {
+        started.push(handle);
+      }
+      return handle;
+    }) as typeof setTimeout);
+    vi.spyOn(globalThis, 'clearTimeout').mockImplementation(((
+      handle?: Parameters<typeof clearTimeout>[0],
+    ) => {
+      cleared.push(handle);
+      realClear(handle);
+    }) as typeof clearTimeout);
+    arrange();
+    await collect({ idleTimeoutMs: idle });
+    expect(started.length).toBeGreaterThan(0);
+    for (const handle of started) {
+      expect(cleared).toContain(handle);
+    }
   });
 });
 
@@ -417,6 +438,25 @@ describe('ask: a stream that is cut off or goes quiet', () => {
     // Counted from sending: about IDLE. Counted from the response: about 1.8 * IDLE.
     expect(elapsed).toBeGreaterThanOrEqual(IDLE - 20);
     expect(elapsed).toBeLessThan(IDLE * 1.5);
+  });
+
+  it('waits for a first chunk that comes after the response, within the limit', async () => {
+    await withServer(
+      (_request, response) => {
+        streamHead(response);
+        response.flushHeaders();
+        setTimeout(() => {
+          response.write(sseEvent(contentChunk('late')));
+          response.write(sseEvent(usageChunk(USAGE)));
+          response.end(DONE);
+        }, IDLE * 0.3);
+      },
+      async (serverURL) => {
+        const { events, error } = await collect(options(serverURL));
+        expect(error).toBeUndefined();
+        expect(textOf(events, 'content')).toBe('late');
+      },
+    );
   });
 
   it('times out on a gap after text has arrived, keeps the text, hangs up, and does not retry', async () => {
