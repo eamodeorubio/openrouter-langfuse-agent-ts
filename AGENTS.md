@@ -14,7 +14,7 @@ The agent will be instrumented with Langfuse.
   - We do not use Stryker's TypeScript checker, which does not support TypeScript 7.
 - **Running TypeScript:** `tsx`.
 - **Docs:** Starlight (Astro) in `docs/`, published to GitHub Pages by `.github/workflows/docs.yml` when `main` changes.
-- **CI:** GitHub Actions in `.github/workflows/`: Biome check, commit message and PR title lint, OpenSpec validation, typecheck, tests, build and docs build on every push and PR, with the pnpm store cached. On `main`, once the checks pass, the same workflow runs `release-please`.
+- **CI:** GitHub Actions in `.github/workflows/`: Biome check, commit message and PR title lint, OpenSpec validation, typecheck, tests, build and docs build on every push and PR, with the pnpm store cached. A separate `mutation` job runs Stryker: on a PR over the source files the PR changed, on `main` over everything (see "Mutation testing"). On `main`, once the checks pass, the same workflow runs `release-please`.
 - **Security:** `.github/workflows/security.yml` runs CodeQL, dependency review (PRs) and gitleaks. Secrets live in `.env` (git-ignored); `.env.example` lists the variables. Never commit keys.
 - **Claude Code settings:** `.claude/settings.json` is shared. It allows the repo's check scripts and read-only `git` and `openspec` commands, asks before `git commit`, `git push`, `gh pr create`, `gh pr edit` and `pnpm add`/`remove`, and denies force pushes, pushes to `main`, `git tag`, `git merge`, `gh pr merge` and reading `.env` files. Personal overrides go in `.claude/settings.local.json`, which is git-ignored.
 - **Dependencies:** Dependabot updates npm (root and `docs/`) and Actions weekly.
@@ -101,7 +101,7 @@ The path through any row:
 - A new test must fail first, and it must fail for the right reason.
 - Tests cover the requirements: happy paths and edge cases. No trivial tests. No tests that pass without really testing anything.
 - Use property tests (`fast-check`) for invariants: round trips, idempotence, ordering, bounds, monotonicity, "never throws on any input". Use example tests for named requirements, exact output wording and specific error cases. A property test must state the invariant in its name, use generators that reach the edge cases (empty, zero, negative, huge, duplicates), and stay offline and fast. When `fast-check` finds a counterexample, keep it as an explicit example test so the regression is named and permanent.
-- Mutation testing (Stryker) checks that the tests would notice a bug. Run `pnpm mutation` whenever you change `src/` logic, product slice or refactor. It is incremental, so it costs only what changed. The score must stay at or above the `break` threshold in `stryker.config.json`. CI does not run it yet, so the author runs it and reports the result in the product slice report.
+- Mutation testing (Stryker) checks that the tests would notice a bug. Run `pnpm mutation` whenever you change `src/` logic, product slice or refactor. It is incremental, so it costs only what changed. The score must stay at or above the `break` threshold in `stryker.config.json`. CI runs it too, but its result arrives after the PR is opened, so the author runs it first and reports the result in the product slice report.
 - Start each product slice with a failing integration test (in the wide sense) that covers the requirements. Then implement the pieces with failing unit tests where code is added. The integration test may stay red until the small pieces are done.
 
 ### Mutation testing
@@ -111,6 +111,7 @@ The path through any row:
 - **No type checker in the loop.** Stryker's TypeScript checker does not support TypeScript 7, so a mutant that no longer compiles still runs, and vitest (which does not type-check) may let it survive. Treat such a survivor as equivalent and disable it with the mutator name and "does not type-check" as the reason. `tsconfigFile` in `stryker.config.json` deliberately names a file that does not exist and `ignorePatterns` keeps the repo's tsconfig files out of the sandbox: both stop Stryker's core from loading the TypeScript API that TS 7 lacks. Remove both when stryker-js#6210 and TS 7 support land.
 - **Static mutants** (mutants in module-level constants, which run only when the file loads) are ignored through `ignoreStatic`. The tests of the code that uses those constants cover them.
 - **No mutation for `console` calls or trivial code.** The `console` ignore plugin in `packages/cli/stryker/` skips `console.*` statements. Trivial code (type declarations, re-exports, constant tables, thin wiring with no logic) is excluded with a `!` glob in `mutate` or a `// Stryker disable` comment with a reason. Do not write tests whose only purpose is to kill a mutant in such code.
+- **In CI.** The `mutation` job in `.github/workflows/ci.yml` uses the same incremental mode, with its results cached in GitHub Actions. A pull request restores its own last results, else those of `main`, and runs `.github/scripts/mutation-pr.sh`: `--mutate` on the source files the PR changed; an incremental run over everything when only tests or configuration changed; nothing when neither did. On `main` the job runs over everything and saves the results the pull requests start from. A cache not used for seven days is evicted, and the next run is a cold one and takes longer. With a warm cache the score is that of the whole report, cached results for the files the PR did not touch included; with a cold cache it is the score of the changed files alone, which is the stricter test. A PR run covers only the files it changes, so a PR that weakens the tests of code it does not touch is caught by the run on `main` after the merge. A failed run keeps its `report.html` as the `stryker-report` artifact.
 - Do not lower `thresholds` to make a run pass.
 
 ### Refactoring
@@ -153,7 +154,7 @@ Before saying a product slice is done, give the user this report:
 - Files changed, and how big the change is, so the human reviewer can judge the load
 - Tests added (names) and their results
 - Format, lint and typecheck results, with the commands used
-- Mutation score (CI does not run mutation testing), the survivors and what was done with each (killed, disabled as equivalent with the reason, or left)
+- Mutation score, the survivors and what was done with each (killed, disabled as equivalent with the reason, or left)
 - Checks left to CI
 - Anything not verified
 - Reviewer findings, and what you did with each

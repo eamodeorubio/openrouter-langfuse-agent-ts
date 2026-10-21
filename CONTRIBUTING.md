@@ -38,7 +38,7 @@ This is the whole path from idea to merged pull request. It is one pull request,
 5. **Write a failing test.** Start with an integration test that covers the requirements, and watch it fail for the right reason.
 6. **Make it pass, one piece at a time.** For each piece, write a failing unit test, then the code. Refactor only when the code falls short of the rubric.
 7. **Update the docs** if users will use the product differently.
-8. **Run the checks.** `pnpm check`, `pnpm typecheck` and `pnpm test` must all pass. When you change `src/` logic, run `pnpm mutation` too and deal with every surviving mutant (see "How we build"). CI does not run it yet.
+8. **Run the checks.** `pnpm check`, `pnpm typecheck` and `pnpm test` must all pass. When you change `src/` logic, run `pnpm mutation` too and deal with every surviving mutant (see "How we build"). CI runs it too, on the source files your pull request changes, but only after you open it, so run it first.
 9. **Review your own work.** Read your diff against the [quality rubric](QUALITY_RUBRIC.md). If you use an AI agent, `.agents/reviewers/` holds the instructions for three read-only reviewers (`reviewer-code-high`, `reviewer-code-low` and `reviewer-docs`, described in [AGENTS.md](AGENTS.md)) that anyone can run. Fix every must-fix finding.
 10. **Commit.** Write commit messages in the Conventional Commits form (see "Commits"). One product slice is one commit.
 11. **Push and ask for review.** Give the pull request a Conventional Commits title (see "Commits"). Describe what changed for the user.
