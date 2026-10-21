@@ -5,8 +5,8 @@ context: |
   Its specialty is helping users discover which model is the most cost-effective
   for their use case. The agent will be instrumented with Langfuse.
 
-  Read AGENTS.md and QUALITY_RUBRIC.md before writing any artifact. Their stack,
-  engineering constraints and quality rubric apply to specs, designs and tasks.
+  Read AGENTS.md and QUALITY_RUBRIC.md before writing any artifact. Their
+  constraints and quality rubric apply to specs, designs and tasks.
   Do not restate them here.
 
   Write all spec artifacts with the beautiful-prose skill, using the settings
@@ -21,15 +21,11 @@ rules:
     - "Every requirement must be testable. Write it so a failing test can be derived from it."
   tasks:
     - "Use the beautiful-prose skill with REGISTER: cold_steel, DENSITY: lean, HEAT: cool, LENGTH: short"
-    - "Follow the ways of working in AGENTS.md and QUALITY_RUBRIC.md."
-    - "Group tasks into product slices. A product slice is the smallest change that adds one user-facing increment, and it lands as one commit: `fix`, `feat` or a breaking `feat!`. Name each product slice and its commit type. A change is delivered by one or more product slices in the same pull request as the spec, which normally holds one or two changes. Name the pull request title and the bump it carries (the largest among its product slices). Size each product slice for the human reviewer: small enough to review well, large enough to be a meaningful increment. If one would overload a reviewer, split it so each part still adds something a user can notice. Everything else (chores, refactors, tests, docs) is chore work: commits that bump nothing."
-    - "Within a product slice, order tasks test first: write the failing integration test that covers the requirements (happy paths and edge cases) before any code. Then, for each piece, write the failing unit test, then the code. State the requirement each test covers. A task never says 'add tests' as a separate step after the code."
-    - "Include a refactor task for each product slice only when the rubric calls for it, naming the criterion. At most 3 refactor passes per product slice."
-    - "Include a task to update the human-facing docs in any product slice that changes how users use the product."
-    - "End every product slice with these tasks, in order: run the checks (pnpm check, pnpm typecheck, pnpm test); run the three agent reviewers (reviewer-code-high, reviewer-code-low, reviewer-docs), fix every must-fix finding and run the checks again; write the product slice report; wait for user approval, which also approves the commit; then commit with a semantic commit. Include a push and pull request step only when the user has allowed it, and never merge."
-    - "A substantial refactor is chore work with a spec: plan its tasks without the failing-test-first step (existing tests stay green), with the reviewers AGENTS.md names for its row in 'Change types', and the same approval and archive tasks."
-    - "Do not plan the next product slice's work in detail beyond naming it. It starts only after the user approves the current one."
-    - "After the last product slice, add a task to archive the change (`chore: archive <change-name>`). Do it before the merge when possible. It never blocks the merge."
+    - "Follow the ways of working in AGENTS.md and QUALITY_RUBRIC.md. Group tasks into product slices, name each slice and its commit type, and name the pull request title and its bump."
+    - "Within a product slice, order tasks test first: the failing integration test before any code, then for each piece the failing unit test, then the code. State the requirement each test covers. Never add 'add tests' as a step after the code. Substantial refactors skip the failing test: existing tests stay green."
+    - "Add a refactor task only when the rubric calls for it, naming the criterion. Add a docs task in any slice that changes how users use the product."
+    - "End every product slice with: run the checks; run the row's reviewers and fix every must-fix finding; write the report; wait for user approval, which also approves the commit; commit. Add a push and pull request step only when the user has allowed it. Never merge."
+    - "Do not plan the next product slice beyond naming it. After the last slice, add a task to archive the change (`chore: archive <change-name>`)."
   proposal:
     - "Use the beautiful-prose skill with REGISTER: journalistic, DENSITY: standard, HEAT: cool, LENGTH: medium"
   design:
@@ -38,39 +34,7 @@ rules:
 operations:
   apply:
     guidance:
-      - "Follow AGENTS.md over the default flow. Stop after each product slice and wait for the user's approval. Do not continue to the next product slice. Commit once the user has approved the product slice report; push or open a pull request only with the user's permission."
-      - "Work test first inside each product slice, as the tasks order it."
+      - "Follow AGENTS.md over the default flow. Stop after each product slice and wait for the user's approval."
   archive:
     guidance:
-      - "Archive after the last product slice and the review fixes, as its own commit: `chore: archive <change-name>`. Commit it once the user has approved archiving. If archiving cannot happen before the merge, say so; it never blocks the merge."
-
-# Project context (optional)
-# Add only constraints that should guide OpenSpec artifacts and workflows.
-# Include constraints an agent cannot infer by reading the code.
-# Keep general project documentation and discoverable codebase facts out.
-# Example:
-#   context: |
-#     Designs and tasks must cover Windows, macOS, and Linux
-#     Write all artifacts in Spanish
-
-# Per-artifact rules (optional)
-# Add custom rules for specific artifacts.
-# Example:
-#   rules:
-#     proposal:
-#       - Keep proposals under 500 words
-#       - Always state what is out of scope
-#     tasks:
-#       - Break tasks into chunks of max 2 hours
-
-# Per-operation guidance (optional)
-# Add advisory guidance for how apply and archive work should be conducted.
-# This is separate from artifact rules above.
-# Example:
-#   operations:
-#     apply:
-#       guidance:
-#         - Keep test summaries concise
-#     archive:
-#       guidance:
-#         - Summarize the archive outcome before finishing
+      - "Archive as its own commit once the user has approved it. It never blocks the merge."

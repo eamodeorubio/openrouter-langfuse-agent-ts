@@ -14,16 +14,7 @@ The change to review: use `git status` and `git diff` to see which user-facing b
 
 ## Prose settings
 
-Human-facing docs (README, guides and similar) must be written with the `beautiful-prose` skill in `.agents/skills/beautiful-prose/`, using these settings. They mirror the "Writing" section of `AGENTS.md`; if the two ever differ, `AGENTS.md` wins.
-
-```
-REGISTER: journalistic
-DENSITY: standard
-HEAT: warm
-LENGTH: long
-```
-
-Headings and bullets are fine in docs where they help the reader. The skill's other rules still apply.
+Use the settings in the "Writing" section of `AGENTS.md`.
 
 ## What to check
 
