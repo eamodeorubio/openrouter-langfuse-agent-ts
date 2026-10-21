@@ -40,7 +40,7 @@ The whole path is one pull request, with the spec inside it.
 10. **Commit.** Use the Conventional Commits form (see "Commits and versions"). One product slice is one commit.
 11. **Push and open the pull request.** Give it a Conventional Commits title and describe what changed for the user. List anything you did not verify.
 12. **Respond to review.** Push fixes to the same branch. Only must-fix findings block the merge.
-13. **Archive the spec.** Once the review fixes are in, make the last commit `chore: archive <change-name>`. If you cannot do it before the merge, the merge goes ahead and the change is archived afterwards in a `chore:` pull request.
+13. **Archive the spec.** Once the review fixes are in, check the change against the code (`/opsx:verify` in Claude Code, the `openspec-verify-change` skill in other agents) and fix what it finds. Then make the last commit `chore: archive <change-name>`. If you cannot do it before the merge, the merge goes ahead and the change is archived afterwards in a `chore:` pull request.
 
 ### What each kind of change needs
 
@@ -98,7 +98,7 @@ The spec comes before the code it covers and ships in the same pull request. The
 4. Run `openspec validate <name> --strict` until it passes.
 5. Approve the spec yourself before you build.
 6. Implement the tasks as product slices on the same branch. The spec may travel as its own `docs:` commit or ride along inside another one.
-7. Archive the change in the last commit (`chore: archive <change-name>`).
+7. Verify the change against the code, fix what that finds, and archive it in the last commit (`chore: archive <change-name>`).
 
 If an OpenSpec change already exists but has no spec delta, mark it with `skip_specs: true` in its `.openspec.yaml`.
 

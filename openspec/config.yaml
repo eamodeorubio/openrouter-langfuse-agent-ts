@@ -37,4 +37,5 @@ operations:
       - "Follow AGENTS.md over the default flow. Stop after each product slice and wait for the user's approval."
   archive:
     guidance:
+      - "Before archiving, verify the change with /opsx:verify (or the openspec-verify-change skill) and fix what it finds. If you are unsure or blocked, ask the user."
       - "Archive as its own commit once the user has approved it. It never blocks the merge."

@@ -27,7 +27,7 @@ This repo uses [OpenSpec](https://github.com/Fission-AI/OpenSpec). Specs and cha
 - **Writing it.** The spec exists before the code it covers. Propose it with `/opsx:propose` in Claude Code or the `openspec-propose` skill in other agents.
 - **Approving it.** The user reviews and approves the spec locally, in the dev session, before implementation starts. The pull request is not where the spec gets approved.
 - **Delivering it.** The spec ships in the same pull request as the code. There is no spec-only pull request.
-- **Archiving it.** Archive each change with `chore: archive <change-name>`, ideally as the last commit before merge, once the user has approved it. This is a preference, not a gate.
+- **Archiving it.** Archive each change with `chore: archive <change-name>`, ideally as the last commit before merge, once the user has approved it. Before archiving, verify the change with `/opsx:verify` (or the `openspec-verify-change` skill) and fix what it finds. If you are unsure or blocked, ask the user. Archiving itself is a preference, not a gate.
 - **Issues.** Agents start from the user's request and do not open issues.
 
 Skills for other agents are in `.agents/skills/`.
@@ -57,7 +57,7 @@ A technical decision we want to remember needs a spec whatever the row says. Out
 2. Build, test first if the row says so (see "Test-driven development"). Refactor only where the rubric calls for it, at most 3 passes per product slice.
 3. Update the human-facing docs if usage changes, run `pnpm check`, `pnpm typecheck` and `pnpm test`, run the row's reviewers and fix every must-fix finding.
 4. Give the report (full or short) and wait for the user's approval. That approval is the only gate: it approves the work and its commit, so commit once it is given. Never commit before it, and never on your own. The next product slice starts only after this approval.
-5. At the end of the PR, archive each OpenSpec change as the last commit, once the user has approved it.
+5. At the end of the PR, verify each OpenSpec change with `/opsx:verify` and fix what it finds (ask the user if you are unsure or blocked), then archive it as the last commit, once the user has approved it.
 
 ### Test-driven development
 
