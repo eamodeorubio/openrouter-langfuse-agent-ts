@@ -34,10 +34,19 @@ Two facts shape the loop. A streamed response may end in tool calls with no text
 ```
 ask.ts        ask(config, question): the loop. Yields AskEvent.
 chat.ts       one streamed request, with retry and idle timeout (today's ask.ts body)
+assemble.ts   joins tool-call and reasoning fragments into whole calls and blocks
+turn.ts       the assistant message of a round; runs a round's tool calls together
 retry.ts      the retry rule, shared by chat.ts and the tools
+usage.ts      adds the token counts of the rounds
+text.ts       one-line text, and the key redaction
 instructions.ts   the system message
-tools/        registry.ts, getModel.ts, searchModels.ts, catalog.ts (SDK calls and shaping), prices.ts
 client.ts     builds the SDK client (key, no SDK retry, serverURL)
+tools/
+  types.ts, registry.ts   what a tool is; the tools offered; running one call
+  catalog.ts              the call to the models API and its expected failures
+  getModel.ts, searchModels.ts   the two catalog tools
+  prices.ts, shape.ts     prices per million tokens; flat, snake_case results
+  calculate.ts, arithmetic.ts    the calculator tool; the parser behind it
 ```
 
 `ask` keeps its name and signature, so `run` changes only where it must. The SDK is now imported in `client.ts`, `chat.ts` and `catalog.ts`; "one module" no longer holds, and this change drops it on purpose. The alternative, a single gateway module for every SDK call, would bundle streaming, retry and catalog shaping under one reason to change.

@@ -38,7 +38,7 @@ Delivers `search_models` and the shared catalog wrapper. Spec: *search_models ar
 - [x] 3.7 Update the user-facing docs: `README.md`, `docs/src/content/docs/ask-a-question.md` (a section on searching with the filters table, a real `--verbose` run) and `docs/src/content/docs/index.md`. Use the beautiful-prose settings in AGENTS.md. Verify every command shown runs as written, and that `pnpm docs:build` succeeds.
 - [x] 3.8 Run `pnpm check`, `pnpm typecheck`, `pnpm test`, `pnpm mutation`; read every survivor and kill or justify it.
 - [x] 3.9 Run `reviewer-code-high`, `reviewer-code-low`, `reviewer-docs`; fix every must-fix finding.
-- [ ] 3.10 Write the full report. Wait for the user's approval, which also approves the commit. Commit `feat: let the agent search the model catalog`.
+- [x] 3.10 Write the full report. Wait for the user's approval, which also approves the commit. Commit `feat: let the agent search the model catalog`.
 
 ## 4. Slice 3: `feat: let the agent do arithmetic` (minor)
 
@@ -57,7 +57,7 @@ Delivers `calculate` and the system message's line about arithmetic. Spec: `spec
 
 ## 5. Close
 
-- [ ] 5.1 After all three slices: `/opsx:verify add-model-tools`, fix what it finds, then archive as the last commit: `chore: archive add-model-tools`, once the user approves.
+- [x] 5.1 After all three slices: `/opsx:verify add-model-tools`, fix what it finds, then archive as the last commit: `chore: archive add-model-tools`, once the user approves.
 
 ## Workflow follow-up
 

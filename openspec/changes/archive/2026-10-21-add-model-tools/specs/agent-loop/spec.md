@@ -36,7 +36,7 @@ The CLI SHALL start every tool call of a round at once and wait for all of them.
 - **THEN** the run completes
 
 ### Requirement: Reasoning continuity
-The assistant message the CLI appends after a round SHALL carry the round's text, its tool calls and its reasoning details exactly as the model sent them. Reasoning details streamed in fragments SHALL be joined without loss. The CLI SHALL NOT alter, drop, reorder or print encrypted or signed blocks.
+The assistant message the CLI appends after a round SHALL carry the round's text, its tool calls and its reasoning details exactly as the model sent them. Reasoning details streamed in fragments SHALL be joined without loss. The CLI SHALL NOT alter, drop, reorder or print encrypted or signed blocks. The one addition: a block of a complete (non-streamed) response that has no index is sent with its position as its index, so that two such blocks stay apart.
 
 #### Scenario: Details returned
 - **WHEN** round 1 streams reasoning details in 3 fragments and a tool call
@@ -74,7 +74,7 @@ A tool call that arrives without an id SHALL fail the run as an API failure: one
 - **THEN** stderr holds one line saying the response held a tool call without an id, no tool ran, and the exit code is 2
 
 ### Requirement: Tool activity on stderr
-With `--verbose`, and only then, the CLI SHALL write for each tool call one line to stderr, before the call runs: `tool: <name> <arguments>`, the arguments as received, on one line, cut at 200 characters with `…`. Stdout SHALL NOT carry it. The lines do not depend on `--thinking`.
+With `--verbose`, and only then, the CLI SHALL write for each tool call one line to stderr, before the call runs: `tool: <name> <arguments>`, the arguments as received, on one line (a run of whitespace becomes one space), cut at 200 characters with `…`. Stdout SHALL NOT carry it. The lines do not depend on `--thinking`.
 
 ```
 tool: get_model {"slug":"openai/gpt-5"}
