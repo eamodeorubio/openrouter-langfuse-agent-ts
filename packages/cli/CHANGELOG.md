@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v0.2.0...v0.3.0) (2026-10-21)
+
+
+### Features
+
+* answer with live model data from OpenRouter ([#21](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues/21)) ([0109d94](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/commit/0109d94733a11ab92e761aadb43776a1951ad360))
+
 ## [0.2.0](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v0.1.0...v0.2.0) (2026-10-21)
 
 
