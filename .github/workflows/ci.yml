@@ -10,7 +10,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ci-${{ github.ref }}
+  # A title edit has its own group, so it cannot cancel a run that is checking the code.
+  group: ci-${{ github.ref }}-${{ github.event.action == 'edited' }}
   cancel-in-progress: true
 
 jobs:
@@ -50,6 +51,62 @@ jobs:
         run: pnpm build
       - name: Build docs
         run: pnpm docs:build
+
+  # Mutation testing checks that the tests would notice a bug. On a pull
+  # request it runs on the source files the pull request changed. On main it
+  # runs over everything and saves the results the pull requests start from.
+  # Stryker's incremental mode (on in packages/cli/stryker.config.json)
+  # retests only the mutants whose code or tests changed since the cached run.
+  mutation:
+    # The "edited" event only matters to the title lint.
+    if: github.event_name == 'push' || github.event.action != 'edited'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      # A pull request keeps its own results; main keeps the baseline.
+      CACHE_SCOPE: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'main' }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # A pull request starts from its own last run, else from main's. Caches
+      # made on a pull request are invisible to main, so main seeds its own.
+      - name: Restore Stryker results
+        uses: actions/cache/restore@v6
+        with:
+          path: packages/cli/.stryker/incremental.json
+          key: stryker-${{ runner.os }}-${{ env.CACHE_SCOPE }}-${{ github.sha }}
+          restore-keys: |
+            stryker-${{ runner.os }}-${{ env.CACHE_SCOPE }}-
+            stryker-${{ runner.os }}-main-
+      - name: Mutation testing on the changed files
+        if: github.event_name == 'pull_request'
+        run: bash .github/scripts/mutation-pr.sh "$GITHUB_BASE_REF"
+      - name: Mutation testing
+        if: github.event_name == 'push'
+        run: pnpm mutation
+      # Saved even when the score is too low, so the next run reuses the work.
+      - name: Save Stryker results
+        if: always() && hashFiles('packages/cli/.stryker/incremental.json') != ''
+        uses: actions/cache/save@v6
+        with:
+          path: packages/cli/.stryker/incremental.json
+          key: stryker-${{ runner.os }}-${{ env.CACHE_SCOPE }}-${{ github.sha }}
+      - name: Keep the report of a failed run
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: stryker-report
+          path: packages/cli/.stryker/report.html
+          include-hidden-files: true
+          if-no-files-found: warn
+          retention-days: 7
 
   # Runs only on main, and only after every check above has passed.
   release:

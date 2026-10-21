@@ -27,7 +27,7 @@ This repo uses [OpenSpec](https://github.com/Fission-AI/OpenSpec). Specs and cha
 - **Writing it.** The spec exists before the code it covers. Propose it with `/opsx:propose` in Claude Code or the `openspec-propose` skill in other agents.
 - **Approving it.** The user reviews and approves the spec locally, in the dev session, before implementation starts. The pull request is not where the spec gets approved.
 - **Delivering it.** The spec ships in the same pull request as the code. There is no spec-only pull request.
-- **Archiving it.** Archive each change with `chore: archive <change-name>`, ideally as the last commit before merge, once the user has approved it. This is a preference, not a gate.
+- **Archiving it.** Archive each change with `chore: archive <change-name>`, ideally as the last commit before merge, once the user has approved it. Before archiving, verify the change with `/opsx:verify` (or the `openspec-verify-change` skill) and fix what it finds. If you are unsure or blocked, ask the user. Archiving itself is a preference, not a gate.
 - **Issues.** Agents start from the user's request and do not open issues.
 
 Skills for other agents are in `.agents/skills/`.
@@ -57,7 +57,7 @@ A technical decision we want to remember needs a spec whatever the row says. Out
 2. Build, test first if the row says so (see "Test-driven development"). Refactor only where the rubric calls for it, at most 3 passes per product slice.
 3. Update the human-facing docs if usage changes, run `pnpm check`, `pnpm typecheck` and `pnpm test`, run the row's reviewers and fix every must-fix finding.
 4. Give the report (full or short) and wait for the user's approval. That approval is the only gate: it approves the work and its commit, so commit once it is given. Never commit before it, and never on your own. The next product slice starts only after this approval.
-5. At the end of the PR, archive each OpenSpec change as the last commit, once the user has approved it.
+5. At the end of the PR, verify each OpenSpec change with `/opsx:verify` and fix what it finds (ask the user if you are unsure or blocked), then archive it as the last commit, once the user has approved it.
 
 ### Test-driven development
 
@@ -72,6 +72,8 @@ A technical decision we want to remember needs a spec whatever the row says. Out
 - Read every survivor. Kill it with a better test, often a property test. If the invariant was too weak, strengthen it or add an example.
 - Equivalent mutants (a change that cannot alter observable behavior): first try to rewrite the code so the mutant is gone. Only if that harms readability, disable it with `// Stryker disable next-line <MutatorName>: equivalent because <reason>`. Never use a bare `all`, and never disable a mutant to hide a missing test. A survivor that no longer type-checks counts as equivalent: give "does not type-check" as the reason.
 - Do not write tests whose only purpose is to kill a mutant in `console` calls or trivial code (declarations, re-exports, constant tables, thin wiring).
+- Concurrency is pinned low (`concurrency` in `stryker.config.json`) on purpose. Stryker counts any failing test as a kill, so with more workers than the machine can serve, the timing-sensitive tests fail by accident and "kill" mutants no test really catches. The same code scored 99.7% at Stryker's default on an 8-core laptop and 97.5%, with the survivors CI reported, at two workers. Do not raise it, and do not trust a score from a loaded machine. The incremental file keeps those accidental kills until `pnpm mutation:full` rebuilds it.
+- In CI, a pull request runs `.github/scripts/mutation-pr.sh`: `--mutate` on the source files it changed, incrementally against cached results (its own last run, else `main`'s). `main` runs over everything and seeds that cache, so a PR that only weakens tests of code it does not touch is caught there, after the merge. A failed run keeps `report.html` as the `stryker-report` artifact.
 
 ### Product slices
 
@@ -102,7 +104,7 @@ A **short** report (chore work) lists the files changed, the checks and their re
 
 - Work on a branch, never on `main`.
 - Commits follow Conventional Commits. Do not edit the version by hand.
-- Push a feature branch and open or edit a pull request only with the user's permission, asked every time. Propose the PR title and description first. Never force-push, push to `main`, push tags, merge, tag or release.
+- Push a feature branch and open or edit a pull request only with the user's permission, asked every time. Propose the PR title and description first. Never force-push, push to `main`, push tags, merge a pull request, tag or release. To bring a PR up to date with `main`, an agent may merge `main` into the branch or rebase it onto `main`. Once the branch is pushed, prefer the merge, because a rebase would need a force-push; the squash merge hides the extra commit.
 - The PR title becomes the one squash commit on `main` and alone sets the bump, the largest among its product slices.
 
 ### When uncertain

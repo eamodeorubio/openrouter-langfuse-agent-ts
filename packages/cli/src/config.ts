@@ -11,7 +11,10 @@ export interface Config {
 
 type Env = Record<string, string | undefined>;
 
-export const resolveConfig = (args: CliArgs, env: Env): Config => {
+export const resolveConfig = (
+  args: Pick<CliArgs, 'model'>,
+  env: Env,
+): Config => {
   const apiKey = env.OPENROUTER_API_KEY?.trim();
   if (!apiKey) {
     throw new ConfigError(
@@ -41,7 +44,7 @@ const readDotenv = async (cwd: string): Promise<Env> => {
 };
 
 export const loadConfig = async (
-  args: CliArgs,
+  args: Pick<CliArgs, 'model'>,
   env: Env,
   cwd: string,
 ): Promise<Config> =>
