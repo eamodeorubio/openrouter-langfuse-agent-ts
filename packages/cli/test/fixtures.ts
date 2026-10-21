@@ -71,6 +71,7 @@ interface Delta {
   content?: string | null;
   reasoning?: string | null;
   reasoning_details?: object[];
+  tool_calls?: object[];
 }
 
 /** A streamed chunk shaped like the recorded ones. */
@@ -169,4 +170,114 @@ export const RECORDED_STREAM_USAGE = {
   totalTokens: streamUsage?.total_tokens ?? 0,
   reasoningTokens:
     streamUsage?.completion_tokens_details?.reasoning_tokens ?? 0,
+};
+
+// A streamed response that ends in two parallel `get_model` calls after signed
+// reasoning, recorded from a live Anthropic model.
+export const recordedToolStream = readFileSync(
+  new URL('./fixtures/chat-tool-calls.stream.sse', import.meta.url),
+  'utf8',
+);
+export const recordedModel = load('model.200.json') as {
+  data: Record<string, unknown>;
+};
+
+interface ToolChunk {
+  choices: {
+    delta: {
+      tool_calls?: {
+        index: number;
+        id?: string;
+        function?: { name?: string; arguments?: string };
+      }[];
+      reasoning_details?: { text?: string; signature?: string }[];
+    };
+  }[];
+  usage?: {
+    prompt_tokens: number;
+    completion_tokens: number;
+    total_tokens: number;
+    completion_tokens_details?: { reasoning_tokens?: number };
+  };
+}
+const toolChunks = sseEvents(recordedToolStream)
+  .map((event) => event.replace(/^data: /, '').trim())
+  .filter((data) => data !== '[DONE]')
+  .map((data) => JSON.parse(data) as ToolChunk);
+
+/** What the recorded tool round says, read the plain way, for tests to compare against. */
+export const RECORDED_TOOL_ROUND = {
+  calls: [0, 1].map((index) => {
+    const pieces = toolChunks
+      .flatMap((chunk) => chunk.choices[0]?.delta.tool_calls ?? [])
+      .filter((call) => call.index === index);
+    return {
+      id: pieces.find((call) => call.id)?.id ?? '',
+      name: pieces.find((call) => call.function?.name)?.function?.name ?? '',
+      arguments: pieces.map((call) => call.function?.arguments ?? '').join(''),
+    };
+  }),
+  reasoningText: toolChunks
+    .flatMap((chunk) => chunk.choices[0]?.delta.reasoning_details ?? [])
+    .map((detail) => detail.text ?? '')
+    .join(''),
+  signature: toolChunks
+    .flatMap((chunk) => chunk.choices[0]?.delta.reasoning_details ?? [])
+    .find((detail) => detail.signature)?.signature,
+  usage: toolChunks.find((chunk) => chunk.usage)?.usage,
+};
+
+/** A tool call as a model makes it. */
+export interface CallSpec {
+  id: string;
+  name: string;
+  arguments: string;
+}
+
+/** A streamed round that ends in the given tool calls, each sent as a head and two argument pieces. */
+export const toolRound = (
+  calls: CallSpec[],
+  {
+    text = '',
+    usage = { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 },
+  }: { text?: string; usage?: Record<string, unknown> | null } = {},
+): string => {
+  const chunks: object[] = text ? [contentChunk(text)] : [];
+  calls.forEach((call, index) => {
+    const half = Math.ceil(call.arguments.length / 2);
+    chunks.push(
+      streamChunk({
+        tool_calls: [
+          {
+            index,
+            id: call.id,
+            type: 'function',
+            function: { name: call.name, arguments: '' },
+          },
+        ],
+      }),
+      streamChunk({
+        tool_calls: [
+          { index, function: { arguments: call.arguments.slice(0, half) } },
+        ],
+      }),
+      streamChunk({
+        tool_calls: [
+          { index, function: { arguments: call.arguments.slice(half) } },
+        ],
+      }),
+    );
+  });
+  chunks.push(
+    streamChunk(
+      {},
+      {
+        choices: [{ index: 0, delta: {}, finish_reason: 'tool_calls' }],
+      },
+    ),
+  );
+  if (usage) {
+    chunks.push(usageChunk(usage));
+  }
+  return sseBody(...chunks);
 };

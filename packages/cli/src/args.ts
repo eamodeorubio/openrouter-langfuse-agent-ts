@@ -6,6 +6,8 @@ export interface CliArgs {
   model: string | undefined;
   /** `true` for --thinking, `false` for --no-thinking, `undefined` to decide from the terminal. */
   thinking: boolean | undefined;
+  /** Show the tool calls on stderr. */
+  verbose: boolean;
 }
 
 /**
@@ -37,6 +39,7 @@ export const parseCliArgs = (argv: string[]): CliArgs => {
         model: { type: 'string' },
         thinking: { type: 'boolean' },
         'no-thinking': { type: 'boolean' },
+        verbose: { type: 'boolean' },
       },
       strict: true,
       allowPositionals: false,
@@ -50,7 +53,12 @@ export const parseCliArgs = (argv: string[]): CliArgs => {
     } else if (values['no-thinking']) {
       thinking = false;
     }
-    return { question: values.q, model: values.model, thinking };
+    return {
+      question: values.q,
+      model: values.model,
+      thinking,
+      verbose: Boolean(values.verbose),
+    };
   } catch (error) {
     throw new UsageError(
       error instanceof Error ? error.message : String(error),

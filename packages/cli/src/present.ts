@@ -1,4 +1,5 @@
 import { formatStatus } from './status.js';
+import { oneLine } from './text.js';
 import type { AskEvent, Sink } from './types.js';
 
 const DIM = '\u001b[2m';
@@ -9,19 +10,22 @@ export interface PresenterOptions {
   stderr: Sink;
   /** `true` for --thinking, `false` for --no-thinking, `undefined` to follow stderr. */
   thinking: boolean | undefined;
+  /** Whether to write a line for each tool call. */
+  verbose: boolean;
   /** The value of `NO_COLOR`; any non-empty value turns styling off. */
   noColor: string | undefined;
 }
 
 /**
  * Decides what goes where. The answer goes to stdout as it arrives, the
- * thinking to stderr (dimmed on a terminal), and the status lines to stderr
- * once the stream has ended.
+ * thinking to stderr (dimmed on a terminal), a line per tool call to stderr
+ * when asked, and the status lines to stderr once the stream has ended.
  */
 export const createPresenter = ({
   stdout,
   stderr,
   thinking,
+  verbose,
   noColor,
 }: PresenterOptions) => {
   const showThinking = thinking ?? Boolean(stderr.isTTY);
@@ -64,6 +68,15 @@ export const createPresenter = ({
           closeThinking(true);
           stdout.write(event.text);
           answerEndedLine = event.text.endsWith('\n');
+          return;
+        case 'tool':
+          if (!verbose) {
+            return;
+          }
+          closeThinking(false);
+          stderr.write(
+            `tool: ${[oneLine(event.name), oneLine(event.arguments)].filter(Boolean).join(' ')}\n`,
+          );
           return;
         case 'done':
           closeThinking(false);

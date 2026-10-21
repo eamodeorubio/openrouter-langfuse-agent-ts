@@ -130,7 +130,10 @@ describe('ask: the request', () => {
     expect(sent).toMatchObject({
       model: 'req/model',
       stream: true,
-      messages: [{ role: 'user', content: 'hi' }],
+      messages: [
+        expect.objectContaining({ role: 'system' }),
+        { role: 'user', content: 'hi' },
+      ],
     });
     expect(authorization).toBe('Bearer sk-test');
   });

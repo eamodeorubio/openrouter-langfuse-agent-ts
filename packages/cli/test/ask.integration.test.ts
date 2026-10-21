@@ -209,7 +209,7 @@ describe('missing question', () => {
 describe('unknown arguments and thinking flags', () => {
   it.each([
     ['a stray positional', ['-q', 'hi', 'extra']],
-    ['an unknown option', ['-q', 'hi', '--verbose']],
+    ['an unknown option', ['-q', 'hi', '--frobnicate']],
     ['both thinking flags', ['-q', 'hi', '--thinking', '--no-thinking']],
   ])('prints usage and exits 1 on %s', async (_name, argv) => {
     api.reply(200, completion());

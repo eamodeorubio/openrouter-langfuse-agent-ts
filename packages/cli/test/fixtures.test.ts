@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   DONE,
   recordedCompletion,
+  recordedModel,
   recordedStream,
+  recordedToolStream,
   recordedUnauthorized,
   sseEvents,
   truncatedStream,
@@ -19,7 +21,10 @@ describe('recorded fixtures', () => {
     const everything = JSON.stringify([
       recordedCompletion,
       recordedUnauthorized,
-    ]).concat(recordedStream);
+      recordedModel,
+    ])
+      .concat(recordedStream)
+      .concat(recordedToolStream);
     expect(everything).not.toMatch(
       /sk-or|bearer|set-cookie|authorization|cf-ray|api[_-]?key/i,
     );

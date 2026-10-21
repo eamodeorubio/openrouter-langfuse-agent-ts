@@ -7,9 +7,26 @@ import type { AddressInfo } from 'node:net';
 import { PassThrough } from 'node:stream';
 
 export interface Sent {
+  method: string;
+  /** The path without the query, such as `/api/v1/model/openai/gpt-5`. */
+  path: string;
+  query: URLSearchParams;
   model: string;
+  /** The first user message of a chat request. */
   question: string;
   authorization: string | undefined;
+  /** The parsed JSON body of a chat request; empty for a GET. */
+  body: ChatBody;
+}
+
+/** The parts of a chat request the tests look at. */
+export interface ChatBody {
+  model?: string;
+  stream?: boolean;
+  parallel_tool_calls?: boolean;
+  tool_choice?: unknown;
+  tools?: { type: string; function: { name: string; parameters?: unknown } }[];
+  messages?: Record<string, unknown>[];
 }
 
 type Handler = (request: IncomingMessage, response: ServerResponse) => void;
@@ -61,6 +78,10 @@ export interface FakeApi {
   sent: Sent[];
   /** Queues one response. A string body answered with 200 is an event stream; anything else is sent as it is. */
   reply(status: number, body: unknown): void;
+  /** Queues one response for `GET` of `path` (without the query), such as `/model/openai/gpt-5`. */
+  replyGet(path: string, status: number, body: unknown): void;
+  /** Like `replyGet`, but the response waits until the returned function is called. */
+  holdGet(path: string, status: number, body: unknown): () => void;
   /** Queues the same response `times` times, enough to outlast the retries. */
   replyTimes(times: number, status: number, body: unknown): void;
   /** Queues a streamed response whose body the test feeds by hand. Destroying it drops the connection. */
@@ -80,12 +101,28 @@ const readBody = async (request: IncomingMessage): Promise<string> => {
   return body;
 };
 
+/** A string body answered with 200 is an event stream; anything else is sent as it is. */
+const jsonResponder =
+  (status: number, body: unknown): Responder =>
+  (response) => {
+    if (typeof body === 'string') {
+      response.writeHead(status, {
+        'content-type': status === 200 ? 'text/event-stream' : 'text/plain',
+      });
+      response.end(body);
+      return;
+    }
+    response.writeHead(status, { 'content-type': 'application/json' });
+    response.end(JSON.stringify(body));
+  };
+
 export const startFakeApi = async (): Promise<FakeApi> => {
   let queue: Responder[] = [];
+  let getQueues = new Map<string, Responder[]>();
   let dropAll = false;
 
   const server = await listen(async (request, response) => {
-    let body: { model?: string; messages?: { content?: string }[] };
+    let body: ChatBody;
     try {
       body = JSON.parse((await readBody(request)) || '{}');
     } catch {
@@ -95,16 +132,26 @@ export const startFakeApi = async (): Promise<FakeApi> => {
       );
       return;
     }
+    const url = new URL(request.url ?? '/', 'http://localhost');
+    const method = request.method ?? 'GET';
+    const firstUser = body.messages?.find((message) => message.role === 'user');
     api.sent.push({
+      method,
+      path: url.pathname,
+      query: url.searchParams,
       model: body.model ?? '',
-      question: body.messages?.[0]?.content ?? '',
+      question: typeof firstUser?.content === 'string' ? firstUser.content : '',
       authorization: request.headers.authorization,
+      body,
     });
     if (dropAll) {
       request.socket.destroy();
       return;
     }
-    const respond = queue.shift();
+    const respond =
+      method === 'GET'
+        ? getQueues.get(url.pathname.replace(/^\/api\/v1/, ''))?.shift()
+        : queue.shift();
     if (!respond) {
       response.writeHead(501, { 'content-type': 'application/json' });
       response.end(
@@ -119,17 +166,24 @@ export const startFakeApi = async (): Promise<FakeApi> => {
     url: server.url,
     sent: [],
     reply(status, body) {
-      queue.push((response) => {
-        if (typeof body === 'string') {
-          response.writeHead(status, {
-            'content-type': status === 200 ? 'text/event-stream' : 'text/plain',
-          });
-          response.end(body);
-          return;
-        }
-        response.writeHead(status, { 'content-type': 'application/json' });
-        response.end(JSON.stringify(body));
+      queue.push(jsonResponder(status, body));
+    },
+    replyGet(path, status, body) {
+      const queued = getQueues.get(path) ?? [];
+      queued.push(jsonResponder(status, body));
+      getQueues.set(path, queued);
+    },
+    holdGet(path, status, body) {
+      let release = () => {};
+      const released = new Promise<void>((resolve) => {
+        release = resolve;
       });
+      const queued = getQueues.get(path) ?? [];
+      queued.push((response) => {
+        released.then(() => jsonResponder(status, body)(response));
+      });
+      getQueues.set(path, queued);
+      return release;
     },
     replyTimes(times, status, body) {
       for (let i = 0; i < times; i++) {
@@ -156,6 +210,7 @@ export const startFakeApi = async (): Promise<FakeApi> => {
     },
     reset() {
       queue = [];
+      getQueues = new Map();
       dropAll = false;
       api.sent = [];
     },
