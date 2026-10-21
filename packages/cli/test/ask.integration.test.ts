@@ -18,9 +18,14 @@ import {
   DONE,
   errorChunk,
   RECORDED_401_MESSAGE,
+  RECORDED_ANSWER,
+  RECORDED_MODEL,
+  RECORDED_REASONING_TOKENS,
   RECORDED_STREAM_ANSWER,
   RECORDED_STREAM_MODEL,
   RECORDED_STREAM_USAGE,
+  RECORDED_USAGE,
+  recordedCompletion,
   recordedStream,
   recordedUnauthorized,
   sseBody,
@@ -437,6 +442,35 @@ describe('answer on stdout', () => {
     expect(result.stderr).toBe(
       `model: ${RECORDED_STREAM_MODEL}\ntokens: ${RECORDED_STREAM_USAGE.promptTokens} prompt, ${RECORDED_STREAM_USAGE.completionTokens} completion (${RECORDED_STREAM_USAGE.reasoningTokens} reasoning), ${RECORDED_STREAM_USAGE.totalTokens} total\n`,
     );
+  });
+});
+
+describe('a server that answers without streaming', () => {
+  it('prints the complete response at once, with the status lines', async () => {
+    api.reply(200, recordedCompletion);
+    const result = await cli({ argv: ['-q', 'hi'] });
+    expect(result.code).toBe(0);
+    expect(result.stdout).toBe(`${RECORDED_ANSWER}\n`);
+    expect(result.stderr).toBe(
+      `model: ${RECORDED_MODEL}\ntokens: ${RECORDED_USAGE.promptTokens} prompt, ${RECORDED_USAGE.completionTokens} completion (${RECORDED_REASONING_TOKENS} reasoning), ${RECORDED_USAGE.totalTokens} total\n`,
+    );
+  });
+
+  it('shows the thinking of a complete response when asked', async () => {
+    api.reply(200, recordedCompletion);
+    const result = await cli({ argv: ['-q', 'hi', '--thinking'] });
+    expect(result.stderr.startsWith('The user wants a single word reply')).toBe(
+      true,
+    );
+    expect(result.stdout).toBe(`${RECORDED_ANSWER}\n`);
+  });
+
+  it('fails like a stream when the complete response holds no answer', async () => {
+    api.reply(200, { ...recordedCompletion, choices: [] });
+    const result = await cli({ argv: ['-q', 'hi'] });
+    expect(result.code).toBe(2);
+    expect(result.stdout).toBe('');
+    expect(result.stderr).toBe('The API response held no answer.\n');
   });
 });
 

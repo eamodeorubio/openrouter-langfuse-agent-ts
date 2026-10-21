@@ -86,6 +86,10 @@ The user asked for thinking to be shown and confirmed this default: shown by def
 
 One value is not guarded: the served model name, which the API supplies, is printed in the `model:` line as received. Redaction covers the messages the CLI composes, and the model name is model-side text like the answer.
 
+### A server that does not stream
+
+The request asks for a stream, but a server may ignore that and send one complete response. The SDK returns it as a plain result, not an event stream, and a probe showed the CLI dying on it with a raw `TypeError`. `readChunks` tells the two apart by whether the result has `Symbol.asyncIterator`, and turns a complete result into one chunk with the same fields a streamed chunk has (model, thinking, answer text, usage). Everything after that point, the answer events, the completeness checks and the status lines, is the code for a stream, so a complete response gets the same rules and the same failures. Only text content counts as an answer; content given in parts is treated as no answer, as an empty one is. The test fixture is the non-streamed response recorded from the live API.
+
 ### Status: reasoning count
 
 `status.ts` reads `usage.completionTokensDetails.reasoningTokens`. A missing or zero count leaves the line as it was. `types.ts` gains an optional `reasoningTokens` on `Usage`.

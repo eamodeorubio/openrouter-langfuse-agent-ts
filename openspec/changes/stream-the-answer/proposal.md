@@ -14,6 +14,7 @@ Streaming removes the second half of that wait: text appears the moment the mode
 - A failure after output has started keeps the partial output on stdout, ends the line, writes one error line to stderr and exits 2. Before any output, failures behave as they do now.
 - Retries run only before anything has been written. After that, a retry would repeat text the user has already read.
 - The single 60 s deadline per attempt becomes two limits: 60 s to the first chunk and 60 s between chunks. A long answer is no longer cut at a minute.
+- A server that answers with one complete response instead of a stream, a proxy for instance, is handled as a stream of a single chunk. The answer appears at once.
 - The key guarantee narrows to messages the CLI writes. Text the model generates, the answer and its thinking, passes through as received. The model never sees the key.
 
 **BREAKING** (for scripts): stdout is no longer empty after every failure. A script that needs all-or-nothing output checks the exit code.

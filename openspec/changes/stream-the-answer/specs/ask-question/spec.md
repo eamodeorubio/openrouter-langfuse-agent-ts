@@ -175,3 +175,18 @@ The CLI SHALL accept `--thinking` and `--no-thinking`. Giving both SHALL print a
 #### Scenario: Both flags
 - **WHEN** the CLI runs with `-q "hi" --thinking --no-thinking`
 - **THEN** stderr holds the usage message, the exit code is 1, and no request is sent
+
+### Requirement: Complete response instead of a stream
+When the server answers with one complete response instead of a stream, the CLI SHALL treat it as a stream of a single chunk. The thinking (when shown) and the answer are written as for a stream, the status lines follow, and the exit code is 0. Only plain text counts as answer text. A complete response without answer text, or without token usage, fails as a stream does.
+
+#### Scenario: Complete response
+- **WHEN** the server answers `-q "hi"` with a complete response that holds the answer `pong`, some thinking, and usage with a reasoning count
+- **THEN** stdout is `pong\n`, the thinking follows the rules for streamed thinking, the status lines follow on stderr, and the exit code is 0
+
+#### Scenario: Complete response with content in parts
+- **WHEN** the server answers with a complete response whose message content is a list of parts and not plain text
+- **THEN** stderr holds one line saying the response held no answer, stdout is empty, and the exit code is 2
+
+#### Scenario: Complete response without an answer
+- **WHEN** the server answers with a complete response whose `choices` list is empty
+- **THEN** stderr holds one line saying the response held no answer, stdout is empty, and the exit code is 2

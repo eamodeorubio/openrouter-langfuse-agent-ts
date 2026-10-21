@@ -28,6 +28,13 @@ export const RECORDED_USAGE = {
   completionTokens: recorded.usage.completion_tokens,
   totalTokens: recorded.usage.total_tokens,
 };
+/** The reasoning tokens the recorded non-streamed response reports. */
+export const RECORDED_REASONING_TOKENS =
+  (
+    recordedCompletion.usage as {
+      completion_tokens_details?: { reasoning_tokens?: number };
+    }
+  ).completion_tokens_details?.reasoning_tokens ?? 0;
 export const RECORDED_401_MESSAGE = (
   recordedUnauthorized as { error: { message: string } }
 ).error.message;

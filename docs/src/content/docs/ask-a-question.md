@@ -72,6 +72,8 @@ The answer lands in the file, and the thinking and the status lines stay on your
 
 How early the first words appear depends on the model. Some models send their answer a piece at a time and the text flows. Others hold the whole answer back and deliver it in one burst; some free models behave this way. The tool prints each piece the moment it arrives, so a burst shows up as one block.
 
+Some servers do not stream at all. A proxy in front of OpenRouter may answer with the whole response at once. The tool treats that as a stream of one piece: the thinking, if it is shown, and the answer arrive together, and the status lines follow as usual. You see no error, only a single block. If that whole response holds no answer or no token count, it fails the way a stream does, with exit code 2.
+
 ## Watching the model think
 
 Some models think before they answer, and OpenRouter passes that thinking along as plain text. The tool writes it to stderr, never to stdout, so the answer in a pipe or a file stays the answer and nothing else.

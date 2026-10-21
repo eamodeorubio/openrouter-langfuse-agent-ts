@@ -17,10 +17,15 @@ import {
   contentChunk,
   DONE,
   errorChunk,
+  RECORDED_ANSWER,
+  RECORDED_MODEL,
+  RECORDED_REASONING_TOKENS,
   RECORDED_STREAM_ANSWER,
   RECORDED_STREAM_MODEL,
   RECORDED_STREAM_THINKING,
   RECORDED_STREAM_USAGE,
+  RECORDED_USAGE,
+  recordedCompletion,
   recordedStream,
   sseBody,
   sseEvent,
@@ -260,6 +265,85 @@ describe('ask: housekeeping', () => {
     for (const handle of started) {
       expect(cleared).toContain(handle);
     }
+  });
+});
+
+describe('ask: a server that answers without streaming', () => {
+  const message = (overrides: object = {}) => ({
+    ...(recordedCompletion.choices as { message: object }[])[0]?.message,
+    ...overrides,
+  });
+  const complete = (messageOverrides?: object) => ({
+    ...recordedCompletion,
+    choices: [
+      {
+        index: 0,
+        finish_reason: 'stop',
+        message: message(messageOverrides),
+      },
+    ],
+  });
+
+  it('treats a complete response as a stream of a single chunk', async () => {
+    reply(200, recordedCompletion);
+    const { events, error } = await collect();
+    expect(error).toBeUndefined();
+    expect(events).toEqual([
+      { kind: 'thinking', text: 'The user wants a single word reply: "pong".' },
+      { kind: 'content', text: RECORDED_ANSWER },
+      {
+        kind: 'done',
+        model: RECORDED_MODEL,
+        usage: {
+          ...RECORDED_USAGE,
+          reasoningTokens: RECORDED_REASONING_TOKENS,
+        },
+      },
+    ]);
+  });
+
+  it('yields no thinking event when the response holds none', async () => {
+    reply(200, complete({ reasoning: null }));
+    const { events } = await collect();
+    expect(events.map((e) => e.kind)).toEqual(['content', 'done']);
+  });
+
+  it.each([
+    ['an empty choices list', { ...recordedCompletion, choices: [] }],
+    ['empty content', complete({ content: '' })],
+    ['content that is not text', complete({ content: null })],
+    [
+      'content in parts, not text',
+      complete({ content: [{ type: 'text', text: 'pong' }] }),
+    ],
+  ])(
+    'rejects a complete response with %s as having no answer',
+    async (_name, body) => {
+      reply(200, body);
+      expect((await failure()).message).toBe(
+        'The API response held no answer.',
+      );
+    },
+  );
+
+  it.each([
+    ['a choices field that is not a list', { choices: 'not a list' }],
+    ['a choice without a message', { choices: [{ index: 0 }] }],
+  ])(
+    'reports a complete response with %s as a bad response, not a crash',
+    async (_name, overrides) => {
+      reply(200, { ...recordedCompletion, ...overrides });
+      expect((await failure()).message).toBe(
+        'The API response did not have the expected shape.',
+      );
+    },
+  );
+
+  it('rejects a complete response without usage', async () => {
+    reply(200, { ...recordedCompletion, usage: undefined });
+    const { events, message: text } = await failure();
+    expect(text).toBe('The API response held no token usage.');
+    expect(events.map((e) => e.kind)).toEqual(['thinking', 'content']);
   });
 });
 

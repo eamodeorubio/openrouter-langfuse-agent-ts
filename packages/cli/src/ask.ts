@@ -1,6 +1,6 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { OpenRouter } from '@openrouter/sdk';
-import type { ChatStreamChunk } from '@openrouter/sdk/models';
+import type { ChatResult, ChatStreamChunk } from '@openrouter/sdk/models';
 import type { Config } from './config.js';
 import { ApiError } from './errors.js';
 import {
@@ -16,6 +16,33 @@ import type { AskEvent } from './types.js';
 const IDLE_TIMEOUT_MS = 60_000;
 const MAX_RETRIES = 4;
 const FIRST_WAIT_MS = 300;
+
+/** The parts of a streamed chunk that the answer is built from. A complete response fills the same fields. */
+interface Chunk {
+  model: string;
+  choices: {
+    delta: {
+      content?: string | null | undefined;
+      reasoning?: string | null | undefined;
+    };
+  }[];
+  usage?: ChatStreamChunk['usage'];
+  /** Set only by a streamed chunk that carries an error. */
+  error?: { code: number; message: string } | undefined;
+}
+
+/** A complete response, from a server that did not stream, read as the single chunk of a stream. */
+const asChunk = (result: ChatResult): Chunk => ({
+  model: result.model,
+  choices: result.choices.map(({ message }) => ({
+    delta: {
+      content:
+        typeof message.content === 'string' ? message.content : undefined,
+      reasoning: message.reasoning,
+    },
+  })),
+  usage: result.usage,
+});
 
 /** Waits for `work`, but gives up with an `IdleTimeout` when `ms` pass first. */
 const within = <T>(work: Promise<T>, ms: number): Promise<T> =>
@@ -44,10 +71,10 @@ async function* readChunks(
   model: string,
   question: string,
   idleTimeoutMs: number,
-): AsyncGenerator<ChatStreamChunk, void> {
+): AsyncGenerator<Chunk, void> {
   const controller = new AbortController();
   const sentAt = Date.now();
-  let iterator: AsyncIterator<ChatStreamChunk> | undefined;
+  let iterator: AsyncIterator<Chunk> | undefined;
   try {
     // Our own signal switches the SDK's whole-request deadline off. The SDK's
     // iterator ignores an abort, so the race below ends the wait; the abort only frees the socket.
@@ -74,13 +101,16 @@ async function* readChunks(
       }
       throw error;
     }
-    // With `stream: true` the SDK returns an event stream; its type also admits a plain result.
-    iterator = (response as unknown as AsyncIterable<ChatStreamChunk>)[
-      Symbol.asyncIterator
-    ]();
+    // With `stream: true` the SDK returns an event stream. A server that
+    // ignores the flag, a proxy for one, gets a complete result instead.
+    if (!(Symbol.asyncIterator in response)) {
+      yield asChunk(response);
+      return;
+    }
+    iterator = response[Symbol.asyncIterator]();
     let limit = Math.max(0, idleTimeoutMs - (Date.now() - sentAt));
     for (;;) {
-      let step: IteratorResult<ChatStreamChunk>;
+      let step: IteratorResult<Chunk>;
       try {
         step = await within(iterator.next(), limit);
       } catch (error) {
@@ -115,7 +145,7 @@ async function* attempt(
   let sawAnswer = false;
   // Stryker disable next-line StringLiteral: equivalent because the first chunk replaces it before it is read, and a stream without chunks fails before it is used.
   let servedModel = '';
-  let usage: ChatStreamChunk['usage'];
+  let usage: Chunk['usage'];
   for await (const chunk of readChunks(
     client,
     model,
