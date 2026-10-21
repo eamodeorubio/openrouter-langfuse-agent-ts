@@ -219,6 +219,24 @@ describe('ask: the events', () => {
   });
 });
 
+describe('ask: the idle limit', () => {
+  it('is 60 seconds when nothing says otherwise', async () => {
+    const delays: unknown[] = [];
+    const realSet = globalThis.setTimeout;
+    vi.spyOn(globalThis, 'setTimeout').mockImplementation(((
+      callback: () => void,
+      ms?: number,
+    ) => {
+      delays.push(ms);
+      return realSet(callback, ms);
+    }) as typeof setTimeout);
+    reply(200, good);
+    const { error } = await collect();
+    expect(error).toBeUndefined();
+    expect(delays).toContain(60_000);
+  });
+});
+
 describe('ask: housekeeping', () => {
   // A timer left running holds the process open after the answer is done. The
   // idle timers are told apart by a duration nothing else uses, and each one
