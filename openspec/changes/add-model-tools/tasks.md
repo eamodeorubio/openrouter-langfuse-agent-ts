@@ -42,7 +42,18 @@ Delivers `search_models` and the shared catalog wrapper. Spec: *search_models ar
 
 ## 4. Slice 3: `feat: let the agent do arithmetic` (minor)
 
-Named only. Adds `calculate` (*calculate grammar*, *calculate result*, *calculate failures*, *calculate never evaluates code*) to the registry, and the system message's line about arithmetic, with its tests (including the oracle property test), docs, mutation run, reviewers, report and commit. Planned in detail once slice 2 is approved.
+Delivers `calculate` and the system message's line about arithmetic. Spec: `specs/calculator/spec.md` (*calculate grammar*, *result*, *failures*, *never evaluates code*) and the system-message and failure rows of `agent-loop`.
+
+- [x] 4.1 Failing integration test, covers the cost example and both failures through `run`: the model reads a priced model with `get_model`, calls `calculate("5 * 0.018 + 1 * 0.09")`, and the next request holds `{"formula":"5 * 0.018 + 1 * 0.09 = 0.18","result":0.18}`; a `10 / (5 - 5)` and a `process.exit(1)` each reach the model as an error result and the run still answers. Verify it fails for the unknown tool.
+- [x] 4.2 Failing unit tests, then code, for the grammar in `tools/arithmetic.ts`: every row of the accepted-and-rejected table, precedence, left associativity, unary signs, whitespace, number syntax.
+- [x] 4.3 Failing unit tests, then code, for the failures: the message for each row of the failures table (character and position, division by zero, what is missing, the 200-character limit, the 32-level limit), and that a failure never throws.
+- [x] 4.4 Failing unit tests, then code, for the result: rounding to 12 significant digits, `-0` shown as `0`, and the `formula` text with single spaces around binary operators.
+- [x] 4.5 Property tests: the parser agrees with an independent oracle on random expression trees printed with random spacing and redundant parentheses (a value, or a division-by-zero error on both sides); any string gives a result or an error message and never throws; no string with a character outside the grammar is accepted; every result within the length limit is finite.
+- [x] 4.6 Add the `calculate` tool and register it; add the arithmetic line to the system message; update the tests that list the offered tools and the instructions test.
+- [x] 4.7 Update the user-facing docs: `README.md`, `docs/src/content/docs/ask-a-question.md` (what the tool accepts, what a failure looks like, a real `--verbose` run that estimates a cost) and `docs/src/content/docs/index.md`; drop "arithmetic is next" from the places that say so. Use the beautiful-prose settings in AGENTS.md. Verify every command shown runs as written, and that `pnpm docs:build` succeeds.
+- [x] 4.8 Run `pnpm check`, `pnpm typecheck`, `pnpm test`, `pnpm mutation`; read every survivor and kill or justify it.
+- [x] 4.9 Run `reviewer-code-high`, `reviewer-code-low`, `reviewer-docs`; fix every must-fix finding.
+- [x] 4.10 Write the full report. Wait for the user's approval, which also approves the commit. Commit `feat: let the agent do arithmetic`.
 
 ## 5. Close
 

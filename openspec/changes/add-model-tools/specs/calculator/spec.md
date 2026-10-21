@@ -7,7 +7,7 @@ Lets the model do arithmetic exactly, from the prices and token counts it read, 
 ## ADDED Requirements
 
 ### Requirement: calculate grammar
-`calculate` SHALL take one argument, `expression`, and SHALL evaluate only decimal numbers, `+`, `-`, `*`, `/`, parentheses, spaces, and unary `+` and `-`. Precedence is the usual one; operators of equal rank go left to right. Anything else SHALL be rejected without being evaluated.
+`calculate` SHALL take one argument, `expression`, and SHALL evaluate only decimal numbers, `+`, `-`, `*`, `/`, parentheses, spaces, and unary `+` and `-`. Precedence is the usual one; operators of equal rank go left to right. Anything else SHALL be rejected without being evaluated. Every result is finite, since 200 characters cannot write a number near 1e308.
 
 #### Scenario: Accepted and rejected
 | `expression` | Result |
@@ -23,7 +23,7 @@ Lets the model do arithmetic exactly, from the prices and token counts it read, 
 | `abc`, `Math.PI`, `process.exit()`, `1; 2`, `` `2` `` | error |
 
 ### Requirement: calculate result
-On success `calculate` SHALL return `formula`, the expression and its result on one line as `<expression> = <result>`, and `result`, the number. The result SHALL be rounded to 12 significant digits, so that `0.1 + 0.2` gives `0.3`.
+On success `calculate` SHALL return `formula`, the expression and its result on one line as `<expression> = <result>`, and `result`, the number. Every step, the last included, SHALL be rounded to 12 significant digits, so that `0.1 + 0.2` gives `0.3`. The result in `formula` SHALL be plain decimal, never with an exponent.
 
 #### Scenario: Cost of a workload
 - **WHEN** the model has read a model priced at 0.018 and 0.09 USD per million tokens, and calls `calculate` with `5 * 0.018 + 1 * 0.09` for 5M input and 1M output tokens
@@ -33,8 +33,15 @@ On success `calculate` SHALL return `formula`, the expression and its result on 
 | `expression` | `result` |
 | --- | --- |
 | `0.1 + 0.2` | `0.3` |
+| `0.1 + 0.2 - 0.3` | `0` |
 | `1 / 3` | `0.333333333333` |
 | `0.000003 * 1000000` | `3` |
+
+#### Scenario: Plain decimal in the formula
+| `expression` | `formula` |
+| --- | --- |
+| `1 / 10000000` | `1 / 10000000 = 0.0000001` |
+| `15 * 100000000000000000000` | `15 * 100000000000000000000 = 1500000000000000000000` |
 
 ### Requirement: calculate failures
 A failing `calculate` SHALL return an error result for the model, as one line, and SHALL NOT fail the run. The message SHALL name the cause.
@@ -43,9 +50,8 @@ A failing `calculate` SHALL return an error result for the model, as one line, a
 | Condition | Message names |
 | --- | --- |
 | Character or token outside the grammar | the character and its position |
-| Division by zero, such as `5 / 0` or `1 / (2 - 2)` | division by zero |
+| Division by zero, such as `5 / 0`, `1 / (2 - 2)` or `1 / (0.1 + 0.2 - 0.3)` | division by zero |
 | Missing operand or parenthesis, such as `1 +`, `(1 + 2`, `` | what is missing |
-| Result is not finite | that the result is out of range |
 | More than 200 characters | the length limit |
 | More than 32 levels of parentheses | the nesting limit |
 

@@ -1,11 +1,12 @@
 import type { ChatFunctionTool } from '@openrouter/sdk/models';
 import { z } from 'zod';
+import { calculate } from './calculate.js';
 import { getModel } from './getModel.js';
 import { searchModels } from './searchModels.js';
 import type { Tool, ToolContext, ToolResult } from './types.js';
 
 /** The tools the agent offers. */
-export const TOOLS: readonly Tool[] = [getModel, searchModels];
+export const TOOLS: readonly Tool[] = [getModel, searchModels, calculate];
 
 /** The tools as the chat API wants them: a name, a description and the JSON Schema of the arguments. */
 export const functionTools = (tools: readonly Tool[]): ChatFunctionTool[] =>

@@ -110,10 +110,10 @@ describe('the tools the agent offers', () => {
       };
     };
 
-  it('are get_model and search_models, each with a description', () => {
+  it('are get_model, search_models and calculate, each with a description', () => {
     expect(
       offered.map((tool) => 'function' in tool && tool.function.name),
-    ).toEqual(['get_model', 'search_models']);
+    ).toEqual(['get_model', 'search_models', 'calculate']);
     for (const tool of offered) {
       expect(
         'function' in tool && tool.function.description?.length,

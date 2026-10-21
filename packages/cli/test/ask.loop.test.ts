@@ -209,6 +209,7 @@ describe('what each request holds', () => {
     expect(sent?.body.tools?.map((tool) => tool.function.name)).toEqual([
       'get_model',
       'search_models',
+      'calculate',
     ]);
     expect(sent?.body.parallel_tool_calls).toBe(true);
     expect(sent?.body.tool_choice).toBeUndefined();

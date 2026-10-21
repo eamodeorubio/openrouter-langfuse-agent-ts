@@ -9,7 +9,7 @@ The agent behind the tool will be instrumented with Langfuse, so every run can b
 
 ## Where things stand
 
-The project has no release yet. The tooling, the quality checks and the release pipeline are in place, and the CLI can send a question to an OpenRouter model of your choice. Before it answers, the model is told to look models up in the live catalog instead of recalling their prices. [Ask a question](ask-a-question/) shows how. The model can also search the catalog by price, context size and capability. Exact cost arithmetic is still to come.
+The project has no release yet. The tooling, the quality checks and the release pipeline are in place, and the CLI can send a question to an OpenRouter model of your choice. Before it answers, the model is told to look models up in the live catalog instead of recalling their prices. [Ask a question](ask-a-question/) shows how. The model can also search the catalog by price, context size and capability. A calculator tool does the arithmetic of a cost estimate exactly.
 
 ## Following along and helping
 

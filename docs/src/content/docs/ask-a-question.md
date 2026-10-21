@@ -1,9 +1,9 @@
 ---
 title: Ask a question
-description: Send one question to an OpenRouter model from the command line, let it check the live catalog, watch the answer and the model's thinking arrive, and see which model answered and how many tokens it used.
+description: Send one question to an OpenRouter model from the command line, let it check the live catalog and do its sums, watch the answer and the model's thinking arrive, and see which model answered and how many tokens it used.
 ---
 
-The tool sends one question to one OpenRouter model and prints the answer as it arrives, word by word, without waiting for the end. If the model thinks before it answers, the tool shows that too. Before it answers, the model may also check OpenRouter's live catalog for the facts it needs, and you still see one question and one answer. On the side, the tool tells you which model answered and how many tokens the exchange used.
+The tool sends one question to one OpenRouter model and prints the answer as it arrives, word by word, without waiting for the end. If the model thinks before it answers, the tool shows that too. Before it answers, the model may also check OpenRouter's live catalog for the facts it needs and work out the arithmetic with a calculator, and you still see one question and one answer. On the side, the tool tells you which model answered and how many tokens the exchange used.
 
 ## Before you start
 
@@ -45,9 +45,9 @@ When both are present, `-q` wins and the pipe is left unread. Surrounding whites
 
 `-q` takes the next argument as the question, whatever it starts with, so `-q "-5 degrees in Fahrenheit"` works. The price is that `-q --model` reads `--model` as the question.
 
-## How the model looks things up
+## The model's tools
 
-A model's memory goes stale. OpenRouter's catalog changes often, and a price remembered from training is often wrong by the time you read it. So the tool gives the model a way to check. It offers two tools. `get_model` fetches the details of a single model by its slug: `author/name`, with an optional variant such as `:free`. The result carries the description, the context window, the input and output modalities, the supported parameters, the prices, the reasoning support and the benchmark scores. `search_models` finds models when the model does not know a slug yet; it is described under Searching the catalog, below.
+A model's memory goes stale. OpenRouter's catalog changes often, and a price remembered from training is often wrong by the time you read it. So the tool gives the model a way to check. It offers three tools. `get_model` fetches the details of a single model by its slug: `author/name`, with an optional variant such as `:free`. The result carries the description, the context window, the input and output modalities, the supported parameters, the prices, the reasoning support and the benchmark scores. `search_models` finds models when the model does not know a slug yet. `calculate` does the arithmetic. The last two are described below, under Searching the catalog and Doing the arithmetic.
 
 Prices come back in US dollars per million tokens, the unit OpenRouter uses on its model pages. The API sends them per token, as decimal strings, and the tool moves the decimal point itself so the model never has to. Prices that are not per token, such as a flat fee per request or per image, are left out. Conditional prices, like a higher rate above a certain prompt size, are kept. A routing model such as `openrouter/auto` has no fixed price, and its price shows as `null`.
 
@@ -125,6 +125,48 @@ All three are free tier models on OpenRouter. If you need paid models, the cheap
 model: anthropic/claude-haiku-4.5
 tokens: 11010 prompt, 318 completion, 11328 total
 ```
+
+### Doing the arithmetic
+
+Models are fluent with words and unreliable with sums. A cost estimate is a sum of products, five million input tokens at one price plus one million output tokens at another, and a slip in it looks as confident as a correct figure. So the tool gives the model a calculator, `calculate`. The system instructions tell it to use the calculator for every cost, and to show the formula and the result in its answer.
+
+The calculator is deliberately small. It accepts decimal numbers (a decimal point needs digits on both sides, so `.5` and `5.` are refused), `+`, `-`, `*`, `/`, parentheses and spaces, and a sign in front of a number or a bracket (`-5 + 2`, `2 - -3`). The usual precedence applies, and operators of equal rank go left to right. Because prices are in dollars per million tokens, the millions of tokens in a workload multiply them directly: `5 * 0.018 + 1 * 0.09` is the cost of five million input and one million output tokens on a model that charges $0.018 and $0.09.
+
+Everything else is refused, and the refusal tells the model why. The tool does not hand the text to `eval`, to a shell or to any other interpreter. It reads the characters itself, one at a time, so a line such as `process.exit(1)` stops at its first letter, with a message that names the letter and its position. These are the cases:
+
+| The model sends                               | The result it gets back                                          |
+| --------------------------------------------- | ---------------------------------------------------------------- |
+| `5 * 0.018 + 1 * 0.09`                        | the formula, a `=` and the result: `5 * 0.018 + 1 * 0.09 = 0.18` |
+| `10 / (5 - 5)`                                | an error: division by zero                                       |
+| `2 ** 3`, `1e3`, `7 % 2`, `Math.PI`           | an error naming the first character outside the grammar          |
+| `(1 + 2`, `1 +`                               | an error saying what is missing                                  |
+| more than 200 characters, or 33 brackets deep | an error naming the limit                                        |
+
+Every step is rounded to twelve significant digits, which clears the noise of binary arithmetic (`0.1 + 0.2` is `0.3`, and `0.1 + 0.2 - 0.3` is `0`, so dividing by it is reported as a division by zero) and leaves the prices in the catalog exact in practice. Results are written in plain decimal, never with an exponent, so the model can paste a formula back. The formula is shown with single spaces around the operators, so you can check it against the `--verbose` line. As with any tool, a failed calculation is not a failed run: the error goes back to the model, which can fix its expression or say it could not compute.
+
+Here is a real run. The model looked up both models, then computed both costs, each pair of calls running together:
+
+```text
+$ pnpm dev --model anthropic/claude-haiku-4.5 --verbose -q "What would 5 million input tokens and 1 million output tokens cost on openai/gpt-oss-120b, and on openai/gpt-oss-20b?"
+tool: get_model {"slug": "openai/gpt-oss-120b"}
+tool: get_model {"slug": "openai/gpt-oss-20b"}
+tool: calculate {"expression": "5 * 0.15 + 1 * 0.6"}
+tool: calculate {"expression": "5 * 0.018 + 1 * 0.09"}
+Now I'll calculate the costs for each model:
+Based on current OpenRouter pricing:
+
+**openai/gpt-oss-120b**: $1.35
+- Formula: 5 million × $0.15 + 1 million × $0.60 = $1.35
+
+**openai/gpt-oss-20b**: $0.18
+- Formula: 5 million × $0.018 + 1 million × $0.09 = $0.18
+
+The 20b model is significantly cheaper—about 7.5× less expensive for this usage pattern. The 120b model costs more because it has much higher per-token pricing ($0.15 input, $0.60 output vs $0.018 input, $0.09 output).
+model: anthropic/claude-haiku-4.5
+tokens: 10004 prompt, 411 completion, 10415 total
+```
+
+The line "Now I'll calculate the costs for each model:" is a remark the instructions ask the model not to make. The tool prints it, as it prints everything the model writes.
 
 ## What you see
 
@@ -207,4 +249,4 @@ The tool waits up to 60 seconds for the first sign of life from the model, and u
 
 ## What is not here yet
 
-Arithmetic is the next piece: the model works out costs in its head today, and a calculator tool will let it compute them exactly. The status lines show model and tokens only. The cost in dollars and a link to the trace in Langfuse arrive with the slices that build them.
+The status lines show model and tokens only. The cost in dollars and a link to the trace in Langfuse arrive with the slices that build them.
