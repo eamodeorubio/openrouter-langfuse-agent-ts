@@ -46,7 +46,7 @@ Every price a tool returns SHALL be a number in USD per million tokens, converte
 - **THEN** the tool values are `3`, `1.5` and `0.07`
 
 ### Requirement: search_models arguments
-`search_models` SHALL accept the arguments below, all optional, and SHALL send each given one to `GET /api/v1/models` under the API's own name. Unknown arguments SHALL fail validation.
+`search_models` SHALL accept the arguments below, all optional, and SHALL send each given one to `GET /api/v1/models` under the API's own name. A `null` value SHALL be read as the argument being absent. Unknown arguments SHALL fail validation.
 
 #### Scenario: Accepted arguments
 | Argument | Type | Meaning |
@@ -70,6 +70,10 @@ Every price a tool returns SHALL be a number in USD per million tokens, converte
 #### Scenario: Cheap tool-capable models
 - **WHEN** the model calls `search_models` with `sort: "pricing-low-to-high"`, `supported_parameters: ["tools"]`, `limit: 5`
 - **THEN** the request carries `sort=pricing-low-to-high`, `supported_parameters=tools`, `limit=5`
+
+#### Scenario: Null as absent
+- **WHEN** the model sends every argument as `null`, as some providers make it do
+- **THEN** the call is valid, the request carries only `limit=10` and `offset=0`, and the schema offered to the model allows `null` for each optional argument
 
 #### Scenario: Bounds
 | `limit` | Result |

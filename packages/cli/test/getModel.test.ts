@@ -276,6 +276,26 @@ describe('get_model', () => {
     expect((await run({ slug: 'a/b' })).ok).toBe(true);
   });
 
+  it('keeps the not-found text for a 404 only; another status shows its own', async () => {
+    nock(HOST)
+      .get('/api/v1/model/a/b')
+      .reply(400, { error: { message: 'bad slug', code: 400 } });
+    const result = await run({ slug: 'a/b' });
+    expect((result as { message: string }).message).toMatch(
+      /^API error 400: .*bad slug/,
+    );
+  });
+
+  it('reports a dropped connection after the retries, not as a missing model', async () => {
+    nock(HOST)
+      .get('/api/v1/model/a/b')
+      .times(5)
+      .replyWithError('socket hang up');
+    const result = await run({ slug: 'a/b' });
+    expect(result.ok).toBe(false);
+    expect((result as { message: string }).message).toMatch(/^Request failed/);
+  });
+
   it('does not retry a refused key', async () => {
     const scope = nock(HOST)
       .get('/api/v1/model/a/b')

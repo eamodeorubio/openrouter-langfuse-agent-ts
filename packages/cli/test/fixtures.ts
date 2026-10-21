@@ -281,3 +281,10 @@ export const toolRound = (
   }
   return sseBody(...chunks);
 };
+
+/** Two models of a catalog search, recorded from the live API: sorted by price, tools required. */
+export const recordedModelsList = load('models-list.200.json') as {
+  data: Record<string, unknown>[];
+  total_count: number;
+  links: { next: string | null };
+};

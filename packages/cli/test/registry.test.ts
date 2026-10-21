@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
-import { functionTools, runTool } from '../src/tools/registry.js';
+import { functionTools, runTool, TOOLS } from '../src/tools/registry.js';
 import type { Tool, ToolContext } from '../src/tools/types.js';
 
 const context = {} as ToolContext;
@@ -92,5 +92,72 @@ describe('functionTools', () => {
     expect(
       (tool as { function: { parameters: object } }).function.parameters,
     ).not.toHaveProperty('$schema');
+  });
+});
+
+describe('the tools the agent offers', () => {
+  const offered = functionTools(TOOLS);
+  const schemaOf = (name: string) =>
+    offered.find(
+      (tool) => 'function' in tool && tool.function.name === name,
+    ) as unknown as {
+      function: {
+        description: string;
+        parameters: {
+          properties: Record<string, { description?: string }>;
+          required?: string[];
+        };
+      };
+    };
+
+  it('are get_model and search_models, each with a description', () => {
+    expect(
+      offered.map((tool) => 'function' in tool && tool.function.name),
+    ).toEqual(['get_model', 'search_models']);
+    for (const tool of offered) {
+      expect(
+        'function' in tool && tool.function.description?.length,
+      ).toBeGreaterThan(20);
+    }
+  });
+
+  it('describe every argument of search_models, and name the unit of each price', () => {
+    const { properties } = schemaOf('search_models').function.parameters;
+    for (const [name, property] of Object.entries(properties)) {
+      expect(property.description, name).toBeTruthy();
+    }
+    for (const name of [
+      'min_prompt_price',
+      'max_prompt_price',
+      'min_completion_price',
+      'max_completion_price',
+    ]) {
+      expect(properties[name]?.description).toMatch(/USD per million tokens/);
+    }
+  });
+
+  it('let a model send null for any optional argument of search_models, as some providers make it do', () => {
+    const { properties } = schemaOf('search_models').function.parameters;
+    for (const [name, property] of Object.entries(properties)) {
+      expect(JSON.stringify(property), name).toContain('"null"');
+    }
+  });
+
+  it('tell the model the default page, since the schema cannot carry a default through null', () => {
+    const { properties } = schemaOf('search_models').function.parameters;
+    expect(properties.limit?.description).toMatch(/default is 10/);
+    expect(properties.offset?.description).toMatch(/default is 0/);
+  });
+
+  it('require nothing of search_models, since the page has defaults', () => {
+    expect(
+      schemaOf('search_models').function.parameters.required ?? [],
+    ).toEqual([]);
+  });
+
+  it('require the slug of get_model', () => {
+    expect(schemaOf('get_model').function.parameters.required).toEqual([
+      'slug',
+    ]);
   });
 });

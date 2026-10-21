@@ -23,11 +23,22 @@ Delivers the loop, the system message, parallel calls, reasoning continuity, `ge
 - [x] 2.10 Update the user-facing docs: `README.md`, `docs/src/content/docs/ask-a-question.md` and, if it describes what the agent does, `docs/src/content/docs/index.md`. Cover tools, `--verbose` and `tool:` lines, the exit-code table, summed tokens, a worked example. Use the beautiful-prose settings in AGENTS.md. Verify every command shown runs as written against the fake API, and that `pnpm docs:build` succeeds.
 - [x] 2.11 Run `pnpm check`, `pnpm typecheck`, `pnpm test`, `pnpm mutation`; read every survivor and kill or justify it.
 - [x] 2.12 Run `reviewer-code-high`, `reviewer-code-low`, `reviewer-docs`; fix every must-fix finding.
-- [ ] 2.13 Write the full report. Wait for the user's approval, which also approves the commit. Commit `feat: let the agent look up a model`.
+- [x] 2.13 Write the full report. Wait for the user's approval, which also approves the commit. Commit `feat: let the agent look up a model`.
 
 ## 3. Slice 2: `feat: let the agent search the model catalog` (minor)
 
-Named only. Adds `search_models` (*search_models arguments*, *search_models result*) to the registry, with its tests, docs, mutation run, reviewers, report and commit. Planned in detail once slice 1 is approved.
+Delivers `search_models` and the shared catalog wrapper. Spec: *search_models arguments*, *search_models result*, *Prices in USD per million tokens*. Fixture: `models-list.200.json`, recorded in the spikes.
+
+- [x] 3.1 Failing integration test, covers *search_models arguments* and *result* through `run`: the model calls `search_models` with a sort, a required parameter and a limit; assert the `GET /models` query, that the result sent back holds `total`, `next_offset` and models without descriptions, with prices in USD per million, and that the answer reaches stdout. Verify it fails for the unknown tool.
+- [x] 3.2 Failing unit tests, then code, for the arguments schema: every row of the arguments table, the `limit` bounds, unknown keys, enum values for `category` and `sort`, and lists as lists.
+- [x] 3.3 Failing unit tests, then code, for the request: each argument under the API's own name (`query` as `q`, `min_context_length` as `context`, price floors and ceilings, `architecture` as `arch`, `authors` as `model_authors`, `zero_data_retention` as `zdr`); lists joined by commas; defaults `limit=10`, `offset=0`; `zero_data_retention: false` sends nothing.
+- [x] 3.4 Failing unit tests, then code, for the result against the fixture: the listed fields only, prices per million, `supports_reasoning`, benchmark indices (`null` when absent), `created` as a date, no description; `next_offset` is `offset + count` when the API has a next page and `null` otherwise. Property: `next_offset` is `null` or greater than `offset`, whatever the page.
+- [x] 3.5 Extract the "call the catalog, turn expected failures into a result" wrapper that `get_model` holds into `tools/catalog.ts`, and use it from both tools; existing tests stay green. Refactor criterion: duplication, single responsibility.
+- [x] 3.6 Register the tool; update the loop test that lists the offered tools; test that the schema offered to the model carries the argument descriptions and units.
+- [x] 3.7 Update the user-facing docs: `README.md`, `docs/src/content/docs/ask-a-question.md` (a section on searching with the filters table, a real `--verbose` run) and `docs/src/content/docs/index.md`. Use the beautiful-prose settings in AGENTS.md. Verify every command shown runs as written, and that `pnpm docs:build` succeeds.
+- [x] 3.8 Run `pnpm check`, `pnpm typecheck`, `pnpm test`, `pnpm mutation`; read every survivor and kill or justify it.
+- [x] 3.9 Run `reviewer-code-high`, `reviewer-code-low`, `reviewer-docs`; fix every must-fix finding.
+- [ ] 3.10 Write the full report. Wait for the user's approval, which also approves the commit. Commit `feat: let the agent search the model catalog`.
 
 ## 4. Slice 3: `feat: let the agent do arithmetic` (minor)
 

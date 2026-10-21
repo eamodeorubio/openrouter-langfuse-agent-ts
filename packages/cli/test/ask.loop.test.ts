@@ -208,6 +208,7 @@ describe('what each request holds', () => {
     });
     expect(sent?.body.tools?.map((tool) => tool.function.name)).toEqual([
       'get_model',
+      'search_models',
     ]);
     expect(sent?.body.parallel_tool_calls).toBe(true);
     expect(sent?.body.tool_choice).toBeUndefined();
@@ -377,6 +378,26 @@ describe('tool failures go to the model', () => {
     expect(String(toolContents(1)[0])).toMatch(/timed out/i);
   });
 
+  it('applies the tool timeout to a search as well', async () => {
+    failing({
+      id: 'c1',
+      name: 'search_models',
+      arguments: '{"query":"stuck"}',
+    });
+    api.holdGet('/models', 200, {
+      data: [],
+      total_count: 0,
+      links: { next: null },
+    });
+    for await (const _ of ask(config, 'q', {
+      serverURL: api.url,
+      toolTimeoutMs: 300,
+    })) {
+      // drained
+    }
+    expect(String(toolContents(1)[0])).toMatch(/timed out/i);
+  });
+
   it('does not cut a slow lookup short because the idle limit is short', async () => {
     failing(call('c1', 'a/slow'));
     const release = api.holdGet('/model/a/slow', 200, model('a/slow'));
@@ -478,6 +499,23 @@ describe('the key stays out of what the model reads and the screen shows', () =>
     api.reply(200, toolRound([call('c1', 'a/b')]));
     api.replyGet('/model/a/b', 401, {
       error: { message: `Bad key ${KEY} for a/b`, code: 401 },
+    });
+    api.reply(200, answer('x'));
+    await withKey();
+    const result = toolContents(1)[0] ?? '';
+    expect(result).not.toContain(KEY);
+    expect(result).toContain('[redacted]');
+  });
+
+  it('replaces the key in the failure of a search, too', async () => {
+    api.reply(
+      200,
+      toolRound([
+        { id: 'c1', name: 'search_models', arguments: '{"query":"x"}' },
+      ]),
+    );
+    api.replyGet('/models', 401, {
+      error: { message: `Bad key ${KEY}`, code: 401 },
     });
     api.reply(200, answer('x'));
     await withKey();
