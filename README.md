@@ -63,13 +63,13 @@ pnpm docs:dev
 
 ## Project layout
 
-| Path                | What lives there                                        |
-| ------------------- | ------------------------------------------------------- |
-| `packages/cli/`     | The CLI: source in `src/`, tests in `test/`             |
-| `docs/`             | The documentation site                                  |
-| `openspec/`         | Specs and change proposals                              |
-| `QUALITY_RUBRIC.md` | The yardstick for writing and reviewing code            |
-| `AGENTS.md`         | Working rules for AI coding agents and for contributors |
+| Path                | What lives there                             |
+| ------------------- | -------------------------------------------- |
+| `packages/cli/`     | The CLI: source in `src/`, tests in `test/`  |
+| `docs/`             | The documentation site                       |
+| `openspec/`         | Specs and change proposals                   |
+| `QUALITY_RUBRIC.md` | The yardstick for writing and reviewing code |
+| `AGENTS.md`         | Working rules for AI coding agents           |
 
 ## Contributing
 
