@@ -104,7 +104,7 @@ A **short** report (chore work) lists the files changed, the checks and their re
 
 - Work on a branch, never on `main`.
 - Commits follow Conventional Commits. Do not edit the version by hand.
-- Push a feature branch and open or edit a pull request only with the user's permission, asked every time. Propose the PR title and description first. Never force-push, push to `main`, push tags, merge, tag or release.
+- Push a feature branch and open or edit a pull request only with the user's permission, asked every time. Propose the PR title and description first. Never force-push, push to `main`, push tags, merge a pull request, tag or release. To bring a PR up to date with `main`, an agent may merge `main` into the branch or rebase it onto `main`. Once the branch is pushed, prefer the merge, because a rebase would need a force-push; the squash merge hides the extra commit.
 - The PR title becomes the one squash commit on `main` and alone sets the bump, the largest among its product slices.
 
 ### When uncertain
