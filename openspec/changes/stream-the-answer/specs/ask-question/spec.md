@@ -45,7 +45,7 @@ tokens: 29 prompt, 2024 completion (11 reasoning), 2053 total
 | no reasoning field | `29 prompt, 2024 completion, 2053 total` |
 
 ### Requirement: Retry transient failures
-The CLI SHALL retry a failed call up to 4 times, 5 attempts in all, when the failure is HTTP 429, HTTP 5xx or a connection error, and only while it has written no answer or thinking text. Before retry n (1 to 4) it SHALL wait 300 ms times 2 to the power n-1, scaled by a random factor between 0.75 and 1.25. It SHALL NOT retry any other failure.
+The CLI SHALL retry a failed call up to 4 times, 5 attempts in all, when the failure is HTTP 429, HTTP 5xx or a connection error, and only while the model has produced no answer or thinking text, whether or not that text is shown. Before retry n (1 to 4) it SHALL wait 300 ms times 2 to the power n-1, scaled by a random factor between 0.75 and 1.25. It SHALL NOT retry any other failure.
 
 #### Scenario: Which failures are retried
 | Failure | Retried |
@@ -56,7 +56,7 @@ The CLI SHALL retry a failed call up to 4 times, 5 attempts in all, when the fai
 | Timeout | no |
 | HTTP 400, 401, 402, 403, 404 | no |
 | Response without answer or usage | no |
-| Any failure after answer or thinking text was written | no |
+| Any failure after the model has produced answer or thinking text | no |
 
 #### Scenario: Waits before each retry
 | Retry | Base wait | Range |

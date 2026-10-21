@@ -39,6 +39,13 @@ Gate: no task starts before the user approves the spec. Both design questions ar
 - [x] 5.3 Run `reviewer-code-high`, `reviewer-code-low` and `reviewer-docs`. Tell each that a real `.env` exists in `packages/cli` and that no file named `.env` may be read, and that the CLI must not be run against the live API. Fix every must-fix finding, then rerun the checks.
 - [x] 5.4 Write the product slice report. Wait for the user's approval, which also approves the commit. Commit as `feat: stream the answer and show the model's thinking`.
 
+### 6. Added after the first report
+
+- [x] 6.1 The first CI run scored 97.39% with nine survivors that local runs had hidden: Stryker's default concurrency made timing-sensitive tests fail by accident. Pin `concurrency` to 2, kill the real gaps with tests, simplify a dead operand, and disable four equivalent mutants with their reasons. Verify `pnpm mutation:full` scores 100% with 0 survivors.
+- [x] 6.2 Spec requirement "Complete response instead of a stream": a failing test on the recorded non-streamed response first, at the `ask` level and through `run`, then `asChunk` in `readChunks`, the usage guide and the design note. Verify the tests pass and the malformed-response cases get the shape error.
+- [x] 6.3 Reword the retry rule to match the code and the design: retries stop once the model has produced anything, shown or not. Verify `openspec validate --strict`.
+- [x] 6.4 Pin the 60 s default idle limit with a test that does not wait for it. Verify the test fails when the constant changes.
+
 ## Workflow follow-up
 
 - Push the branch and open the pull request only with the user's permission. Never merge.
