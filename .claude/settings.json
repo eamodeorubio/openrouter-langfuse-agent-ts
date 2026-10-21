@@ -30,6 +30,7 @@
     ],
     "ask": [
       "Bash(git commit:*)",
+      "Bash(git merge:*)",
       "Bash(git push:*)",
       "Bash(gh pr create:*)",
       "Bash(gh pr edit:*)",
@@ -43,7 +44,6 @@
       "Bash(git push -f:*)",
       "Bash(git push --force:*)",
       "Bash(git tag:*)",
-      "Bash(git merge:*)",
       "Bash(gh pr merge:*)",
       "Read(**/.env)",
       "Read(**/.env.local)"
