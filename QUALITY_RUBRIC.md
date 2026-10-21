@@ -18,7 +18,7 @@ The single yardstick for writing, refactoring and reviewing code in this repo. I
 
 - Refactor only when the code fails a criterion above. Name the criterion.
 - No trivial refactors and no overengineering. Weigh the complexity a change adds against the quality it buys.
-- Reuse existing code and extract duplication into shared utilities, but never at the cost of cohesion, single responsibility, coupling, abstraction or readability. A refactor that breaks the rubric is not allowed, even to remove duplication.
+- Extracting duplication must not cost cohesion, single responsibility, coupling, abstraction or readability.
 - At most 3 refactor passes per product slice.
 
 ## Severity
