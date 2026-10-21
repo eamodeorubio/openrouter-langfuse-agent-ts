@@ -13,6 +13,23 @@ describe('formatStatus', () => {
     );
   });
 
+  it.each([
+    [11, '29 prompt, 2024 completion (11 reasoning), 2053 total'],
+    [0, '29 prompt, 2024 completion, 2053 total'],
+    [undefined, '29 prompt, 2024 completion, 2053 total'],
+  ])('with reasoning tokens %s prints %s', (reasoningTokens, expected) => {
+    const text = formatStatus({
+      model: 'm',
+      usage: {
+        promptTokens: 29,
+        completionTokens: 2024,
+        totalTokens: 2053,
+        reasoningTokens,
+      },
+    });
+    expect(text).toBe(`model: m\ntokens: ${expected}\n`);
+  });
+
   it('prints zero counts', () => {
     const text = formatStatus({
       model: 'm',
@@ -38,6 +55,32 @@ describe('formatStatus', () => {
             `tokens: ${promptTokens} prompt, ${completionTokens} completion, ${totalTokens} total`,
             '',
           ]);
+        },
+      ),
+    );
+  });
+
+  it('shows the reasoning count exactly when it is above zero, for any counts', () => {
+    fc.assert(
+      fc.property(
+        fc.nat(),
+        fc.nat(),
+        fc.nat(),
+        fc.option(fc.nat(), { nil: undefined }),
+        (promptTokens, completionTokens, totalTokens, reasoningTokens) => {
+          const tokens = formatStatus({
+            model: 'm',
+            usage: {
+              promptTokens,
+              completionTokens,
+              totalTokens,
+              reasoningTokens,
+            },
+          }).split('\n')[1];
+          const shown = (reasoningTokens ?? 0) > 0;
+          expect(tokens).toBe(
+            `tokens: ${promptTokens} prompt, ${completionTokens} completion${shown ? ` (${reasoningTokens} reasoning)` : ''}, ${totalTokens} total`,
+          );
         },
       ),
     );

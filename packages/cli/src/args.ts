@@ -4,6 +4,8 @@ import { UsageError } from './errors.js';
 export interface CliArgs {
   question: string | undefined;
   model: string | undefined;
+  /** `true` for --thinking, `false` for --no-thinking, `undefined` to decide from the terminal. */
+  thinking: boolean | undefined;
 }
 
 /**
@@ -33,11 +35,22 @@ export const parseCliArgs = (argv: string[]): CliArgs => {
       options: {
         q: { type: 'string', short: 'q' },
         model: { type: 'string' },
+        thinking: { type: 'boolean' },
+        'no-thinking': { type: 'boolean' },
       },
       strict: true,
       allowPositionals: false,
     });
-    return { question: values.q, model: values.model };
+    if (values.thinking && values['no-thinking']) {
+      throw new UsageError('Use either --thinking or --no-thinking, not both.');
+    }
+    let thinking: boolean | undefined;
+    if (values.thinking) {
+      thinking = true;
+    } else if (values['no-thinking']) {
+      thinking = false;
+    }
+    return { question: values.q, model: values.model, thinking };
   } catch (error) {
     throw new UsageError(
       error instanceof Error ? error.message : String(error),

@@ -13,7 +13,7 @@ pnpm install
 pnpm check         # Biome and Prettier
 pnpm format        # fix formatting
 pnpm typecheck     # tsc --noEmit
-pnpm test          # Vitest, with HTTP mocked by nock
+pnpm test          # Vitest, with HTTP mocked by nock or a local fake server
 pnpm test:watch    # rerun tests on every change
 pnpm test:coverage # tests with a coverage report
 pnpm mutation      # Stryker mutation testing, incremental
@@ -25,7 +25,7 @@ pnpm docs:preview  # serve the built site (Ctrl+C stops it)
 pnpm docs:preview:stop  # stop a detached preview server
 ```
 
-Tests never touch the network. Mock HTTP with `nock`. To run the tool against real services, copy `.env.example` to `.env` and fill in your keys. Never commit `.env`. To report a security problem, follow [SECURITY.md](SECURITY.md) instead of opening an issue.
+Tests never reach the public network. Mock HTTP with `nock`, or use the local fake server in `packages/cli/test/fakeApi.ts` for streams a test cancels or cuts. To run the tool against real services, copy `.env.example` to `.env` and fill in your keys. Never commit `.env`. To report a security problem, follow [SECURITY.md](SECURITY.md) instead of opening an issue.
 
 ## Your first change, step by step
 
@@ -159,7 +159,7 @@ The user-facing docs live in `docs/` and are published to GitHub Pages when `mai
 - **The pre-commit hook rewrote my files.** That is `lint-staged` formatting what you staged and adding the result to the commit. Review the diff and commit again. If it reports an error it cannot fix, fix it by hand.
 - **`pnpm check` fails on formatting.** Run `pnpm format`, then check again. Biome formats code and JSON, and Prettier formats Markdown and YAML.
 - **`openspec validate` fails.** The usual causes are a requirement with no `#### Scenario:` header (exactly four hashes), a requirement statement over 500 characters, or a requirement that does not say SHALL or MUST.
-- **A test needs the network.** It must not. Mock the call with `nock` so the test runs offline.
+- **A test needs the network.** It must not. Mock the call with `nock`, or use the local fake server in `packages/cli/test/fakeApi.ts`, so the test runs offline.
 - **The Husky hook does not run.** Run `pnpm install` again. The `prepare` script installs the hooks.
 
 ## Questions and bugs

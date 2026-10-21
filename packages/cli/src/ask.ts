@@ -1,113 +1,200 @@
 import { setTimeout as sleep } from 'node:timers/promises';
 import { OpenRouter } from '@openrouter/sdk';
-import type { ChatResult } from '@openrouter/sdk/models';
-import {
-  ConnectionError,
-  HTTPClientError,
-  OpenRouterError,
-  ResponseValidationError,
-} from '@openrouter/sdk/models/errors';
+import type { ChatStreamChunk } from '@openrouter/sdk/models';
 import type { Config } from './config.js';
 import { ApiError } from './errors.js';
-import type { Answer } from './types.js';
+import {
+  ChunkError,
+  IdleTimeout,
+  isShapeError,
+  isTransient,
+  StreamError,
+  toApiError,
+} from './failures.js';
+import type { AskEvent } from './types.js';
 
-const TIMEOUT_MS = 60_000;
-const MAX_MESSAGE_LENGTH = 200;
+const IDLE_TIMEOUT_MS = 60_000;
 const MAX_RETRIES = 4;
 const FIRST_WAIT_MS = 300;
 
-const oneLine = (text: string): string => {
-  const line = text.replace(/\s+/g, ' ').trim();
-  return line.length > MAX_MESSAGE_LENGTH
-    ? `${line.slice(0, MAX_MESSAGE_LENGTH)}…`
-    : line;
-};
-
-const toApiError = (error: unknown): ApiError | undefined => {
-  if (error instanceof ResponseValidationError) {
-    return new ApiError('The API response did not have the expected shape.');
-  }
-  if (error instanceof OpenRouterError) {
-    return new ApiError(
-      `API error ${error.statusCode}: ${oneLine(error.message)}`,
+/** Waits for `work`, but gives up with an `IdleTimeout` when `ms` pass first. */
+const within = <T>(work: Promise<T>, ms: number): Promise<T> =>
+  new Promise((resolve, reject) => {
+    const timer = setTimeout(() => reject(new IdleTimeout()), ms);
+    work.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (error) => {
+        clearTimeout(timer);
+        reject(error);
+      },
     );
-  }
-  // Stryker disable next-line ConditionalExpression: equivalent because every error the SDK call throws is an HTTPClientError or an OpenRouterError; the fall-through guards SDK bugs and no test can reach it.
-  if (error instanceof HTTPClientError) {
-    return new ApiError(`Request failed: ${oneLine(error.message)}`);
-  }
-  return undefined;
-};
+  });
 
-const isTransient = (error: unknown): boolean =>
-  error instanceof ConnectionError ||
-  (error instanceof OpenRouterError &&
-    (error.statusCode === 429 || error.statusCode >= 500));
-
-/** Retries a transient failure with doubling waits, each scaled by 0.75 to 1.25. */
-const withRetries = async <T>(send: () => Promise<T>): Promise<T> => {
-  for (let retry = 0; ; retry++) {
+/**
+ * Sends the request and yields its chunks. Nothing may stay silent for longer
+ * than `idleTimeoutMs`: the first chunk counts from the moment of sending,
+ * each later one from the chunk before. However this ends, short of reaching
+ * the end of the stream, the stream is cancelled.
+ */
+async function* readChunks(
+  client: OpenRouter,
+  model: string,
+  question: string,
+  idleTimeoutMs: number,
+): AsyncGenerator<ChatStreamChunk, void> {
+  const controller = new AbortController();
+  const sentAt = Date.now();
+  let iterator: AsyncIterator<ChatStreamChunk> | undefined;
+  try {
+    // Our own signal switches the SDK's whole-request deadline off. The SDK's
+    // iterator ignores an abort, so the race below ends the wait; the abort only frees the socket.
+    let response: Awaited<ReturnType<typeof client.chat.send>>;
     try {
-      return await send();
+      response = await within(
+        client.chat.send(
+          {
+            chatRequest: {
+              model,
+              stream: true,
+              messages: [{ role: 'user', content: question }],
+            },
+          },
+          { signal: controller.signal },
+        ),
+        idleTimeoutMs,
+      );
     } catch (error) {
-      if (retry >= MAX_RETRIES || !isTransient(error)) {
-        throw error;
+      // A response that never came is still open; one that failed has been read already.
+      if (error instanceof IdleTimeout) {
+        controller.abort();
       }
-      await sleep(FIRST_WAIT_MS * 2 ** retry * (0.75 + Math.random() * 0.5));
+      throw error;
     }
+    // With `stream: true` the SDK returns an event stream; its type also admits a plain result.
+    iterator = (response as unknown as AsyncIterable<ChatStreamChunk>)[
+      Symbol.asyncIterator
+    ]();
+    let limit = Math.max(0, idleTimeoutMs - (Date.now() - sentAt));
+    for (;;) {
+      let step: IteratorResult<ChatStreamChunk>;
+      try {
+        step = await within(iterator.next(), limit);
+      } catch (error) {
+        // A stalled read ignores everything but the abort, which also frees the socket.
+        controller.abort();
+        throw error instanceof IdleTimeout || isShapeError(error)
+          ? error
+          : new StreamError(
+              error instanceof Error ? error.message : String(error),
+            );
+      }
+      if (step.done) {
+        return;
+      }
+      limit = idleTimeoutMs;
+      yield step.value;
+    }
+  } finally {
+    // Cancelling the reader lets go of a stream we abandon; on one that has ended it does nothing.
+    // Stryker disable next-line OptionalChaining: equivalent because the SDK's event stream always has `return`, and `return()` always gives a promise.
+    iterator?.return?.()?.catch(() => undefined);
   }
-};
-
-/** Test seams: a short timeout and a local server. `run` never sets them. */
-export interface AskOptions {
-  timeoutMs?: number;
-  serverURL?: string;
 }
 
-export const ask = async (
-  { apiKey, model }: Config,
+/** One request, read to the end, turned into events. */
+async function* attempt(
+  client: OpenRouter,
+  model: string,
   question: string,
-  { timeoutMs = TIMEOUT_MS, serverURL }: AskOptions = {},
-): Promise<Answer> => {
-  // The SDK's own retry cannot express our policy (see withRetries) and runs for an hour by default.
-  const client = new OpenRouter({
-    apiKey,
-    retryConfig: { strategy: 'none' },
-    timeoutMs,
-    serverURL,
-  });
-  let response: ChatResult;
-  try {
-    // Without `stream: true` the SDK returns a ChatResult; the type also admits an event stream.
-    response = await withRetries(
-      async () =>
-        (await client.chat.send({
-          chatRequest: {
-            model,
-            messages: [{ role: 'user', content: question }],
-          },
-        })) as ChatResult,
-    );
-  } catch (error) {
-    throw toApiError(error) ?? error;
+  idleTimeoutMs: number,
+): AsyncGenerator<AskEvent, void> {
+  let sawAnswer = false;
+  let servedModel = '';
+  let usage: ChatStreamChunk['usage'];
+  for await (const chunk of readChunks(
+    client,
+    model,
+    question,
+    idleTimeoutMs,
+  )) {
+    if (chunk.error) {
+      throw new ChunkError(chunk.error.code, chunk.error.message);
+    }
+    servedModel = chunk.model;
+    const delta = chunk.choices[0]?.delta;
+    if (delta?.reasoning) {
+      yield { kind: 'thinking', text: delta.reasoning };
+    }
+    if (delta?.content) {
+      sawAnswer = true;
+      yield { kind: 'content', text: delta.content };
+    }
+    usage = chunk.usage ?? usage;
   }
 
-  const text = response.choices[0]?.message.content;
-  if (typeof text !== 'string' || text === '') {
+  if (!sawAnswer) {
     throw new ApiError('The API response held no answer.');
   }
-  // The SDK already rejects a usage object that lacks any of its three counts.
-  const { usage } = response;
   if (!usage) {
     throw new ApiError('The API response held no token usage.');
   }
-  return {
-    text,
-    model: response.model,
+  yield {
+    kind: 'done',
+    model: servedModel,
     usage: {
       promptTokens: usage.promptTokens,
       completionTokens: usage.completionTokens,
       totalTokens: usage.totalTokens,
+      reasoningTokens:
+        usage.completionTokensDetails?.reasoningTokens ?? undefined,
     },
   };
-};
+}
+
+/** Test seams: a short idle limit (never set by `run`) and a local server (`run` forwards its `Io.serverURL`; production leaves it unset). */
+export interface AskOptions {
+  idleTimeoutMs?: number;
+  serverURL?: string;
+}
+
+/**
+ * Asks the model one question and yields the answer as it arrives. A
+ * transient failure is retried with doubling waits (each scaled by 0.75 to
+ * 1.25), but only while nothing has been yielded: after that a retry would
+ * repeat text the caller has already seen.
+ */
+export async function* ask(
+  { apiKey, model }: Config,
+  question: string,
+  { idleTimeoutMs = IDLE_TIMEOUT_MS, serverURL }: AskOptions = {},
+): AsyncGenerator<AskEvent, void> {
+  // The SDK's own retry cannot express our policy and runs for an hour by default.
+  const client = new OpenRouter({
+    apiKey,
+    retryConfig: { strategy: 'none' },
+    serverURL,
+  });
+  for (let retry = 0; ; retry++) {
+    let started = false;
+    try {
+      for await (const event of attempt(
+        client,
+        model,
+        question,
+        idleTimeoutMs,
+      )) {
+        started = true;
+        yield event;
+      }
+      return;
+    } catch (error) {
+      if (started || retry >= MAX_RETRIES || !isTransient(error)) {
+        throw toApiError(error, idleTimeoutMs) ?? error;
+      }
+      await sleep(FIRST_WAIT_MS * 2 ** retry * (0.75 + Math.random() * 0.5));
+    }
+  }
+}

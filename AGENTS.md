@@ -9,7 +9,7 @@ The agent will be instrumented with Langfuse.
 - **Package manager:** `pnpm` (workspace: the CLI in `packages/cli/`, the docs site in `docs/`, and the repo tooling at the root). Never use npm or yarn.
 - **Language:** TypeScript (latest) on Node 26 (see `.nvmrc`), ESM, strict mode.
 - **Format and lint:** `biome` (config in `biome.json`) for TypeScript, JavaScript and JSON. `prettier` (config in `.prettierrc.json`) only for Markdown and YAML. Each file type has one owner. Indentation, line endings and charset come from `.editorconfig`, which both tools read. `.gitattributes` forces LF line endings in Git.
-- **Tests:** `vitest`, in `packages/cli/test/`. Mock HTTP with `nock`; tests must not hit the network. `fast-check` for property tests of invariants. `stryker` (`@stryker-mutator/core` with the vitest runner) for mutation testing.
+- **Tests:** `vitest`, in `packages/cli/test/`. Mock HTTP with `nock`, or with the loopback server in `test/fakeApi.ts` for streams a test cancels or cuts; tests must not reach the public network. `fast-check` for property tests of invariants. `stryker` (`@stryker-mutator/core` with the vitest runner) for mutation testing.
   - `vitest` and `@vitest/coverage-v8` are pinned to 4.1.12, because Stryker's vitest runner finds no tests under vitest 5 ([stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210)). Dependabot ignores their major versions. Remove the pin and the Dependabot ignore rule when that issue is fixed.
   - We do not use Stryker's TypeScript checker, which does not support TypeScript 7.
 - **Running TypeScript:** `tsx`.
@@ -23,7 +23,7 @@ The agent will be instrumented with Langfuse.
 
 These bind every spec, design and implementation.
 
-- Tests never touch the network. Mock HTTP with `nock`.
+- Tests never reach the public network. Mock HTTP with `nock`. Where a test must cancel, cut or stall a response stream, use a real server on `127.0.0.1` instead (`packages/cli/test/fakeApi.ts`): `nock`'s mock sockets cannot survive a cancel, and the failures they cause are intermittent.
 - API keys come from the environment (see `.env.example`). Never log them, print them, commit them, or send them to Langfuse in traces or metadata.
 - Validate untrusted input (arguments, environment, API responses) at the boundary, with clear error messages.
 - Results go to stdout. Diagnostics and errors go to stderr. A failed run exits non-zero.

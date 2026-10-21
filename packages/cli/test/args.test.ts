@@ -5,7 +5,11 @@ import { UsageError } from '../src/errors.js';
 
 describe('parseCliArgs', () => {
   it('returns nothing when no argument is given', () => {
-    expect(parseCliArgs([])).toEqual({ question: undefined, model: undefined });
+    expect(parseCliArgs([])).toEqual({
+      question: undefined,
+      model: undefined,
+      thinking: undefined,
+    });
   });
 
   it('reads the question from -q', () => {
@@ -22,7 +26,24 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs(['--model', 'a/b', '-q', 'hi'])).toEqual({
       question: 'hi',
       model: 'a/b',
+      thinking: undefined,
     });
+  });
+
+  it.each([
+    ['--thinking', ['--thinking'], true],
+    ['--no-thinking', ['--no-thinking'], false],
+    ['neither flag', [], undefined],
+  ])('reads %s as thinking = %s', (_name, argv, thinking) => {
+    expect(parseCliArgs(argv).thinking).toBe(thinking);
+  });
+
+  it.each([
+    ['--thinking first', ['--thinking', '--no-thinking']],
+    ['--no-thinking first', ['--no-thinking', '--thinking']],
+  ])('rejects both thinking flags together (%s) and says so', (_name, argv) => {
+    expect(() => parseCliArgs(argv)).toThrow(UsageError);
+    expect(() => parseCliArgs(argv)).toThrow(/--thinking.*--no-thinking/);
   });
 
   it('accepts an empty -q value and leaves the judgement to the caller', () => {
@@ -42,6 +63,7 @@ describe('parseCliArgs', () => {
     expect(parseCliArgs(['--model', 'a/b', '-q', '-5 degrees'])).toEqual({
       question: '-5 degrees',
       model: 'a/b',
+      thinking: undefined,
     });
   });
 
@@ -80,11 +102,16 @@ describe('parseCliArgs', () => {
         ),
         fc.option(model, { nil: undefined }),
         fc.boolean(),
-        (question, model, modelFirst) => {
+        fc.constantFrom(undefined, true, false),
+        (question, model, modelFirst, thinking) => {
           const q = question === undefined ? [] : ['-q', question];
           const m = model === undefined ? [] : ['--model', model];
-          const argv = modelFirst ? [...m, ...q] : [...q, ...m];
-          expect(parseCliArgs(argv)).toEqual({ question, model });
+          const t =
+            thinking === undefined
+              ? []
+              : [thinking ? '--thinking' : '--no-thinking'];
+          const argv = modelFirst ? [...m, ...t, ...q] : [...q, ...t, ...m];
+          expect(parseCliArgs(argv)).toEqual({ question, model, thinking });
         },
       ),
     );

@@ -3,19 +3,24 @@ import { ask } from './ask.js';
 import { loadConfig } from './config.js';
 import { ApiError, ConfigError, UsageError } from './errors.js';
 import { readQuestion, type Stdin } from './input.js';
-import { formatStatus } from './status.js';
+import { createPresenter } from './present.js';
+import type { Sink } from './types.js';
 
 export interface Io {
   cwd: string;
   stdin: Stdin;
-  stdout: { write(text: string): unknown };
-  stderr: { write(text: string): unknown };
+  stdout: Sink;
+  stderr: Sink;
+  /** Where the API lives. Tests point it at a local server; the real entry point leaves it unset. */
+  serverURL?: string;
 }
 
-const USAGE = `Usage: openrouter-langfuse-agent-ts [-q <question>] [--model <model>]
+const USAGE = `Usage: openrouter-langfuse-agent-ts [-q <question>] [--model <model>] [--thinking | --no-thinking]
 
   -q <question>   The question. Without it, the question is read from stdin.
   --model <model> The model that answers. Overrides OPENROUTER_MODEL.
+  --thinking      Show the model's thinking on stderr, even when stderr is not a terminal.
+  --no-thinking   Do not show the thinking, even on a terminal.
 
 Environment: OPENROUTER_API_KEY (required), OPENROUTER_MODEL.`;
 
@@ -33,16 +38,31 @@ export const run = async (
   io: Io,
 ): Promise<number> => {
   let apiKey: string | undefined;
+  let presenter: ReturnType<typeof createPresenter> | undefined;
   try {
     const args = parseCliArgs(argv);
     const config = await loadConfig(args, env, io.cwd);
     apiKey = config.apiKey;
     const question = await readQuestion(args.question, io.stdin);
-    const answer = await ask(config, question);
-    io.stdout.write(`${answer.text}\n`);
-    io.stderr.write(formatStatus(answer));
+    presenter = createPresenter({
+      stdout: io.stdout,
+      stderr: io.stderr,
+      thinking: args.thinking,
+      noColor: env.NO_COLOR,
+    });
+    for await (const event of ask(config, question, {
+      serverURL: io.serverURL,
+    })) {
+      presenter.handle(event);
+    }
     return EXIT_OK;
   } catch (error) {
+    try {
+      // Stryker disable next-line OptionalChaining: equivalent because the catch around it swallows the TypeError a missing presenter would throw.
+      presenter?.interrupt();
+    } catch {
+      // The output is gone; the error line below still goes to stderr.
+    }
     const fail = (message: string, code: number): number => {
       io.stderr.write(`${redact(message, apiKey)}\n`);
       return code;

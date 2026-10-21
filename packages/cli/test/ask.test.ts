@@ -1,4 +1,8 @@
-import { createServer } from 'node:http';
+import {
+  createServer,
+  type IncomingMessage,
+  type ServerResponse,
+} from 'node:http';
 import type { AddressInfo } from 'node:net';
 import fc from 'fast-check';
 import nock from 'nock';
@@ -14,13 +18,14 @@ import {
 } from 'vitest';
 import { type AskOptions, ask } from '../src/ask.js';
 import { ApiError } from '../src/errors.js';
+import type { AskEvent } from '../src/types.js';
 import {
+  contentChunk,
+  forNock,
   RECORDED_401_MESSAGE,
-  RECORDED_ANSWER,
-  RECORDED_MODEL,
-  RECORDED_USAGE,
-  recordedCompletion,
   recordedUnauthorized,
+  sseBody,
+  usageChunk,
 } from './fixtures.js';
 
 const waits = vi.hoisted(() => [] as number[]);
@@ -33,11 +38,9 @@ vi.mock('node:timers/promises', () => ({
 const HOST = 'https://openrouter.ai';
 const PATH = '/api/v1/chat/completions';
 const config = { apiKey: 'sk-test', model: 'req/model' };
+const USAGE = { prompt_tokens: 12, completion_tokens: 34, total_tokens: 46 };
 
-const body = (overrides: Record<string, unknown> = {}) => ({
-  ...recordedCompletion,
-  ...overrides,
-});
+const good = sseBody(contentChunk('42'), usageChunk(USAGE));
 
 const attempts = { count: 0 };
 const counted = (scope: nock.Scope) =>
@@ -48,27 +51,57 @@ const counted = (scope: nock.Scope) =>
 
 type Step = [status: number, payload: nock.Body];
 
+const headersFor = (status: number, payload: unknown) =>
+  status === 200 && typeof payload === 'string'
+    ? { 'content-type': 'text/event-stream' }
+    : undefined;
+
+const bodyFor = (status: number, payload: nock.Body): nock.Body =>
+  status === 200 && typeof payload === 'string' ? forNock(payload) : payload;
+
 /** Answers the first request with the first step, the second with the second, and so on. */
 const serve = (...steps: Step[]) => {
   for (const [status, payload] of steps) {
-    counted(nock(HOST)).reply(status, payload);
+    counted(nock(HOST)).reply(
+      status,
+      bodyFor(status, payload),
+      headersFor(status, payload),
+    );
   }
 };
 
 /** Answers every request the same way. */
 const serveAlways = (status: number, payload: nock.Body) =>
-  counted(nock(HOST).persist()).reply(status, payload);
+  counted(nock(HOST).persist()).reply(
+    status,
+    bodyFor(status, payload),
+    headersFor(status, payload),
+  );
 
 const reply = (status: number, payload: nock.Body) => serve([status, payload]);
 
-const failure = async (options?: AskOptions): Promise<ApiError> => {
-  const error = await ask(config, 'hi', options).then(
-    () => undefined,
-    (e: unknown) => e,
-  );
-  expect(error).toBeInstanceOf(ApiError);
-  return error as ApiError;
+/** Runs `ask` to the end, keeping the events that came before any failure. */
+const collect = async (options?: AskOptions) => {
+  const events: AskEvent[] = [];
+  let error: unknown;
+  try {
+    for await (const event of ask(config, 'hi', options)) {
+      events.push(event);
+    }
+  } catch (caught) {
+    error = caught;
+  }
+  return { events, error };
 };
+
+const failure = async (options?: AskOptions) => {
+  const { events, error } = await collect(options);
+  expect(error).toBeInstanceOf(ApiError);
+  return { events, message: (error as ApiError).message };
+};
+
+const textOf = (events: AskEvent[], kind: 'thinking' | 'content') =>
+  events.flatMap((e) => (e.kind === kind ? [e.text] : [])).join('');
 
 beforeAll(() => nock.disableNetConnect());
 afterAll(() => nock.enableNetConnect());
@@ -82,8 +115,8 @@ afterEach(() => {
   nock.cleanAll();
 });
 
-describe('ask', () => {
-  it('sends the model, the question and the key, and returns the answer, served model and usage', async () => {
+describe('ask: the request', () => {
+  it('sends the model, the question, the key and a streaming flag', async () => {
     let sent: unknown;
     let authorization: string | undefined;
     nock(HOST, {
@@ -98,44 +131,29 @@ describe('ask', () => {
         sent = requestBody;
         return true;
       })
-      .reply(200, body());
-    const answer = await ask(config, 'What is a token?');
+      .reply(200, forNock(good), { 'content-type': 'text/event-stream' });
+    await collect();
     expect(sent).toMatchObject({
       model: 'req/model',
-      messages: [{ role: 'user', content: 'What is a token?' }],
+      stream: true,
+      messages: [{ role: 'user', content: 'hi' }],
     });
     expect(authorization).toBe('Bearer sk-test');
-    expect(answer).toEqual({
-      text: RECORDED_ANSWER,
-      model: RECORDED_MODEL,
-      usage: RECORDED_USAGE,
-    });
   });
+});
 
-  it('accepts zero token counts', async () => {
-    reply(
-      200,
-      body({
-        usage: { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 },
-      }),
-    );
-    expect((await ask(config, 'hi')).usage).toEqual({
-      promptTokens: 0,
-      completionTokens: 0,
-      totalTokens: 0,
-    });
-  });
-
-  it('cuts a long server message to 200 characters and marks the cut', async () => {
-    serveAlways(500, { error: { code: 500, message: 'x'.repeat(1000) } });
-    const { message } = await failure();
-    expect(message).toBe(`API error 500: ${'x'.repeat(200)}…`);
-  });
-
+describe('ask: HTTP and network failures', () => {
   it('turns an HTTP error into an ApiError with the status and the API message', async () => {
     reply(401, recordedUnauthorized as nock.Body);
     expect((await failure()).message).toBe(
       `API error 401: ${RECORDED_401_MESSAGE}`,
+    );
+  });
+
+  it('cuts a long server message to 200 characters and marks the cut', async () => {
+    serveAlways(500, { error: { code: 500, message: 'x'.repeat(1000) } });
+    expect((await failure()).message).toBe(
+      `API error 500: ${'x'.repeat(200)}…`,
     );
   });
 
@@ -144,75 +162,9 @@ describe('ask', () => {
     expect((await failure()).message).toMatch(/^API error 500: /);
   });
 
-  it('turns a request that never gets an answer into a timeout ApiError', async () => {
-    const server = createServer();
-    await new Promise<void>((resolve) =>
-      server.listen(0, '127.0.0.1', resolve),
-    );
-    nock.enableNetConnect('127.0.0.1');
-    try {
-      const { port } = server.address() as AddressInfo;
-      const error = await failure({
-        timeoutMs: 200,
-        serverURL: `http://127.0.0.1:${port}/api/v1`,
-      });
-      expect(error.message).toMatch(/^Request failed: Request timed out/);
-      expect(waits).toEqual([]);
-    } finally {
-      server.closeAllConnections();
-      server.close();
-      nock.disableNetConnect();
-    }
-  });
-
   it('turns a network error into an ApiError', async () => {
     nock(HOST).persist().post(PATH).replyWithError('socket hang up');
     expect((await failure()).message).toMatch(/^Request failed: /);
-  });
-
-  it('turns a body the SDK cannot parse into an ApiError without the validation dump', async () => {
-    reply(200, { error: { code: 502, message: 'provider down' } });
-    const { message } = await failure();
-    expect(message).toBe('The API response did not have the expected shape.');
-  });
-
-  it.each([
-    ['no choices', { choices: [] }, /no answer/i],
-    [
-      'null content',
-      {
-        choices: [
-          {
-            index: 0,
-            finish_reason: 'stop',
-            message: { role: 'assistant', content: null },
-          },
-        ],
-      },
-      /no answer/i,
-    ],
-    [
-      'empty content',
-      {
-        choices: [
-          {
-            index: 0,
-            finish_reason: 'stop',
-            message: { role: 'assistant', content: '' },
-          },
-        ],
-      },
-      /no answer/i,
-    ],
-    ['no usage', { usage: undefined }, /token usage/i],
-    [
-      'partial usage',
-      { usage: { prompt_tokens: 1 } },
-      /token usage|expected shape/i,
-    ],
-  ])('rejects a response with %s', async (_name, overrides, message) => {
-    reply(200, body(overrides));
-    expect((await failure()).message).toMatch(message);
   });
 
   it('keeps every failure message on one line, whatever the server sends', async () => {
@@ -236,7 +188,7 @@ describe('ask', () => {
   });
 });
 
-describe('retries', () => {
+describe('ask: retries', () => {
   const busy = (status: number): Step => [
     status,
     { error: { code: status, message: 'busy' } },
@@ -245,8 +197,10 @@ describe('retries', () => {
   it.each([429, 500, 502, 503, 504])(
     'retries HTTP %i once and returns the later answer',
     async (status) => {
-      serve(busy(status), [200, body()]);
-      expect((await ask(config, 'hi')).text).toBe(RECORDED_ANSWER);
+      serve(busy(status), [200, good]);
+      const { events, error } = await collect();
+      expect(error).toBeUndefined();
+      expect(textOf(events, 'content')).toBe('42');
       expect(attempts.count).toBe(2);
       expect(waits).toEqual([300]);
     },
@@ -279,16 +233,11 @@ describe('retries', () => {
 
   it('retries a connection error', async () => {
     nock(HOST).post(PATH).replyWithError('socket hang up');
-    serve([200, body()]);
-    expect((await ask(config, 'hi')).text).toBe(RECORDED_ANSWER);
+    serve([200, good]);
+    const { events, error } = await collect();
+    expect(error).toBeUndefined();
+    expect(textOf(events, 'content')).toBe('42');
     expect(waits).toEqual([300]);
-  });
-
-  it('does not retry a response without an answer', async () => {
-    serve([200, body({ choices: [] })], [200, body()]);
-    await failure();
-    expect(attempts.count).toBe(1);
-    expect(waits).toEqual([]);
   });
 
   it('waits 300 ms doubling each time, scaled by 0.75 to 1.25, for any jitter draw', async () => {

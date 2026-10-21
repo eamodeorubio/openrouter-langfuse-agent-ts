@@ -28,10 +28,10 @@ Then check that everything works:
 ```sh
 pnpm check       # formatting and lint (Biome and Prettier)
 pnpm typecheck   # TypeScript, no emit
-pnpm test        # Vitest, with HTTP mocked by nock
+pnpm test        # Vitest, with HTTP mocked by nock or a local fake server
 ```
 
-Tests never reach the network. Any call to OpenRouter or Langfuse is mocked.
+Tests never reach the public network. Calls to OpenRouter and Langfuse are mocked with `nock` or served by a local fake server.
 
 ## Usage
 
@@ -43,7 +43,9 @@ pnpm dev -q "What is a token, and why do providers charge for them?"
 echo "Name one planet." | pnpm dev --model openai/gpt-4o-mini
 ```
 
-The answer goes to stdout. The model that served the request and the token usage go to stderr, so pipes stay clean. There is no default model: pass `--model` or set `OPENROUTER_MODEL`. A run exits 0 on success, 1 when the arguments or the settings are wrong, and 2 when the API call fails. The [usage guide](https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/ask-a-question/) covers every case.
+The answer streams to stdout as it arrives. The model that served the request and the token usage go to stderr, so pipes stay clean.
+
+If the model thinks before it answers, the thinking shows on stderr whenever you are watching stderr on a screen (when it is not redirected to a file or a pipe). `--thinking` and `--no-thinking` override that. There is no default model: pass `--model` or set `OPENROUTER_MODEL`. A run exits 0 on success, 1 when the arguments or the settings are wrong, and 2 when the API call fails. A stream that breaks halfway keeps the partial answer on stdout and exits 2. The [usage guide](https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/ask-a-question/) covers every case.
 
 ## Releases
 
