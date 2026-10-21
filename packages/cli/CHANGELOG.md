@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.2.0](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v0.1.0...v0.2.0) (2026-10-21)
+
+
+### Features
+
+* stream the answer and show the model's thinking ([#18](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues/18)) ([6011aa5](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/commit/6011aa5aa63fc766cfd24cb4a63fa8165fe981e0))
+
 ## 0.1.0 (2026-10-20)
 
 

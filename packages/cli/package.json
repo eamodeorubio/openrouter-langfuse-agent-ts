@@ -1,6 +1,6 @@
 {
   "name": "openrouter-langfuse-agent-ts",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A small CLI that answers questions about OpenRouter, helping users discover the most cost-effective model for their use case.",
   "license": "MIT",
   "private": true,
