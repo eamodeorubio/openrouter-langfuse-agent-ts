@@ -1,9 +1,10 @@
 import { parseCliArgs } from './args.js';
 import { ask } from './ask.js';
 import { loadConfig } from './config.js';
-import { ApiError, ConfigError, UsageError } from './errors.js';
+import { ApiError, ConfigError, LimitError, UsageError } from './errors.js';
 import { readQuestion, type Stdin } from './input.js';
 import { createPresenter } from './present.js';
+import { redactKey } from './text.js';
 import type { Sink } from './types.js';
 
 export interface Io {
@@ -15,22 +16,20 @@ export interface Io {
   serverURL?: string;
 }
 
-const USAGE = `Usage: openrouter-langfuse-agent-ts [-q <question>] [--model <model>] [--thinking | --no-thinking]
+const USAGE = `Usage: openrouter-langfuse-agent-ts [-q <question>] [--model <model>] [--thinking | --no-thinking] [--verbose]
 
   -q <question>   The question. Without it, the question is read from stdin.
   --model <model> The model that answers. Overrides OPENROUTER_MODEL.
   --thinking      Show the model's thinking on stderr, even when stderr is not a terminal.
   --no-thinking   Do not show the thinking, even on a terminal.
+  --verbose       Show each tool call the model makes on stderr.
 
 Environment: OPENROUTER_API_KEY (required), OPENROUTER_MODEL.`;
 
 const EXIT_OK = 0;
 const EXIT_USAGE_OR_CONFIG = 1;
 const EXIT_API = 2;
-
-/** The one place that keeps the API key off the screen, whatever failed. */
-const redact = (text: string, apiKey: string | undefined): string =>
-  apiKey ? text.replaceAll(apiKey, '[redacted]') : text;
+const EXIT_LIMIT = 3;
 
 export const run = async (
   argv: string[],
@@ -48,6 +47,7 @@ export const run = async (
       stdout: io.stdout,
       stderr: io.stderr,
       thinking: args.thinking,
+      verbose: args.verbose,
       noColor: env.NO_COLOR,
     });
     for await (const event of ask(config, question, {
@@ -64,7 +64,7 @@ export const run = async (
       // The output is gone; the error line below still goes to stderr.
     }
     const fail = (message: string, code: number): number => {
-      io.stderr.write(`${redact(message, apiKey)}\n`);
+      io.stderr.write(`${redactKey(message, apiKey)}\n`);
       return code;
     };
     if (error instanceof UsageError) {
@@ -72,6 +72,9 @@ export const run = async (
     }
     if (error instanceof ConfigError) {
       return fail(error.message, EXIT_USAGE_OR_CONFIG);
+    }
+    if (error instanceof LimitError) {
+      return fail(error.message, EXIT_LIMIT);
     }
     if (error instanceof ApiError) {
       return fail(error.message, EXIT_API);

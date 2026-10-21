@@ -16,6 +16,7 @@ const thinking = (text: string): AskEvent => ({ kind: 'thinking', text });
 const content = (text: string): AskEvent => ({ kind: 'content', text });
 
 interface Setup {
+  verbose?: boolean;
   thinking?: boolean | undefined;
   stdoutIsTTY?: boolean;
   stderrIsTTY?: boolean;
@@ -23,6 +24,7 @@ interface Setup {
 }
 
 const setup = ({
+  verbose = false,
   thinking: flag,
   stdoutIsTTY = false,
   stderrIsTTY = false,
@@ -43,6 +45,7 @@ const setup = ({
       },
     },
     thinking: flag,
+    verbose,
     noColor,
   });
   return {
@@ -241,5 +244,103 @@ describe('when the stream fails', () => {
     interrupt();
     interrupt();
     expect(out.stderr).toBe(`${DIM}hm${RESET}\n`);
+  });
+});
+
+const tool = (args: string, name = 'get_model'): AskEvent => ({
+  kind: 'tool',
+  name,
+  arguments: args,
+});
+
+describe('tool calls', () => {
+  it('writes nothing for a tool call without --verbose', () => {
+    const { out, play } = setup();
+    play(tool('{"slug":"a/b"}'));
+    expect(out).toEqual({ stdout: '', stderr: '' });
+  });
+
+  it('writes one line to stderr per call with --verbose, and nothing to stdout', () => {
+    const { out, play } = setup({ verbose: true });
+    play(tool('{"slug":"a/b"}'), tool('{"slug":"c/d"}', 'other'));
+    expect(out.stderr).toBe(
+      'tool: get_model {"slug":"a/b"}\ntool: other {"slug":"c/d"}\n',
+    );
+    expect(out.stdout).toBe('');
+  });
+
+  it('shows the arguments as received, on one line', () => {
+    const { out, play } = setup({ verbose: true });
+    play(tool('{\n  "slug": "a/b"\n}'));
+    expect(out.stderr).toBe('tool: get_model { "slug": "a/b" }\n');
+  });
+
+  it('cuts arguments longer than 200 characters with an ellipsis', () => {
+    const { out, play } = setup({ verbose: true });
+    play(tool('x'.repeat(201)));
+    expect(out.stderr).toBe(`tool: get_model ${'x'.repeat(200)}…\n`);
+  });
+
+  it('cuts by character, never in the middle of a surrogate pair', () => {
+    const { out, play } = setup({ verbose: true });
+    play(tool('😀'.repeat(201)));
+    expect(out.stderr).toBe(`tool: get_model ${'😀'.repeat(200)}…\n`);
+  });
+
+  it('keeps arguments of exactly 200 characters whole', () => {
+    const { out, play } = setup({ verbose: true });
+    play(tool('x'.repeat(200)));
+    expect(out.stderr).toBe(`tool: get_model ${'x'.repeat(200)}\n`);
+  });
+
+  it('shows the line whether or not thinking is shown', () => {
+    for (const flag of [true, false, undefined]) {
+      const { out, play } = setup({ verbose: true, thinking: flag });
+      play(tool('{}'));
+      expect(out.stderr).toBe('tool: get_model {}\n');
+    }
+  });
+
+  it('ends an open thinking line before it writes the tool line', () => {
+    const { out, play } = setup({ verbose: true, thinking: true });
+    play(thinking('let me look'), tool('{}'));
+    expect(out.stderr).toBe('let me look\ntool: get_model {}\n');
+  });
+
+  it('closes the dimmed style before the tool line on a terminal, and dims later thinking again', () => {
+    const { out, play } = setup({
+      verbose: true,
+      thinking: true,
+      stderrIsTTY: true,
+    });
+    play(thinking('a'), tool('{}'), thinking('b'));
+    expect(out.stderr).toBe(`${DIM}a${RESET}\ntool: get_model {}\n${DIM}b`);
+  });
+
+  it('leaves no blank line before the tool line when stdout is a terminal', () => {
+    const { out, play } = setup({
+      verbose: true,
+      thinking: true,
+      stdoutIsTTY: true,
+    });
+    play(thinking('a'), tool('{}'));
+    expect(out.stderr).toBe('a\ntool: get_model {}\n');
+  });
+
+  it('writes no trailing space for a call without arguments', () => {
+    const { out, play } = setup({ verbose: true });
+    play(tool(''));
+    expect(out.stderr).toBe('tool: get_model\n');
+  });
+
+  it('never writes more than one line per call, whatever the arguments', () => {
+    fc.assert(
+      fc.property(fc.string(), fc.string({ minLength: 1 }), (args, name) => {
+        const { out, play } = setup({ verbose: true });
+        play(tool(args, name.replace(/\s/g, '_')));
+        expect(out.stderr.endsWith('\n')).toBe(true);
+        expect(out.stderr.slice(0, -1)).not.toMatch(/[\r\n]/);
+      }),
+    );
   });
 });

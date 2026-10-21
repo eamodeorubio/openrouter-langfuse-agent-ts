@@ -100,7 +100,7 @@ The CLI SHALL write the answer text to stdout as it arrives, chunk by chunk, wit
 - **THEN** stdout already holds that chunk
 
 ### Requirement: Status lines on stderr
-After the stream ends, the CLI SHALL write to stderr one `model:` line and one `tokens:` line. The model SHALL be the one the stream reports, not the one requested. Tokens give prompt, completion and total. When the usage reports a non-zero reasoning count, it follows the completion count in parentheses.
+After the final response ends, the CLI SHALL write to stderr one `model:` line and one `tokens:` line. The model SHALL be the one the final response reports, not the one requested. Tokens give prompt, completion and total, each summed over every request of the question. When the summed reasoning count is non-zero, it follows the completion count in parentheses.
 
 ```
 model: anthropic/claude-sonnet-5.5-20261001
@@ -119,8 +119,12 @@ tokens: 29 prompt, 2024 completion (11 reasoning), 2053 total
 | reasoning 0 | `29 prompt, 2024 completion, 2053 total` |
 | no reasoning field | `29 prompt, 2024 completion, 2053 total` |
 
+#### Scenario: Two rounds
+- **WHEN** round 1 reports 10 prompt, 5 completion, 15 total and round 2 reports 30 prompt, 8 completion, 38 total
+- **THEN** the line reads `tokens: 40 prompt, 13 completion, 53 total`
+
 ### Requirement: Retry transient failures
-The CLI SHALL retry a failed call up to 4 times, 5 attempts in all, when the failure is HTTP 429, HTTP 5xx or a connection error, and only while the model has produced no answer or thinking text, whether or not that text is shown. Before retry n (1 to 4) it SHALL wait 300 ms times 2 to the power n-1, scaled by a random factor between 0.75 and 1.25. It SHALL NOT retry any other failure.
+The CLI SHALL retry a failed request up to 4 times, 5 attempts in all, when the failure is HTTP 429, HTTP 5xx or a connection error, and only while that request has produced no answer or thinking text, whether or not that text is shown. Before retry n (1 to 4) it SHALL wait 300 ms times 2 to the power n-1, scaled by a random factor between 0.75 and 1.25. It SHALL NOT retry any other failure.
 
 #### Scenario: Which failures are retried
 | Failure | Retried |
@@ -131,7 +135,7 @@ The CLI SHALL retry a failed call up to 4 times, 5 attempts in all, when the fai
 | Timeout | no |
 | HTTP 400, 401, 402, 403, 404 | no |
 | Response without answer or usage | no |
-| Any failure after the model has produced answer or thinking text | no |
+| Any failure after the request has produced answer or thinking text | no |
 
 #### Scenario: Waits before each retry
 | Retry | Base wait | Range |
@@ -170,7 +174,7 @@ When the API call fails before any answer or thinking text was written and no re
 - **THEN** stderr holds one line with the status and the API's message, stdout is empty, the exit code is 2
 
 ### Requirement: Unusable response
-The CLI SHALL treat a stream that ends without answer text, or without token usage, as an API failure: one-line message on stderr and exit 2. Stdout holds only the answer text already written.
+The CLI SHALL treat a final response, one with no tool calls, that ends without answer text, or without token usage, as an API failure: one-line message on stderr and exit 2. A response that ends in tool calls needs no answer text, but it still needs token usage. Stdout holds only the answer text already written.
 
 #### Scenario: No choices
 - **WHEN** the stream ends with no answer text, or with an empty `choices` list
@@ -183,6 +187,10 @@ The CLI SHALL treat a stream that ends without answer text, or without token usa
 #### Scenario: No usage
 - **WHEN** the stream carries an answer and ends without token usage
 - **THEN** stdout holds the answer and a newline, stderr ends with one line saying the response held no token usage, and the exit code is 2
+
+#### Scenario: Tool calls without text
+- **WHEN** a response carries a tool call, no answer text and usage
+- **THEN** it is not an API failure and the run continues with the tool result
 
 ### Requirement: Failure after output has started
 When the stream fails after answer or thinking text was written, the CLI SHALL keep what it wrote, end an unfinished stdout line with one newline, write a one-line message to stderr, and exit 2. It SHALL NOT retry.
@@ -263,3 +271,24 @@ When the server answers with one complete response instead of a stream, the CLI 
 #### Scenario: Complete response without an answer
 - **WHEN** the server answers with a complete response whose `choices` list is empty
 - **THEN** stderr holds one line saying the response held no answer, stdout is empty, and the exit code is 2
+
+### Requirement: Verbose flag
+The CLI SHALL accept `--verbose`. It SHALL list the flag in the usage message. It turns on the `tool:` lines of `agent-loop` and nothing else.
+
+#### Scenario: Flag accepted
+- **WHEN** the CLI runs with `-q "hi" --verbose`
+- **THEN** the run proceeds as without the flag, plus the `tool:` lines
+
+### Requirement: Exit codes
+The CLI SHALL exit with the code in the table.
+
+| Code | Meaning |
+| --- | --- |
+| 0 | the answer was written |
+| 1 | usage or configuration error |
+| 2 | model, API or network error, including a timeout |
+| 3 | stopped by a limit, such as the round limit of `agent-loop` |
+
+#### Scenario: Limit is not an API error
+- **WHEN** the model calls a tool in every response
+- **THEN** the exit code is 3, not 2

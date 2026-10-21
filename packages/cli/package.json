@@ -39,6 +39,7 @@
   },
   "homepage": "https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/",
   "dependencies": {
-    "@openrouter/sdk": "^1.4.25"
+    "@openrouter/sdk": "^1.4.25",
+    "zod": "^4.6.7"
   }
 }

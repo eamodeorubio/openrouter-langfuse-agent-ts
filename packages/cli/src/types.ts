@@ -16,6 +16,8 @@ export interface Completion {
 export type AskEvent =
   | { kind: 'thinking'; text: string }
   | { kind: 'content'; text: string }
+  /** The model called a tool; `arguments` is the JSON text it sent. */
+  | { kind: 'tool'; name: string; arguments: string }
   | ({ kind: 'done' } & Completion);
 
 /** Somewhere to write text, such as `process.stdout`. `isTTY` says whether a person is watching it. */

@@ -1,0 +1,3 @@
+{
+  "error": { "message": "Model not found: openai/does-not-exist", "code": 404 }
+}

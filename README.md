@@ -8,7 +8,7 @@ Ask it what you need to do, and it helps you weigh the options. The agent behind
 
 ## Status
 
-The project has no release yet and is still taking shape. The tooling, the quality checks and the release pipeline are in place, and the CLI can now ask one OpenRouter model one question. The agent that compares models by cost is the next thing to build. See [Usage](#usage) to try what exists.
+The project has no release yet and is still taking shape. The tooling, the quality checks and the release pipeline are in place. The CLI asks an OpenRouter model your question, and before it answers, the model is told to look up any model in OpenRouter's live catalog instead of recalling prices and context windows from memory. It can also search the catalog by price, context size and capability, and it does the arithmetic of a cost estimate with a calculator instead of in its head. Tracing every run with Langfuse is the next piece. See [Usage](#usage) to try what exists.
 
 ## Requirements
 
@@ -45,7 +45,9 @@ echo "Name one planet." | pnpm dev --model openai/gpt-4o-mini
 
 The answer streams to stdout as it arrives. The model that served the request and the token usage go to stderr, so pipes stay clean.
 
-If the model thinks before it answers, the thinking shows on stderr whenever you are watching stderr on a screen (when it is not redirected to a file or a pipe). `--thinking` and `--no-thinking` override that. There is no default model: pass `--model` or set `OPENROUTER_MODEL`. A run exits 0 on success, 1 when the arguments or the settings are wrong, and 2 when the API call fails. A stream that breaks halfway keeps the partial answer on stdout and exits 2. The [usage guide](https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/ask-a-question/) covers every case.
+The model has three tools. `get_model` fetches the details of one OpenRouter model by its slug. `search_models` filters and sorts the catalog by price, context size, capabilities and benchmark scores. `calculate` evaluates plain arithmetic, numbers and `+ - * / ( )` only, and shows the formula with the result. Prices come in dollars per million tokens. The system instructions tell it to check the catalog instead of trusting its memory, so a question such as "how does `openai/gpt-oss-20b` compare with `openai/gpt-oss-120b` on price?" may take several round trips to the model. You still get one answer. Add `--verbose` to see each lookup on stderr as it starts, and read the `tokens:` line as the sum of every round trip.
+
+If the model thinks before it answers, the thinking shows on stderr whenever you are watching stderr on a screen (when it is not redirected to a file or a pipe). `--thinking` and `--no-thinking` override that. There is no default model: pass `--model` or set `OPENROUTER_MODEL`. A run exits 0 on success, 1 when the arguments or the settings are wrong, 2 when the API call fails, and 3 when the model keeps calling tools past eight rounds. A stream that breaks halfway keeps the partial answer on stdout and exits 2. The [usage guide](https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/ask-a-question/) covers every case.
 
 ## Releases
 

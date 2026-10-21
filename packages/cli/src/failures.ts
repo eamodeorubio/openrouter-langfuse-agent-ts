@@ -1,12 +1,10 @@
 import {
-  ConnectionError,
   HTTPClientError,
   OpenRouterError,
   SDKValidationError,
 } from '@openrouter/sdk/models/errors';
 import { ApiError } from './errors.js';
-
-const MAX_MESSAGE_LENGTH = 200;
+import { oneLine } from './text.js';
 
 /** No chunk arrived in time. */
 export class IdleTimeout extends Error {}
@@ -23,13 +21,6 @@ export class ChunkError extends Error {
 
 /** The stream broke while we were reading it (a dropped connection, for one). */
 export class StreamError extends Error {}
-
-const oneLine = (text: string): string => {
-  const line = text.replace(/\s+/g, ' ').trim();
-  return line.length > MAX_MESSAGE_LENGTH
-    ? `${line.slice(0, MAX_MESSAGE_LENGTH)}…`
-    : line;
-};
 
 export const isShapeError = (error: unknown): boolean =>
   // The SDK makes `instanceof SDKValidationError` match a ResponseValidationError too.
@@ -71,12 +62,3 @@ export const toApiError = (
   }
   return undefined;
 };
-
-const isRetryableStatus = (code: number): boolean =>
-  code === 429 || code >= 500;
-
-export const isTransient = (error: unknown): boolean =>
-  error instanceof ConnectionError ||
-  error instanceof StreamError ||
-  (error instanceof ChunkError && isRetryableStatus(error.code)) ||
-  (error instanceof OpenRouterError && isRetryableStatus(error.statusCode));

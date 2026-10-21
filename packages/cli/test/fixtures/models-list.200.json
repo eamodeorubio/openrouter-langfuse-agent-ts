@@ -1,0 +1,110 @@
+{
+  "data": [
+    {
+      "id": "cohere/north-mini-code:free",
+      "canonical_slug": "cohere/north-mini-code-20260617",
+      "hugging_face_id": "CohereLabs/North-Mini-Code-1.0",
+      "name": "Cohere: North Mini Code (free)",
+      "created": 1781723748,
+      "description": "North Mini Code is Cohere's first agentic coding model and the debut of its North family. A sparse mixture-of-experts model with 30B total parameters and 3B active, it is optimized...",
+      "context_length": 256000,
+      "architecture": {
+        "modality": "text->text",
+        "input_modalities": ["text"],
+        "output_modalities": ["text"],
+        "tokenizer": "Cohere",
+        "instruct_type": null
+      },
+      "pricing": { "prompt": "0", "completion": "0" },
+      "top_provider": {
+        "context_length": 256000,
+        "max_completion_tokens": 64000,
+        "is_moderated": true
+      },
+      "per_request_limits": null,
+      "supported_parameters": [
+        "frequency_penalty",
+        "include_reasoning",
+        "max_tokens",
+        "presence_penalty",
+        "reasoning",
+        "seed",
+        "stop",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_k",
+        "top_p"
+      ],
+      "default_parameters": {
+        "temperature": null,
+        "top_p": null,
+        "top_k": null,
+        "frequency_penalty": null,
+        "presence_penalty": null,
+        "repetition_penalty": null
+      },
+      "supported_voices": null,
+      "knowledge_cutoff": null,
+      "expiration_date": null,
+      "links": {
+        "details": "/api/v1/models/cohere/north-mini-code-20260617/endpoints"
+      },
+      "benchmarks": {
+        "design_arena": [],
+        "artificial_analysis": {
+          "intelligence_index": 9.9,
+          "coding_index": 36.5,
+          "agentic_index": 1.1
+        }
+      },
+      "reasoning": { "mandatory": false }
+    },
+    {
+      "id": "dots-studio/dots-3-note-preview:free",
+      "canonical_slug": "dots-studio/dots-3-note-preview-20260813",
+      "hugging_face_id": null,
+      "name": "Dots Studio: Dots3-Note Preview (free)",
+      "created": 1786680361,
+      "description": "Dots3-Note Preview is an open-weight mixture-of-experts model from Dots Studio, with 16B active parameters out of 280B total. It is the lightest model in the Dots 3 family and is...",
+      "context_length": 512000,
+      "architecture": {
+        "modality": "text+image->text",
+        "input_modalities": ["text", "image"],
+        "output_modalities": ["text"],
+        "tokenizer": "Other",
+        "instruct_type": null
+      },
+      "pricing": { "prompt": "0", "completion": "0" },
+      "top_provider": {
+        "context_length": 512000,
+        "max_completion_tokens": 460800,
+        "is_moderated": false
+      },
+      "per_request_limits": null,
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "response_format",
+        "structured_outputs",
+        "temperature",
+        "tool_choice",
+        "tools",
+        "top_p"
+      ],
+      "default_parameters": {},
+      "supported_voices": null,
+      "knowledge_cutoff": null,
+      "expiration_date": "2026-12-31",
+      "links": {
+        "details": "/api/v1/models/dots-studio/dots-3-note-preview-20260813/endpoints"
+      },
+      "reasoning": { "mandatory": false }
+    }
+  ],
+  "total_count": 375,
+  "links": {
+    "next": "/api/v1/models?sort=pricing-low-to-high&supported_parameters=tools&offset=2&limit=2"
+  }
+}

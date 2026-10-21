@@ -9,6 +9,7 @@ describe('parseCliArgs', () => {
       question: undefined,
       model: undefined,
       thinking: undefined,
+      verbose: false,
     });
   });
 
@@ -27,6 +28,7 @@ describe('parseCliArgs', () => {
       question: 'hi',
       model: 'a/b',
       thinking: undefined,
+      verbose: false,
     });
   });
 
@@ -36,6 +38,19 @@ describe('parseCliArgs', () => {
     ['neither flag', [], undefined],
   ])('reads %s as thinking = %s', (_name, argv, thinking) => {
     expect(parseCliArgs(argv).thinking).toBe(thinking);
+  });
+
+  it.each([
+    ['--verbose', ['--verbose'], true],
+    ['no flag', [], false],
+  ])('reads %s as verbose = %s', (_name, argv, verbose) => {
+    expect(parseCliArgs(argv).verbose).toBe(verbose);
+  });
+
+  it('lets --verbose go with the other flags', () => {
+    expect(
+      parseCliArgs(['--verbose', '-q', 'hi', '--no-thinking']),
+    ).toMatchObject({ question: 'hi', thinking: false, verbose: true });
   });
 
   it.each([
@@ -64,6 +79,7 @@ describe('parseCliArgs', () => {
       question: '-5 degrees',
       model: 'a/b',
       thinking: undefined,
+      verbose: false,
     });
   });
 
@@ -82,7 +98,7 @@ describe('parseCliArgs', () => {
   it.each([
     ['a stray positional', ['-q', 'hi', 'extra']],
     ['a lone positional', ['hello']],
-    ['an unknown option', ['--verbose']],
+    ['an unknown option', ['--frobnicate']],
     ['-q without a value', ['-q']],
     ['--model without a value', ['--model']],
   ])('throws a UsageError on %s', (_name, argv) => {
@@ -103,15 +119,24 @@ describe('parseCliArgs', () => {
         fc.option(model, { nil: undefined }),
         fc.boolean(),
         fc.constantFrom(undefined, true, false),
-        (question, model, modelFirst, thinking) => {
+        fc.boolean(),
+        (question, model, modelFirst, thinking, verbose) => {
           const q = question === undefined ? [] : ['-q', question];
           const m = model === undefined ? [] : ['--model', model];
           const t =
             thinking === undefined
               ? []
               : [thinking ? '--thinking' : '--no-thinking'];
-          const argv = modelFirst ? [...m, ...t, ...q] : [...q, ...t, ...m];
-          expect(parseCliArgs(argv)).toEqual({ question, model, thinking });
+          const v = verbose ? ['--verbose'] : [];
+          const argv = modelFirst
+            ? [...m, ...t, ...v, ...q]
+            : [...q, ...v, ...t, ...m];
+          expect(parseCliArgs(argv)).toEqual({
+            question,
+            model,
+            thinking,
+            verbose,
+          });
         },
       ),
     );
