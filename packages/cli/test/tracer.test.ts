@@ -206,6 +206,53 @@ describe('the root', () => {
   });
 });
 
+describe('the names of the observations', () => {
+  const namesOf = async () => {
+    await tracer.flush();
+    return exporter
+      .getFinishedSpans()
+      .map((s) => s.name)
+      .sort();
+  };
+
+  it.each([
+    ['openai/gpt-oss-20b', 'openai/gpt-oss-20b-2026-01'],
+    ['anthropic/claude-haiku', 'anthropic/claude-haiku-4.5'],
+  ])(
+    'do not hold the model, asked for as %s or answered by %s',
+    async (requested, served) => {
+      const root = tracer.root('q');
+      root
+        .generation({ requestedModel: requested, messages })
+        .end({ model: served, text: 'a' });
+      root.end({ answer: 'a' });
+      expect(await namesOf()).toEqual(['answer-question', 'generate-response']);
+    },
+  );
+
+  it('do not hold the question, the number of a round or an id, whatever the run holds', async () => {
+    const root = tracer.root('what does gpt-4o cost? 0123456789abcdef');
+    root.generation({ requestedModel: 'm', messages }).end({ model: 'm' });
+    root.tool({ name: 'get_model', arguments: '{}' }).end({
+      output: '{}',
+      failed: false,
+    });
+    root.generation({ requestedModel: 'm', messages }).end({ model: 'm' });
+    root.tool({ name: 'calculate', arguments: '{}' }).end({
+      output: '1',
+      failed: false,
+    });
+    root.end({ answer: 'a' });
+    expect(await namesOf()).toEqual([
+      'answer-question',
+      'calculate',
+      'generate-response',
+      'generate-response',
+      'get_model',
+    ]);
+  });
+});
+
 describe('a generation', () => {
   it('is named generate-response under the root and sends the messages in OpenAI shape', async () => {
     const root = tracer.root('q');
