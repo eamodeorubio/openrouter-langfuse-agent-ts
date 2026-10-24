@@ -14,6 +14,18 @@ import { tokenBuckets } from './buckets.js';
 import { createMask, redactorFor } from './mask.js';
 import { toOpenAiMessages } from './messages.js';
 import {
+  type Abort,
+  closeOpen,
+  lifecycle,
+  orElse,
+  parsed,
+  quietly,
+  type Redact,
+  reasonOf,
+  traceparentOf,
+  withTimeout,
+} from './support.js';
+import {
   type GenerationResult,
   type GenerationSpan,
   type GenerationStart,
@@ -45,56 +57,6 @@ export interface LangfuseTracerOptions {
   flushTimeoutMs?: number;
 }
 
-/** The text of an error, and nothing that must stay secret. */
-type Redact = (text: string) => string;
-
-/** The value of `make`, or of `fallback` when `make` fails: a fault in tracing is the tracer's, never the caller's. */
-const orElse = <T>(make: () => T, fallback: () => T): T => {
-  try {
-    return make();
-  } catch {
-    return fallback();
-  }
-};
-
-/** Runs `work`; a fault in it is the tracer's, never the caller's. */
-const quietly = (work: () => void): void => {
-  try {
-    work();
-  } catch {
-    // Tracing must not change the answer.
-  }
-};
-
-const parsed = (text: string): unknown => {
-  try {
-    return JSON.parse(text);
-  } catch {
-    return text;
-  }
-};
-
-/** The reason a tool gave for failing: the `error` of its result, else the result. */
-const reasonOf = (output: string): string => {
-  const result = parsed(output);
-  const reason = (result as { error?: unknown } | null)?.error;
-  return typeof reason === 'string' ? reason : output;
-};
-
-const withTimeout = async (work: Promise<void>, ms: number): Promise<void> => {
-  let timer: NodeJS.Timeout | undefined;
-  try {
-    await Promise.race([
-      work,
-      new Promise<never>((_, reject) => {
-        timer = setTimeout(() => reject(new Error()), ms);
-      }),
-    ]);
-  } finally {
-    clearTimeout(timer);
-  }
-};
-
 const generationOutput = ({ text, thinking, toolCalls }: GenerationResult) => ({
   role: 'assistant',
   content: text || null,
@@ -110,37 +72,6 @@ const generationOutput = ({ text, thinking, toolCalls }: GenerationResult) => ({
     : {}),
 });
 
-/** Ends an observation because the run was cut short. */
-type Abort = (reason: string) => void;
-
-/**
- * Tracks an observation until it ends, once, by itself or by an abort,
- * whichever comes first. Gives the function that ends it by itself, and one that says whether it is still open.
- */
-const lifecycle = (open: Set<Abort>, onAbort: Abort) => {
-  const abort: Abort = (reason) => {
-    // Stryker disable next-line ConditionalExpression: equivalent because OpenTelemetry ignores an update and a second end on an ended span, so an observation that was ended and is then aborted is still exported once, as it was.
-    if (open.delete(abort)) {
-      quietly(() => onAbort(reason));
-    }
-  };
-  open.add(abort);
-  const finish = (end: () => void): void => {
-    // Stryker disable next-line ConditionalExpression: equivalent because OpenTelemetry ignores an update and a second end on an ended span, so an observation that was aborted and is then ended is still exported once, as it was.
-    if (open.delete(abort)) {
-      quietly(end);
-    }
-  };
-  return [finish, () => open.has(abort)] as const;
-};
-
-/** Ends every observation still open, as an error with `reason`. */
-const closeOpen = (open: Set<Abort>, reason: string): void => {
-  for (const abort of [...open]) {
-    abort(reason);
-  }
-};
-
 /** Lets a run that was cut short go on running without recording more: the caller falls back to a span that does nothing. */
 const refuseWhenAborted = ({ aborted }: Context): void => {
   if (aborted) {
@@ -148,15 +79,6 @@ const refuseWhenAborted = ({ aborted }: Context): void => {
     throw new Error();
   }
 };
-
-/** The W3C trace context that names `observation` as the parent of what is sent with it, sampled. */
-const traceparentOf = ({
-  traceId,
-  id,
-}: {
-  traceId: string;
-  id: string;
-}): string => `00-${traceId}-${id}-01`;
 
 /** The observation's own state: what it needs to record an error and to be told apart. */
 interface Context {
