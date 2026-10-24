@@ -153,12 +153,8 @@ describe('redactorFor, by pattern', () => {
       'key sk-or-v1-0123456789abcdef used',
       'key [REDACTED] used',
     ],
-    ['a Langfuse secret key shape', 'sk-lf-1234-abcd-5678', '[REDACTED]'],
-    [
-      'a Langfuse public key shape',
-      'pk-lf-1234-abcd-5678, ok',
-      '[REDACTED], ok',
-    ],
+    ['a Langfuse secret key shape', 'sk-lf-test-key', '[REDACTED]'],
+    ['a Langfuse public key shape', 'pk-lf-test-key, ok', '[REDACTED], ok'],
     ['two at once', 'a@b.io and c@d.io', '[REDACTED] and [REDACTED]'],
   ])('replaces %s', (_name, text, expected) => {
     expect(redact(text)).toBe(expected);

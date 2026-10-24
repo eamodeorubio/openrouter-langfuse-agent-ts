@@ -316,9 +316,9 @@ describe('a traced question that needs tools', () => {
   it('hides keys that have no recognisable shape, because it knows them', async () => {
     queueTwoRounds();
     const keys = {
-      OPENROUTER_API_KEY: 'plainOpenRouterKey9f8e7d',
-      LANGFUSE_PUBLIC_KEY: 'plainPublicKey9f8e7d',
-      LANGFUSE_SECRET_KEY: 'plainSecretKey9f8e7d',
+      OPENROUTER_API_KEY: 'plainkey-a',
+      LANGFUSE_PUBLIC_KEY: 'plainkey-b',
+      LANGFUSE_SECRET_KEY: 'plainkey-c',
     };
     await cli(['-q', `my keys: ${Object.values(keys).join(' ')}`], keys);
     const everything = JSON.stringify(
