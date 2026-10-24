@@ -78,6 +78,11 @@ export const createPresenter = ({
             `tool: ${[oneLine(event.name), oneLine(event.arguments)].filter(Boolean).join(' ')}\n`,
           );
           return;
+        case 'trace':
+          if (verbose) {
+            stderr.write(`trace: ${event.id}\n`);
+          }
+          return;
         case 'done':
           closeThinking(false);
           stdout.write('\n');

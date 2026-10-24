@@ -31,7 +31,8 @@ const describeIssues = (error: z.ZodError): string =>
     .map((issue) => `${issue.path.join('.') || 'arguments'}: ${issue.message}`)
     .join('; ');
 
-const attempt = async (
+/** Runs one call and says how it went. A call that fails is a result for the model to read, not a failure of the run. */
+export const callTool = async (
   tools: readonly Tool[],
   name: string,
   rawArguments: string,
@@ -58,17 +59,15 @@ const attempt = async (
   return tool.run(parsed.data, context);
 };
 
-/**
- * Runs one tool call the model made and returns the text that goes back to it:
- * the tool's value as JSON, or `{"error": "<one line>"}`. A call that fails is
- * a result for the model to read, not a failure of the run.
- */
+/** The text that goes back to the model: the tool's value as JSON, or `{"error": "<one line>"}`. */
+export const toContent = (result: ToolResult): string =>
+  JSON.stringify(result.ok ? result.value : { error: result.message });
+
+/** Runs one tool call the model made and returns the text that goes back to it. */
 export const runTool = async (
   tools: readonly Tool[],
   name: string,
   rawArguments: string,
   context: ToolContext,
-): Promise<string> => {
-  const result = await attempt(tools, name, rawArguments, context);
-  return JSON.stringify(result.ok ? result.value : { error: result.message });
-};
+): Promise<string> =>
+  toContent(await callTool(tools, name, rawArguments, context));

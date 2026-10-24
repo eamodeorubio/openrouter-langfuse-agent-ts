@@ -26,6 +26,8 @@
     "format": "biome format --write . && prettier --write \"**/*.{md,mdx,yml,yaml}\"",
     "format:check": "biome format . && prettier --check \"**/*.{md,mdx,yml,yaml}\"",
     "check": "biome check . && prettier --check \"**/*.{md,mdx,yml,yaml}\"",
+    "secrets": "sh scripts/secrets.sh",
+    "secrets:staged": "sh scripts/secrets.sh --staged",
     "test": "pnpm --filter \"./packages/*\" run test",
     "test:watch": "pnpm --filter openrouter-langfuse-agent-ts run test:watch",
     "test:coverage": "pnpm --filter \"./packages/*\" run test:coverage",

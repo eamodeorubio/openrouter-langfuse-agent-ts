@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { callCatalog } from './catalog.js';
 import { isoDate, shapePricing, snakeKeys } from './shape.js';
-import type { Tool } from './types.js';
+import { requestOptions, type Tool } from './types.js';
 
 const parameters = z
   .object({
@@ -19,13 +19,14 @@ export const getModel: Tool<typeof parameters> = {
   description:
     'Get the details of one OpenRouter model by its slug: description, context length, modalities, supported parameters, prices in USD per million tokens, reasoning support and benchmark scores.',
   parameters,
-  run({ slug }, { client, timeoutMs }) {
+  run({ slug }, context) {
+    const { client } = context;
     // The schema guarantees exactly one slash, with text on both sides.
     const slash = slug.indexOf('/');
     const author = slug.slice(0, slash);
     const name = slug.slice(slash + 1);
     return callCatalog(
-      () => client.models.get({ author, slug: name }, { timeoutMs }),
+      () => client.models.get({ author, slug: name }, requestOptions(context)),
       ({ data: model }) => ({
         id: model.id,
         name: model.name,

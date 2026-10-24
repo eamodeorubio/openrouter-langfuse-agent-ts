@@ -18,6 +18,7 @@
       "Bash(openspec instructions:*)",
       "Bash(openspec schemas:*)",
       "Bash(openspec --version)",
+      "Bash(openspec context *)",
       "Bash(git status:*)",
       "Bash(git diff:*)",
       "Bash(git log:*)",
@@ -26,7 +27,8 @@
       "Bash(gh pr list:*)",
       "Bash(gh pr checks:*)",
       "Bash(gh run list:*)",
-      "Bash(gh run view:*)"
+      "Bash(gh run view:*)",
+      "Bash(gh --version)"
     ],
     "ask": [
       "Bash(git commit:*)",

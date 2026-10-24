@@ -15,6 +15,8 @@ export interface Sent {
   /** The first user message of a chat request. */
   question: string;
   authorization: string | undefined;
+  /** The W3C trace context header, when the request carries one. */
+  traceparent: string | undefined;
   /** The parsed JSON body of a chat request; empty for a GET. */
   body: ChatBody;
 }
@@ -142,6 +144,7 @@ export const startFakeApi = async (): Promise<FakeApi> => {
       model: body.model ?? '',
       question: typeof firstUser?.content === 'string' ? firstUser.content : '',
       authorization: request.headers.authorization,
+      traceparent: request.headers.traceparent as string | undefined,
       body,
     });
     if (dropAll) {

@@ -344,3 +344,22 @@ describe('tool calls', () => {
     );
   });
 });
+
+describe('the trace id', () => {
+  const trace = (id: string): AskEvent => ({ kind: 'trace', id });
+
+  it('writes one line to stderr with --verbose, and nothing to stdout', () => {
+    const { out, play } = setup({ verbose: true });
+    play(trace('0123456789abcdef0123456789abcdef'));
+    expect(out).toEqual({
+      stdout: '',
+      stderr: 'trace: 0123456789abcdef0123456789abcdef\n',
+    });
+  });
+
+  it('writes nothing without --verbose', () => {
+    const { out, play } = setup();
+    play(trace('0123456789abcdef0123456789abcdef'));
+    expect(out).toEqual({ stdout: '', stderr: '' });
+  });
+});

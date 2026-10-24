@@ -10,7 +10,7 @@ import {
   it,
   vi,
 } from 'vitest';
-import { run } from '../src/cli.js';
+import { NOT_TRACED, run } from '../src/cli.js';
 import { type FakeApi, startFakeApi } from './fakeApi.js';
 import {
   contentChunk,
@@ -44,7 +44,10 @@ const cli = async (argv: string[]) => {
     },
     stderr: {
       write: (text: string) => {
-        out.stderr += text;
+        // The warning of an untraced run is covered in cli.trace.test.ts.
+        if (text !== NOT_TRACED) {
+          out.stderr += text;
+        }
       },
     },
   });
