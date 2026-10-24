@@ -1,5 +1,6 @@
 import type { SpanExporter } from '@opentelemetry/sdk-trace-base';
 import type { LangfuseConfig } from '../config.js';
+import { readVersion } from '../version.js';
 import { checkCredentials } from './credentials.js';
 import type { Tracer } from './tracer.js';
 
@@ -25,6 +26,9 @@ export const openTracer = async (
   return createLangfuseTracer({
     config: langfuse,
     exporter,
+    version: await readVersion(),
+    environment: langfuse.environment,
+    release: langfuse.release,
     secrets: [apiKey, langfuse.publicKey, langfuse.secretKey],
   });
 };

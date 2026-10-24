@@ -62,6 +62,9 @@ export async function* ask(
     }
   };
   try {
+    if (root.traceId) {
+      yield { kind: 'trace', id: root.traceId };
+    }
     yield* converse(config, question, options, root, (answer) =>
       finish({ answer }),
     );
@@ -132,6 +135,7 @@ async function* converse(
         toolCalls: response.toolCalls,
         thinking: response.thinking,
         finishReason: response.finishReason,
+        usage: response.usage,
       };
     } catch (error) {
       outcome = { error: describe(error) };

@@ -1,5 +1,6 @@
 import type { ChatMessages } from '@openrouter/sdk/models';
 import type { ToolCall } from '../assemble.js';
+import type { Usage } from '../types.js';
 
 /** The status message of an observation the run left open when it was cut short. */
 export const INTERRUPTED = 'The run was interrupted.';
@@ -19,23 +20,34 @@ export interface GenerationResult {
   toolCalls?: ToolCall[] | undefined;
   thinking?: string | undefined;
   finishReason?: string | undefined;
+  usage?: Usage | undefined;
   /** One line. Present when the request failed. */
   error?: string | undefined;
 }
 
 export interface GenerationSpan {
+  /** The W3C trace context of this request, to send with it. Absent when nothing is recorded. */
+  readonly traceparent: string | undefined;
   /** A failed attempt was repeated. */
   retried(): void;
+  /** The first text or thinking arrived. Recorded once. */
+  firstToken(): void;
+  /** The stream failed and the request ends with it. Recorded once. */
+  streamFailed(message: string): void;
   end(result: GenerationResult): void;
 }
 
 export interface ToolSpan {
+  /** The W3C trace context of this call, to send with its requests. Absent when nothing is recorded. */
+  readonly traceparent: string | undefined;
   /** `output` is the text that went back to the model. */
   end(result: { output: string; failed: boolean }): void;
 }
 
 /** The record of one run, from the question to the answer. */
 export interface RootSpan {
+  /** The id of the trace, or `undefined` when nothing is recorded. */
+  readonly traceId: string | undefined;
   generation(start: GenerationStart): GenerationSpan;
   tool(call: { name: string; arguments: string }): ToolSpan;
   end(result: { answer?: string; error?: string }): void;
@@ -53,9 +65,16 @@ export interface Tracer {
   flush(): Promise<void>;
 }
 
-const NO_GENERATION: GenerationSpan = { retried: () => {}, end: () => {} };
-const NO_TOOL: ToolSpan = { end: () => {} };
+const NO_GENERATION: GenerationSpan = {
+  traceparent: undefined,
+  retried: () => {},
+  firstToken: () => {},
+  streamFailed: () => {},
+  end: () => {},
+};
+const NO_TOOL: ToolSpan = { traceparent: undefined, end: () => {} };
 export const NO_ROOT: RootSpan = {
+  traceId: undefined,
   generation: () => NO_GENERATION,
   tool: () => NO_TOOL,
   end: () => {},

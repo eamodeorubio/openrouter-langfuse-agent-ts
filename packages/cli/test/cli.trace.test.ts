@@ -236,8 +236,9 @@ describe('an interrupt', () => {
     expect(spans.map((s) => s.name).sort()).toEqual([
       'answer-question',
       'generate-response',
+      'receive-first-token',
     ]);
-    for (const s of spans) {
+    for (const s of spans.filter((x) => x.name !== 'receive-first-token')) {
       expect(s.attributes['langfuse.observation.level']).toBe('ERROR');
       expect(s.attributes['langfuse.observation.status_message']).toBe(
         'The run was interrupted.',

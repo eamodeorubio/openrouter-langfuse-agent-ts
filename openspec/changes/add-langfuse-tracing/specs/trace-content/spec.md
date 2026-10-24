@@ -47,19 +47,21 @@ Each `generation` SHALL carry: the requested model and the model that served it;
 - **THEN** that generation holds the whole thinking text, whether or not `--thinking` is on
 
 ### Requirement: Usage and cost
-Each `generation` SHALL carry token counts as non-overlapping buckets: `input`, `input_cached_tokens`, `output`, `output_reasoning_tokens` and `total`. Cached and reasoning tokens are not counted again in `input` and `output`. It SHALL carry the API's cost in USD when reported. A bucket the API does not report is absent, not zero.
+Each `generation` SHALL carry token counts as non-overlapping buckets: `input`, `input_cached_tokens`, `output`, `output_reasoning_tokens` and `total`, the sum of the others. Cached and reasoning tokens come out of `input` and `output`, unless that would leave a bucket below zero: then the prompt or completion count stays whole and the reported cached or reasoning count goes to metadata. The API's cost in USD is carried when reported. A bucket the API does not report is absent.
 
 #### Scenario: Examples
 | API reports | Buckets |
 | --- | --- |
 | prompt 100, completion 40 | input 100, output 40, total 140 |
 | prompt 100 of which cached 30, completion 40 of which reasoning 15 | input 70, input_cached_tokens 30, output 25, output_reasoning_tokens 15, total 140 |
+| prompt 25, completion 122, reasoning 128 (a recorded run) | input 25, output 122, total 147; metadata `reasoning_tokens` 128 |
+| prompt 10, cached 30, completion 5 | input 10, output 5, total 15; metadata `cached_tokens` 30 |
 | cost 0.0021 | cost 0.0021 |
 | no cost | no cost |
 
-#### Scenario: Buckets add up
+#### Scenario: Buckets add up and never go below zero
 - **WHEN** any usage is reported
-- **THEN** the buckets other than `total` sum to `total`
+- **THEN** every bucket is zero or more, and the buckets other than `total` sum to `total`
 
 ### Requirement: Tool content
 Each `tool` SHALL carry the arguments as input and the result the model received as output. A tool that fails SHALL have level `ERROR` and the one-line reason as status message; a tool that succeeds has the default level.
@@ -76,7 +78,15 @@ A request that fails SHALL end its `generation` with level `ERROR`, a status mes
 - **THEN** the trace holds one generation for it, with metadata `retries` equal to 1 and the default level
 
 ### Requirement: Stream events
-A streamed generation SHALL have at most two `event` observations as children: one named `receive-first-token` at the arrival of the first chunk of text or thinking, and one named `fail-stream` when the stream breaks or goes idle. Chunks SHALL NOT create events.
+A streamed generation SHALL have at most two `event` observations as children: one named `receive-first-token` at the arrival of the first chunk of text or thinking, and one named `fail-stream` when the stream breaks or goes idle. The first token SHALL also set the generation's completion start time, from which Langfuse measures time to first token. Chunks SHALL NOT create events.
+
+#### Scenario: Time to first token
+- **WHEN** a generation receives its first token
+- **THEN** its completion start time equals the time of its `receive-first-token` event, and a generation that never got a token has none
+
+#### Scenario: A failure that is retried
+- **WHEN** a stream breaks before any output and the request is retried
+- **THEN** the generation holds no `fail-stream` event for that attempt
 
 #### Scenario: Long stream
 - **WHEN** a response arrives in 500 chunks
@@ -84,6 +94,10 @@ A streamed generation SHALL have at most two `event` observations as children: o
 
 ### Requirement: Trace attributes
 Every observation SHALL carry the CLI version as `version`. The trace SHALL carry the environment from `LANGFUSE_TRACING_ENVIRONMENT` (default `default`) and the release from `LANGFUSE_RELEASE` (default the CLI version). Run-specific values, such as the retry count and the round index, SHALL be metadata, not names or tags. The trace SHALL NOT carry a session id or a user id.
+
+#### Scenario: Nothing from the machine
+- **WHEN** any traced run exports its observations
+- **THEN** the service is named `openrouter-langfuse-agent-ts` with the version of the package, and no exported value holds the path of the Node binary, the home directory or the host name
 
 #### Scenario: Version from the package
 - **WHEN** `package.json` says version `0.3.0`

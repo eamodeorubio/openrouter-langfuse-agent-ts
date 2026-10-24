@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import {
@@ -24,6 +24,7 @@ import {
   sseBody,
   usageChunk,
 } from './fixtures.js';
+import { sink } from './sink.js';
 
 // Retries wait between attempts; tests must not.
 vi.mock('node:timers/promises', () => ({ setTimeout: async () => undefined }));
@@ -46,24 +47,20 @@ const tracedEnv = () => ({
   LANGFUSE_BASE_URL: langfuseURL(),
 });
 
-const cli = async (argv: string[]) => {
+const cli = async (argv: string[], extraEnv: Record<string, string> = {}) => {
   const out = { stdout: '', stderr: '' };
-  const code = await run(argv, tracedEnv(), {
-    serverURL: api.url,
-    tracing: { exporter },
-    cwd: emptyDir,
-    stdin: { isTTY: true, read: async () => '' },
-    stdout: {
-      write: (text: string) => {
-        out.stdout += text;
-      },
+  const code = await run(
+    argv,
+    { ...tracedEnv(), ...extraEnv },
+    {
+      serverURL: api.url,
+      tracing: { exporter },
+      cwd: emptyDir,
+      stdin: { isTTY: true, read: async () => '' },
+      stdout: sink(out, 'stdout'),
+      stderr: sink(out, 'stderr'),
     },
-    stderr: {
-      write: (text: string) => {
-        out.stderr += text;
-      },
-    },
-  });
+  );
   return { code, ...out };
 };
 
@@ -84,6 +81,9 @@ const queueTwoRounds = () => {
         prompt_tokens: 700,
         completion_tokens: 50,
         total_tokens: 750,
+        cost: 0.0021,
+        prompt_tokens_details: { cached_tokens: 200 },
+        completion_tokens_details: { reasoning_tokens: 20 },
       }),
     ),
   );
@@ -139,10 +139,22 @@ describe('a traced question that needs tools', () => {
         name: 'answer-question',
         type: 'agent',
         children: [
-          { name: 'generate-response', type: 'generation', children: [] },
+          {
+            name: 'generate-response',
+            type: 'generation',
+            children: [
+              { name: 'receive-first-token', type: 'event', children: [] },
+            ],
+          },
           { name: 'get_model', type: 'tool', children: [] },
           { name: 'get_model', type: 'tool', children: [] },
-          { name: 'generate-response', type: 'generation', children: [] },
+          {
+            name: 'generate-response',
+            type: 'generation',
+            children: [
+              { name: 'receive-first-token', type: 'event', children: [] },
+            ],
+          },
         ],
       },
     ]);
@@ -173,7 +185,7 @@ describe('a traced question that needs tools', () => {
   it('delivers the whole tree before the run returns', async () => {
     queueTwoRounds();
     await cli(['-q', QUESTION]);
-    expect(exporter.getFinishedSpans()).toHaveLength(5);
+    expect(exporter.getFinishedSpans()).toHaveLength(7);
   });
 
   it('exports none of the three keys, though the question holds them, while the model still gets the question as written', async () => {
@@ -189,5 +201,129 @@ describe('a traced question that needs tools', () => {
     expect(api.sent.find((sent) => sent.method === 'POST')?.question).toBe(
       question,
     );
+  });
+
+  const named = (name: string) =>
+    exporter
+      .getFinishedSpans()
+      .filter((span) => span.name === name)
+      .sort((a, b) => nanos(a) - nanos(b));
+
+  it('records the buckets and the cost of every generation, with the odd counts kept out of them', async () => {
+    queueTwoRounds();
+    await cli(['-q', QUESTION]);
+    const [, second] = named('generate-response');
+    expect(attribute(second, 'langfuse.observation.usage_details')).toBe(
+      JSON.stringify({
+        input: 500,
+        input_cached_tokens: 200,
+        output: 30,
+        output_reasoning_tokens: 20,
+        total: 750,
+      }),
+    );
+    expect(attribute(second, 'langfuse.observation.cost_details')).toBe(
+      JSON.stringify({ total: 0.0021 }),
+    );
+  });
+
+  it('stamps the version of the package on every observation', async () => {
+    queueTwoRounds();
+    await cli(['-q', QUESTION]);
+    const { version } = JSON.parse(
+      await readFile(new URL('../package.json', import.meta.url), 'utf8'),
+    ) as { version: string };
+    const spans = exporter.getFinishedSpans();
+    expect(spans.length).toBeGreaterThan(0);
+    for (const span of spans) {
+      expect(span.attributes['langfuse.version']).toBe(version);
+    }
+  });
+
+  it('sends each request a traceparent naming the observation that makes it', async () => {
+    queueTwoRounds();
+    await cli(['-q', QUESTION]);
+    const [first, second] = named('generate-response');
+    const tools = named('get_model');
+    const traceId = first?.spanContext().traceId;
+    const header = (id: string | undefined) => `00-${traceId}-${id}-01`;
+    const posts = api.sent.filter((sent) => sent.method === 'POST');
+    expect(posts.map((sent) => sent.traceparent)).toEqual([
+      header(first?.spanContext().spanId),
+      header(second?.spanContext().spanId),
+    ]);
+    const gets = api.sent
+      .filter(
+        (sent) => sent.method === 'GET' && sent.path.startsWith('/api/v1'),
+      )
+      .map((sent) => sent.traceparent);
+    expect(new Set(gets).size).toBe(2);
+    expect(new Set(gets)).toEqual(
+      new Set(tools.map((tool) => header(tool.spanContext().spanId))),
+    );
+  });
+
+  it('writes the trace id first on stderr with --verbose, and not without it', async () => {
+    queueTwoRounds();
+    const verbose = await cli(['-q', QUESTION, '--verbose']);
+    const traceId = exporter.getFinishedSpans()[0]?.spanContext().traceId;
+    expect(verbose.stderr.split('\n')[0]).toBe(`trace: ${traceId}`);
+    api.reset();
+    exporter.reset();
+    queueTwoRounds();
+    const quiet = await cli(['-q', QUESTION]);
+    expect(quiet.stderr).not.toContain('trace:');
+  });
+
+  it('sends no traceparent and shows no trace line in a run that is not traced', async () => {
+    api.reply(200, sseBody(contentChunk('Fine.'), usageChunk()));
+    const out = { stdout: '', stderr: '' };
+    await run(
+      ['-q', QUESTION, '--verbose'],
+      { OPENROUTER_API_KEY: KEY, OPENROUTER_MODEL: 'm' },
+      {
+        serverURL: api.url,
+        cwd: emptyDir,
+        stdin: { isTTY: true, read: async () => '' },
+        stdout: sink(out, 'stdout'),
+        stderr: sink(out, 'stderr'),
+      },
+    );
+    expect(api.sent.map((sent) => sent.traceparent)).toEqual([undefined]);
+    expect(out.stderr).not.toContain('trace:');
+  });
+
+  it('masks an email in the question for the trace only, and exports no header and no variable name', async () => {
+    queueTwoRounds();
+    const question = 'Compare these for a@b.io please.';
+    await cli(['-q', question]);
+    const everything = JSON.stringify(
+      exporter.getFinishedSpans().map((span) => [span.name, span.attributes]),
+    );
+    expect(everything).not.toContain('a@b.io');
+    expect(everything).toContain('[REDACTED]');
+    expect(everything.toLowerCase()).not.toContain('authorization');
+    expect(everything).not.toMatch(
+      /OPENROUTER_API_KEY|LANGFUSE_SECRET_KEY|LANGFUSE_PUBLIC_KEY/,
+    );
+    expect(api.sent.find((sent) => sent.method === 'POST')?.question).toBe(
+      question,
+    );
+  });
+
+  it('hides keys that have no recognisable shape, because it knows them', async () => {
+    queueTwoRounds();
+    const keys = {
+      OPENROUTER_API_KEY: 'plainOpenRouterKey9f8e7d',
+      LANGFUSE_PUBLIC_KEY: 'plainPublicKey9f8e7d',
+      LANGFUSE_SECRET_KEY: 'plainSecretKey9f8e7d',
+    };
+    await cli(['-q', `my keys: ${Object.values(keys).join(' ')}`], keys);
+    const everything = JSON.stringify(
+      exporter.getFinishedSpans().map((span) => span.attributes),
+    );
+    for (const secret of Object.values(keys)) {
+      expect(everything).not.toContain(secret);
+    }
   });
 });

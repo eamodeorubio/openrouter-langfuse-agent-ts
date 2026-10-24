@@ -1,13 +1,16 @@
 import { LangfuseSpanProcessor } from '@langfuse/otel';
 import {
   type LangfuseAgent,
+  type LangfuseSpanAttributes,
   setLangfuseTracerProvider,
   startObservation,
 } from '@langfuse/tracing';
+import { resourceFromAttributes } from '@opentelemetry/resources';
 import type { SpanExporter } from '@opentelemetry/sdk-trace-base';
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import type { LangfuseConfig } from '../config.js';
 import { ApiError } from '../errors.js';
+import { tokenBuckets } from './buckets.js';
 import { createMask, redactorFor } from './mask.js';
 import { toOpenAiMessages } from './messages.js';
 import {
@@ -21,6 +24,9 @@ import {
   type Tracer,
 } from './tracer.js';
 
+/** What the traces call this tool, in place of anything taken from the machine. */
+const SERVICE_NAME = 'openrouter-langfuse-agent-ts';
+
 /** The longest the final flush may take. */
 export const FLUSH_TIMEOUT_MS = 10_000;
 
@@ -30,6 +36,12 @@ export interface LangfuseTracerOptions {
   exporter?: SpanExporter | undefined;
   /** Every string that must not leave the process. */
   secrets: readonly string[];
+  /** The version of this tool, stamped on every observation. */
+  version: string;
+  /** Where the traces are filed. Langfuse's own default when absent. */
+  environment?: string | undefined;
+  /** What the traces are attributed to. The version when absent. */
+  release?: string | undefined;
   flushTimeoutMs?: number;
 }
 
@@ -103,7 +115,7 @@ type Abort = (reason: string) => void;
 
 /**
  * Tracks an observation until it ends, once, by itself or by an abort,
- * whichever comes first. Gives the function that ends it by itself.
+ * whichever comes first. Gives the function that ends it by itself, and one that says whether it is still open.
  */
 const lifecycle = (open: Set<Abort>, onAbort: Abort) => {
   const abort: Abort = (reason) => {
@@ -113,12 +125,13 @@ const lifecycle = (open: Set<Abort>, onAbort: Abort) => {
     }
   };
   open.add(abort);
-  return (end: () => void): void => {
+  const finish = (end: () => void): void => {
     // Stryker disable next-line ConditionalExpression: equivalent because OpenTelemetry ignores an update and a second end on an ended span, so an observation that was aborted and is then ended is still exported once, as it was.
     if (open.delete(abort)) {
       quietly(end);
     }
   };
+  return [finish, () => open.has(abort)] as const;
 };
 
 /** Ends every observation still open, as an error with `reason`. */
@@ -136,60 +149,123 @@ const refuseWhenAborted = ({ aborted }: Context): void => {
   }
 };
 
+/** The W3C trace context that names `observation` as the parent of what is sent with it, sampled. */
+const traceparentOf = ({
+  traceId,
+  id,
+}: {
+  traceId: string;
+  id: string;
+}): string => `00-${traceId}-${id}-01`;
+
 /** The observation's own state: what it needs to record an error and to be told apart. */
 interface Context {
   open: Set<Abort>;
   redact: Redact;
+  version: string;
   /** Set by an abort: an observation asked for afterwards is not recorded. */
   aborted: boolean;
 }
+
+/** What a generation that failed records: the error and the retries. */
+const failed = (error: string, redact: Redact, retries: number) => ({
+  level: 'ERROR' as const,
+  statusMessage: redact(error),
+  metadata: retries ? { retries } : {},
+});
+
+/** What a generation that was answered records: the reply, the buckets, the cost, and the counts that did not fit. */
+const succeeded = (
+  result: GenerationResult,
+  redact: Redact,
+  retries: number,
+) => {
+  const buckets = result.usage && tokenBuckets(result.usage);
+  return {
+    model: result.model === undefined ? undefined : redact(result.model),
+    output: generationOutput(result),
+    usageDetails: buckets?.details,
+    costDetails:
+      typeof result.usage?.cost === 'number'
+        ? { total: result.usage.cost }
+        : undefined,
+    metadata: {
+      ...(result.finishReason ? { finish_reason: result.finishReason } : {}),
+      ...buckets?.metadata,
+      ...(retries ? { retries } : {}),
+    },
+  };
+};
 
 const generationSpan = (
   root: LangfuseAgent,
   { requestedModel, messages }: GenerationStart,
   context: Context,
 ): GenerationSpan => {
-  const { open, redact } = context;
+  const { open, redact, version } = context;
   refuseWhenAborted(context);
   const started = root.startObservation(
     'generate-response',
     {
-      model: requestedModel,
+      model: redact(requestedModel),
       input: toOpenAiMessages(messages),
       metadata: { requested_model: requestedModel },
+      version,
     },
     { asType: 'generation' },
   );
-  const finish = lifecycle(open, (reason) => {
+  const [finish, isOpen] = lifecycle(open, (reason) => {
     started.update({ level: 'ERROR', statusMessage: redact(reason) });
     started.end();
   });
   let retries = 0;
+  const traceparent = traceparentOf(started);
+  const seen = new Set<string>();
+  /** An instant on the generation, made once at the moment `at`, and only while the generation is open. */
+  const instant = (
+    name: string,
+    attributes: LangfuseSpanAttributes,
+    onFirst: (at: Date) => void = () => {},
+  ) =>
+    quietly(() => {
+      if (isOpen() && !seen.has(name)) {
+        seen.add(name);
+        const at = new Date();
+        onFirst(at);
+        // The top-level call, not the child method of the SDK, because only it takes the time of the event.
+        startObservation(
+          name,
+          { ...attributes, version },
+          {
+            asType: 'event',
+            startTime: at,
+            parentSpanContext: started.otelSpan.spanContext(),
+          },
+        );
+      }
+    });
   return {
+    traceparent,
     retried: () => {
       retries += 1;
     },
+    firstToken: () =>
+      instant('receive-first-token', {}, (at) => {
+        // Langfuse measures the time to first token from this, and it is the moment of the event.
+        started.update({ completionStartTime: at });
+      }),
+    streamFailed: (message) =>
+      instant('fail-stream', {
+        level: 'ERROR',
+        statusMessage: redact(message),
+      }),
     end: (result) =>
       finish(() => {
-        const metadata = retries ? { retries } : {};
-        if (result.error !== undefined) {
-          started.update({
-            level: 'ERROR',
-            statusMessage: redact(result.error),
-            metadata,
-          });
-        } else {
-          started.update({
-            model: result.model,
-            output: generationOutput(result),
-            metadata: {
-              ...(result.finishReason
-                ? { finish_reason: result.finishReason }
-                : {}),
-              ...metadata,
-            },
-          });
-        }
+        started.update(
+          result.error === undefined
+            ? succeeded(result, redact, retries)
+            : failed(result.error, redact, retries),
+        );
         started.end();
       }),
   };
@@ -204,14 +280,15 @@ const toolSpan = (
   refuseWhenAborted(context);
   const started = root.startObservation(
     redact(name),
-    { input: parsed(args) },
+    { input: parsed(args), version: context.version },
     { asType: 'tool' },
   );
-  const finish = lifecycle(open, (reason) => {
+  const [finish] = lifecycle(open, (reason) => {
     started.update({ level: 'ERROR', statusMessage: redact(reason) });
     started.end();
   });
   return {
+    traceparent: traceparentOf(started),
     end: ({ output, failed }) =>
       finish(() => {
         started.update({
@@ -228,14 +305,15 @@ const toolSpan = (
 const rootSpan = (question: string, context: Context): RootSpan => {
   const root = startObservation(
     'answer-question',
-    { input: question },
+    { input: question, version: context.version },
     { asType: 'agent' },
   );
-  const finish = lifecycle(context.open, (reason) => {
+  const [finish] = lifecycle(context.open, (reason) => {
     root.update({ level: 'ERROR', statusMessage: context.redact(reason) });
     root.end();
   });
   return {
+    traceId: root.traceId,
     generation: (start) =>
       orElse(
         () => generationSpan(root, start, context),
@@ -266,6 +344,9 @@ export const createLangfuseTracer = ({
   config,
   exporter,
   secrets,
+  version,
+  environment = 'default',
+  release = version,
   flushTimeoutMs = FLUSH_TIMEOUT_MS,
 }: LangfuseTracerOptions): Tracer => {
   const processor = new LangfuseSpanProcessor({
@@ -273,15 +354,25 @@ export const createLangfuseTracer = ({
     secretKey: config.secretKey,
     baseUrl: config.baseUrl,
     exporter,
+    environment,
+    release,
     mask: createMask(secrets),
   });
   setLangfuseTracerProvider(
-    new NodeTracerProvider({ spanProcessors: [processor] }),
+    new NodeTracerProvider({
+      // The default resource names the service after the path of the Node binary, which holds the user's home directory.
+      resource: resourceFromAttributes({
+        'service.name': SERVICE_NAME,
+        'service.version': version,
+      }),
+      spanProcessors: [processor],
+    }),
   );
   const context: Context = {
     open: new Set(),
     // The processor's mask does not reach the status message or the name of a tool.
     redact: redactorFor(secrets),
+    version,
     aborted: false,
   };
 

@@ -182,6 +182,15 @@ Three settings switch it on:
 
 They live in the same two places as the other settings, the environment and `.env`, and the environment wins. The tool works with Langfuse Cloud and with a self-hosted Langfuse server from version 4.59.0.
 
+Two more settings are optional. Both only take effect when tracing is on:
+
+| Setting                        | Meaning                                                                                                                                    |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `LANGFUSE_TRACING_ENVIRONMENT` | Where the traces are filed in Langfuse, such as `staging`, so test runs stay out of the dashboards of real ones. The default is `default`. |
+| `LANGFUSE_RELEASE`             | What the traces are attributed to, such as a git commit. The default is the version of this tool.                                          |
+
+An environment is 1 to 40 characters of lower case letters, digits, hyphens and underscores, and it must not start with `langfuse`. One that breaks those rules is refused up front, with exit code 1 and the name of the setting. A blank value of either setting counts as unset.
+
 Set all three or none. With none, the tool runs untraced and writes one line to stderr to say so. That line is a reminder, not an error: stdout and the exit code stay as they were. With one or two, the tool stops before it reads your question, exits with code 1 and names the settings that are missing. A half-configured setup is almost always a typo, and a trace that quietly never arrives is worse than a refusal.
 
 With all three, the tool checks the keys before it asks the model anything. It asks Langfuse for the project the keys belong to. If Langfuse rejects the keys, or does not answer within ten seconds, the tool prints one line, sends nothing to OpenRouter and exits with code 2. You find out in the first second, and no tokens were spent.
@@ -190,14 +199,38 @@ With all three, the tool checks the keys before it asks the model anything. It a
 
 The root of the trace is an `agent` observation named `answer-question`. Its input is your question and its output is the final answer. Under it, in the order they happened:
 
-- One `generation` named `generate-response` for each request to the model. It holds the model you asked for and the model that served the request, the messages that went out as a conversation (system, user, assistant and tool messages, with each tool result matched to its call), the reply with its text, its tool calls and its thinking, and the reason the model stopped. A request that was retried after a failure is still one generation, with the number of retries in its metadata.
+- One `generation` named `generate-response` for each request to the model. It holds the model you asked for and the model that served the request, the messages that went out as a conversation (system, user, assistant and tool messages, with each tool result matched to its call), the reply with its text, its tool calls and its thinking, the reason the model stopped, the tokens it used and what the request cost. A request that was retried after a failure is still one generation, with the number of retries in its metadata.
 - One `tool` for each tool call, named after the tool: `get_model`, `search_models` or `calculate`. It holds the arguments the model sent and the result that went back. A call that failed is marked as an error, with the reason as its status message. A tool sits beside the generation that asked for it, never inside it, so the tree reads like the run did.
 
 When a run fails, the error marks the root and the request that failed. The trace of a failed run is delivered like any other.
 
+Every observation carries the version of the tool that made it, and every trace carries its environment and release. The traces name their service `openrouter-langfuse-agent-ts` and carry nothing taken from your machine: no path, no home directory, no host name.
+
+### Tokens and cost
+
+Langfuse keeps every kind of token in a bucket of its own, so that a token is counted once. A generation reports `input` and `output`, and when the provider says so, `input_cached_tokens` for the part of the prompt served from its cache and `output_reasoning_tokens` for the part of the completion the model spent thinking. Those two are taken out of `input` and `output`. `total` is the sum of the buckets. The cost is the one OpenRouter reports for the request, in US dollars, so it does not depend on Langfuse knowing the price of the model.
+
+Providers do not always count consistently. One recorded run reports 25 prompt tokens, 122 completion tokens and 128 reasoning tokens, more reasoning than completion, so the reasoning cannot be part of the completion. When a cached or reasoning count is larger than the count it should sit in, the tool leaves that bucket whole and puts the odd count in the metadata of the generation, as `cached_tokens` or `reasoning_tokens`. The buckets never go below zero and always add up.
+
+### The stream, as it happened
+
+A generation holds at most two events. `receive-first-token` marks the moment the first piece of text or thinking arrived, which tells you how long the model took to start. `fail-stream` marks a stream that broke, went idle or carried an error, and ended the request. A stream that failed and was tried again leaves no event, only the retry count. The first token also sets the completion start time of the generation, so Langfuse can show the time to first token of each request. The tool never records an event per chunk.
+
+### Finding the trace
+
+With tracing on and `--verbose`, the tool writes the id of the trace to stderr before anything else:
+
+```text
+trace: 4bf92f3577b34da6a3ce929d0e0e4736
+```
+
+Paste it into the search of the Langfuse project to open the run. The tool also sends the id to OpenRouter, in a `traceparent` header on every request, each naming the generation or the tool call that made it. As far as we know OpenRouter ignores the header. It is there for anything between you and OpenRouter, such as a proxy that records its own spans, so that it can join the same trace.
+
 ### What leaves your machine
 
-The question, the answer, the thinking, and the arguments and results of every tool call go to Langfuse in full. That is the point of a trace, and it is also a decision to make with open eyes. The tool replaces your OpenRouter key and the two Langfuse keys with `[REDACTED]` wherever they appear in what it sends. It looks for nothing else. A name, an address or a number that you type into a question, or that a model repeats, is stored as it is. Do not ask a traced run what you would not want written on that server.
+The question, the answer, the thinking, and the arguments and results of every tool call go to Langfuse in full. That is the point of a trace, and it is also a decision to make with open eyes. The tool replaces your OpenRouter key and the two Langfuse keys with `[REDACTED]` wherever they appear in what it sends. It also replaces, by their shape, bearer tokens (the word `Bearer` followed by a token of 16 or more characters, in any case), anything that looks like an OpenRouter or Langfuse key (`sk-or-`, `sk-lf-`, `pk-lf-`) and email addresses. The patterns are few and tight on purpose, because a broad one would also eat the tool results that a trace exists to keep. A shorter bearer token slips through. So does everything else: a name, a street address, a phone number, or any number that you type into a question, or that a model repeats, is stored as it is.
+
+The model still gets your question exactly as you wrote it; only the copy sent to Langfuse is masked. The trace carries no request headers and no environment variables. Do not ask a traced run what you would not want written on that server.
 
 ### When the run ends
 
@@ -207,7 +240,7 @@ Press Ctrl-C, or stop the process with `SIGTERM`, and the tool does not walk awa
 
 ## What you see
 
-The tool writes to two channels. Stdout carries the result: the answer, as it arrives. Stderr carries everything else that is about the run rather than the result, which means the model's thinking (when there is some and when it is shown), the lookup lines (when you ask for them with `--verbose`), one line saying tracing is off when no Langfuse settings are present, and two status lines once the answer is complete:
+The tool writes to two channels. Stdout carries the result: the answer, as it arrives. Stderr carries everything else that is about the run rather than the result, which means the model's thinking (when there is some and when it is shown), the lookup lines (when you ask for them with `--verbose`), one line saying tracing is off when no Langfuse settings are present, the id of the trace (with `--verbose` and tracing on), and two status lines once the answer is complete:
 
 ```text
 $ pnpm dev -q "Name three primary colors, one per line."
@@ -287,4 +320,4 @@ The tool waits up to 60 seconds for the first sign of life from the model, and u
 
 ## What is not here yet
 
-The status lines show model and tokens only. The trace does not carry token counts or costs yet, and nothing prints its id. Those arrive with the next piece, together with the masking of email addresses and bearer tokens.
+The status lines show model and tokens only. The cost in dollars is in the trace, not on your screen, and the tool prints the id of the trace but not a link to it.

@@ -2,9 +2,28 @@ import { createRedactor } from '../text.js';
 
 export const REDACTED = '[REDACTED]';
 
-/** Replaces each secret in a text with `[REDACTED]`. */
-export const redactorFor = (secrets: readonly (string | undefined)[]) =>
-  createRedactor(secrets, REDACTED);
+/**
+ * What is replaced by its shape: a bearer token, a key as OpenRouter and
+ * Langfuse make them, an email address. Few and tight on purpose: a pattern
+ * that is too broad would eat the tool results a trace exists to keep. Every
+ * run of characters is bounded, so that a huge unbroken text cannot make the
+ * match quadratic.
+ */
+const PATTERNS: readonly RegExp[] = [
+  /\bBearer\s{1,16}[A-Za-z0-9._~+/=-]{16,}/gi,
+  /\b(?:sk-or|sk-lf|pk-lf)-[A-Za-z0-9_-]{4,}/g,
+  /[A-Za-z0-9._%+-]{1,64}@[A-Za-z0-9-]{1,63}(?:\.[A-Za-z0-9-]{1,63})*\.[A-Za-z]{2,}/g,
+];
+
+/** Replaces each secret in a text, then whatever has the shape of a credential or an address, with `[REDACTED]`. */
+export const redactorFor = (secrets: readonly (string | undefined)[]) => {
+  const literally = createRedactor(secrets, REDACTED);
+  return (text: string): string =>
+    PATTERNS.reduce(
+      (rest, pattern) => rest.replace(pattern, REDACTED),
+      literally(text),
+    );
+};
 
 /**
  * The step the processor puts every exported input, output and metadata value

@@ -38,20 +38,28 @@ const recorder = () => {
     root: (question) => {
       log.push({ root: question });
       return {
+        traceId: 'abc123',
         generation: (start) => {
           log.push({
             generation: start.requestedModel,
             roles: start.messages.map((m) => m.role),
           });
           return {
+            traceparent: undefined,
             retried: () => log.push('retried'),
+            firstToken: () => log.push('firstToken'),
+            streamFailed: (message: string) =>
+              log.push({ streamFailed: message }),
             end: (result: GenerationResult) =>
               log.push({ generationEnd: result }),
           };
         },
         tool: (call) => {
           log.push({ tool: call.name });
-          return { end: (result) => log.push({ toolEnd: result.failed }) };
+          return {
+            traceparent: undefined,
+            end: (result) => log.push({ toolEnd: result.failed }),
+          };
         },
         end: (result) => log.push({ rootEnd: result }),
       };
@@ -107,6 +115,7 @@ describe('ask with a tracer', () => {
         generation: 'req/model',
         roles: ['system', 'user', 'assistant', 'tool'],
       },
+      'firstToken',
       {
         generationEnd: expect.objectContaining({ text: 'Done.' }),
       },
@@ -175,7 +184,8 @@ describe('ask with a tracer', () => {
     );
     const { tracer, log } = recorder();
     const events = ask(config, 'q', { serverURL: api.url, tracer });
-    await events.next();
+    await events.next(); // the trace id
+    await events.next(); // the first text
     await events.return(undefined);
     const ends = log.filter((e) => (e as { rootEnd?: unknown }).rootEnd);
     expect(ends).toHaveLength(1);
@@ -185,5 +195,22 @@ describe('ask with a tracer', () => {
     expect(log).toContainEqual({
       generationEnd: { error: expect.stringMatching(/interrupted/i) },
     });
+  });
+
+  it('yields the trace id first, once', async () => {
+    api.reply(200, sseBody(contentChunk('ok'), usageChunk(USAGE)));
+    const { tracer } = recorder();
+    const { events } = await drain(tracer);
+    expect(events[0]).toEqual({ kind: 'trace', id: 'abc123' });
+    expect(events.filter((event) => event.kind === 'trace')).toHaveLength(1);
+  });
+
+  it('yields no trace event when the run is not traced', async () => {
+    api.reply(200, sseBody(contentChunk('ok'), usageChunk(USAGE)));
+    const events = [];
+    for await (const event of ask(config, 'q', { serverURL: api.url })) {
+      events.push(event);
+    }
+    expect(events.some((event) => event.kind === 'trace')).toBe(false);
   });
 });

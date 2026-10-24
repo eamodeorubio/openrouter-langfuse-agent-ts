@@ -1,3 +1,4 @@
+import { homedir, hostname } from 'node:os';
 import {
   InMemorySpanExporter,
   type ReadableSpan,
@@ -22,6 +23,7 @@ beforeEach(() => {
     config,
     exporter,
     secrets: ['sk-or-OPENROUTER', config.publicKey, config.secretKey],
+    version: '1.2.3',
   });
 });
 
@@ -51,6 +53,136 @@ const messages = [
   { role: 'system' as const, content: 'Be brief.' },
   { role: 'user' as const, content: 'Which is cheaper?' },
 ];
+
+describe('what every observation carries', () => {
+  const everything = async () => {
+    const root = tracer.root('q');
+    const generation = root.generation({ requestedModel: 'm', messages });
+    generation.firstToken();
+    generation.end({ model: 'm', text: 'a' });
+    root.tool({ name: 'calculate', arguments: '{}' }).end({
+      output: '1',
+      failed: false,
+    });
+    root.end({ answer: 'a' });
+    await tracer.flush();
+    return exporter.getFinishedSpans();
+  };
+
+  it('stamps the version on the root, the generation, the tool and the event', async () => {
+    const spans = await everything();
+    expect(spans.map((s) => s.name).sort()).toEqual([
+      'answer-question',
+      'calculate',
+      'generate-response',
+      'receive-first-token',
+    ]);
+    for (const s of spans) {
+      expect(s.attributes['langfuse.version']).toBe('1.2.3');
+    }
+  });
+
+  it('stamps the version on an observation that was aborted', async () => {
+    tracer.root('q').generation({ requestedModel: 'm', messages });
+    tracer.abort('x');
+    await tracer.flush();
+    for (const s of exporter.getFinishedSpans()) {
+      expect(s.attributes['langfuse.version']).toBe('1.2.3');
+    }
+  });
+
+  it('puts the environment and the release on every observation, with defaults', async () => {
+    for (const s of await everything()) {
+      expect(s.attributes['langfuse.environment']).toBe('default');
+      expect(s.attributes['langfuse.release']).toBe('1.2.3');
+    }
+  });
+
+  it('uses the environment and the release it is given', async () => {
+    exporter.reset();
+    tracer = createLangfuseTracer({
+      config,
+      exporter,
+      secrets: [],
+      version: '1.2.3',
+      environment: 'staging',
+      release: 'abc123',
+    });
+    for (const s of await everything()) {
+      expect(s.attributes['langfuse.environment']).toBe('staging');
+      expect(s.attributes['langfuse.release']).toBe('abc123');
+    }
+  });
+
+  it('names the service and says nothing about this machine', async () => {
+    const spans = await everything();
+    expect(spans.length).toBeGreaterThan(0);
+    for (const s of spans) {
+      expect(s.resource.attributes['service.name']).toBe(
+        'openrouter-langfuse-agent-ts',
+      );
+      expect(s.resource.attributes['service.version']).toBe('1.2.3');
+      const resource = JSON.stringify(s.resource.attributes);
+      // A needle of a few characters, such as `/` for a home directory, would match anything.
+      const needles = [process.execPath, homedir(), hostname()].filter(
+        (needle) => needle.length >= 4,
+      );
+      expect(needles).toContain(process.execPath);
+      for (const private_ of needles) {
+        expect(resource).not.toContain(private_);
+      }
+    }
+  });
+
+  it('carries no session id and no user id', async () => {
+    for (const s of await everything()) {
+      expect(Object.keys(s.attributes).join(' ')).not.toMatch(/session|user/);
+    }
+  });
+});
+
+describe('the trace id and the trace context', () => {
+  it('gives the trace id of the exported spans, 32 hex characters', async () => {
+    const root = tracer.root('q');
+    root.end({ answer: 'a' });
+    const s = await span('answer-question');
+    expect(root.traceId).toMatch(/^[0-9a-f]{32}$/);
+    expect(root.traceId).toBe(s.spanContext().traceId);
+  });
+
+  it('gives each generation and tool a traceparent of its own span, with the sampled flag', async () => {
+    const root = tracer.root('q');
+    const generation = root.generation({ requestedModel: 'm', messages });
+    const tool = root.tool({ name: 'calculate', arguments: '{}' });
+    generation.end({ model: 'm', text: 'a' });
+    tool.end({ output: '1', failed: false });
+    root.end({ answer: 'a' });
+    const g = await span('generate-response');
+    const t = await span('calculate');
+    expect(generation.traceparent).toBe(
+      `00-${root.traceId}-${g.spanContext().spanId}-01`,
+    );
+    expect(tool.traceparent).toBe(
+      `00-${root.traceId}-${t.spanContext().spanId}-01`,
+    );
+    expect(generation.traceparent).not.toBe(tool.traceparent);
+  });
+
+  it('gives no traceparent and no trace id after an abort, or from the no-op tracer', () => {
+    const root = tracer.root('q');
+    tracer.abort(INTERRUPTED);
+    const late = root.generation({ requestedModel: 'm', messages });
+    expect(late.traceparent).toBeUndefined();
+    const none = NO_TRACER.root('q');
+    expect(none.traceId).toBeUndefined();
+    expect(
+      none.generation({ requestedModel: 'm', messages }).traceparent,
+    ).toBeUndefined();
+    expect(
+      none.tool({ name: 't', arguments: '{}' }).traceparent,
+    ).toBeUndefined();
+  });
+});
 
 describe('the root', () => {
   it('is an agent holding the question, then the answer', async () => {
@@ -171,6 +303,58 @@ describe('a generation', () => {
     );
   });
 
+  it('holds the buckets and the cost, and the odd counts in the metadata', async () => {
+    tracer
+      .root('q')
+      .generation({ requestedModel: 'm', messages })
+      .end({
+        model: 'm',
+        text: 'a',
+        usage: {
+          promptTokens: 25,
+          completionTokens: 122,
+          totalTokens: 147,
+          reasoningTokens: 128,
+          cost: 0.0021,
+        },
+      });
+    const g = await span('generate-response');
+    expect(json(g, 'langfuse.observation.usage_details')).toEqual({
+      input: 25,
+      output: 122,
+      total: 147,
+    });
+    expect(json(g, 'langfuse.observation.cost_details')).toEqual({
+      total: 0.0021,
+    });
+    expect(json(g, 'langfuse.observation.metadata.reasoning_tokens')).toBe(128);
+  });
+
+  it('gives no usage and no cost when the API reported none', async () => {
+    tracer
+      .root('q')
+      .generation({ requestedModel: 'm', messages })
+      .end({ model: 'm', text: 'a' });
+    const g = await span('generate-response');
+    expect(g.attributes['langfuse.observation.usage_details']).toBeUndefined();
+    expect(g.attributes['langfuse.observation.cost_details']).toBeUndefined();
+  });
+
+  it('gives no cost when the cost is not a number', async () => {
+    tracer
+      .root('q')
+      .generation({ requestedModel: 'm', messages })
+      .end({
+        model: 'm',
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      });
+    expect(
+      (await span('generate-response')).attributes[
+        'langfuse.observation.cost_details'
+      ],
+    ).toBeUndefined();
+  });
+
   it('leaves the content null and the lists out when there is nothing to put in them', async () => {
     tracer
       .root('q')
@@ -218,6 +402,18 @@ describe('a generation', () => {
     ).toBeUndefined();
   });
 
+  it('counts its retries in the metadata when the request fails in the end', async () => {
+    const generation = tracer
+      .root('q')
+      .generation({ requestedModel: 'm', messages });
+    generation.retried();
+    generation.retried();
+    generation.end({ error: 'The API answered 503.' });
+    const g = await span('generate-response');
+    expect(json(g, 'langfuse.observation.metadata.retries')).toBe(2);
+    expect(g.attributes['langfuse.observation.level']).toBe('ERROR');
+  });
+
   it('records no retries when there were none', async () => {
     tracer
       .root('q')
@@ -228,6 +424,139 @@ describe('a generation', () => {
         'langfuse.observation.metadata.retries'
       ],
     ).toBeUndefined();
+  });
+});
+
+describe('the time to first token', () => {
+  it('sets the completion start time of the generation to the moment of the first token', async () => {
+    const generation = tracer
+      .root('q')
+      .generation({ requestedModel: 'm', messages });
+    generation.firstToken();
+    generation.end({ model: 'm', text: 'a' });
+    await tracer.flush();
+    const g = exporter
+      .getFinishedSpans()
+      .find((s) => s.name === 'generate-response');
+    const event = exporter
+      .getFinishedSpans()
+      .find((s) => s.name === 'receive-first-token');
+    const started = event?.startTime ?? [0, 0];
+    const expected = new Date(started[0] * 1000 + started[1] / 1e6);
+    const actual = new Date(
+      json(
+        g as ReadableSpan,
+        'langfuse.observation.completion_start_time',
+      ) as string,
+    );
+    expect(Number.isNaN(actual.getTime())).toBe(false);
+    // The same instant, to the millisecond.
+    expect(Math.abs(actual.getTime() - expected.getTime())).toBeLessThan(1);
+  });
+
+  it('leaves it unset for a generation that never got a token', async () => {
+    tracer
+      .root('q')
+      .generation({ requestedModel: 'm', messages })
+      .end({ model: 'm', text: '' });
+    expect(
+      (await span('generate-response')).attributes[
+        'langfuse.observation.completion_start_time'
+      ],
+    ).toBeUndefined();
+  });
+
+  it('is not set by a failed stream, which is no token', async () => {
+    const generation = tracer
+      .root('q')
+      .generation({ requestedModel: 'm', messages });
+    generation.streamFailed('The stream broke.');
+    generation.end({ error: 'The stream broke.' });
+    expect(
+      (await span('generate-response')).attributes[
+        'langfuse.observation.completion_start_time'
+      ],
+    ).toBeUndefined();
+  });
+
+  it('keeps the first moment when told twice', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date('2030-01-01T00:00:00.000Z'));
+      const generation = tracer
+        .root('q')
+        .generation({ requestedModel: 'm', messages });
+      generation.firstToken();
+      vi.setSystemTime(new Date('2030-01-01T00:00:05.000Z'));
+      generation.firstToken();
+      generation.end({ model: 'm', text: 'a' });
+    } finally {
+      vi.useRealTimers();
+    }
+    expect(
+      json(
+        await span('generate-response'),
+        'langfuse.observation.completion_start_time',
+      ),
+    ).toBe('2030-01-01T00:00:00.000Z');
+  });
+});
+
+describe('the events of a stream', () => {
+  const eventsOf = async (name: string) => {
+    await tracer.flush();
+    return exporter.getFinishedSpans().filter((s) => s.name === name);
+  };
+
+  it('has one receive-first-token event under the generation, however often it is told', async () => {
+    const generation = tracer
+      .root('q')
+      .generation({ requestedModel: 'm', messages });
+    generation.firstToken();
+    generation.firstToken();
+    generation.end({ model: 'm', text: 'a' });
+    const events = await eventsOf('receive-first-token');
+    const g = await span('generate-response');
+    expect(events).toHaveLength(1);
+    expect(events[0]?.attributes['langfuse.observation.type']).toBe('event');
+    expect(events[0]?.parentSpanContext?.spanId).toBe(g.spanContext().spanId);
+  });
+
+  it('has one fail-stream event with the reason, as an error, however often it is told', async () => {
+    const generation = tracer
+      .root('q')
+      .generation({ requestedModel: 'm', messages });
+    generation.streamFailed('The stream broke: reset.');
+    generation.streamFailed('again');
+    generation.end({ error: 'The stream broke: reset.' });
+    const events = await eventsOf('fail-stream');
+    expect(events).toHaveLength(1);
+    expect(events[0]?.attributes['langfuse.observation.level']).toBe('ERROR');
+    expect(events[0]?.attributes['langfuse.observation.status_message']).toBe(
+      'The stream broke: reset.',
+    );
+  });
+
+  it('hides a key in the reason of a failed stream', async () => {
+    tracer
+      .root('q')
+      .generation({ requestedModel: 'm', messages })
+      .streamFailed('broke at sk-or-OPENROUTER');
+    const [event] = await eventsOf('fail-stream');
+    expect(
+      event?.attributes['langfuse.observation.status_message'],
+    ).not.toContain('sk-or-OPENROUTER');
+  });
+
+  it('makes no event once the generation has ended', async () => {
+    const generation = tracer
+      .root('q')
+      .generation({ requestedModel: 'm', messages });
+    generation.end({ model: 'm', text: 'a' });
+    generation.firstToken();
+    generation.streamFailed('late');
+    expect(await eventsOf('receive-first-token')).toHaveLength(0);
+    expect(await eventsOf('fail-stream')).toHaveLength(0);
   });
 });
 
@@ -313,6 +642,45 @@ describe('a tool failure, as the model is told of it', () => {
   );
 });
 
+describe('personal data and credentials by pattern', () => {
+  it('masks an email in the question and the answer', async () => {
+    const root = tracer.root('mail me at a@b.io');
+    root.end({ answer: 'Sent to c@d.io.' });
+    const s = await span('answer-question');
+    expect(input(s)).toBe('mail me at [REDACTED]');
+    expect(output(s)).toBe('Sent to [REDACTED].');
+  });
+
+  it('masks a bearer token in a tool result, a tool name and a status message', async () => {
+    const token = 'Bearer abcdef0123456789abcdef';
+    const root = tracer.root('q');
+    root.tool({ name: `t-${token}`, arguments: '{}' }).end({
+      output: `{"error":"bad ${token}"}`,
+      failed: true,
+    });
+    root.end({ error: `failed with ${token}` });
+    await tracer.flush();
+    expect(
+      JSON.stringify(
+        exporter.getFinishedSpans().map((s) => [s.name, s.attributes]),
+      ),
+    ).not.toContain('abcdef0123456789abcdef');
+  });
+
+  it('masks an email in the reason of a failed stream and in the metadata', async () => {
+    const generation = tracer
+      .root('q')
+      .generation({ requestedModel: 'a@b.io', messages });
+    generation.streamFailed('broke for a@b.io');
+    generation.end({ model: 'm', text: 'x' });
+    await tracer.flush();
+    const everything = JSON.stringify(
+      exporter.getFinishedSpans().map((s) => [s.name, s.attributes]),
+    );
+    expect(everything).not.toContain('a@b.io');
+  });
+});
+
 describe('a tool whose name is a key', () => {
   it('hides the key in the name of the observation', async () => {
     tracer.root('q').tool({ name: 'sk-or-OPENROUTER', arguments: '{}' }).end({
@@ -381,6 +749,7 @@ describe('flushing', () => {
       config,
       exporter: { export: () => {}, shutdown: async () => {} },
       secrets: [],
+      version: '1.2.3',
       flushTimeoutMs: 30,
     });
     hanging.root('q').end({ answer: 'a' });
@@ -397,6 +766,7 @@ describe('flushing', () => {
         shutdown: async () => {},
       },
       secrets: [],
+      version: '1.2.3',
     });
     failing.root('q').end({ answer: 'a' });
     await expect(failing.flush()).rejects.toThrow(
@@ -423,6 +793,7 @@ describe('flushing', () => {
       config,
       exporter,
       secrets: [],
+      version: '1.2.3',
       flushTimeoutMs: WAIT,
     });
     quick.root('q').end({ answer: 'a' });
@@ -536,6 +907,8 @@ describe('the no-op tracer', () => {
   it('accepts every call and flushes', async () => {
     const root = NO_TRACER.root('q');
     root.generation({ requestedModel: 'm', messages }).retried();
+    root.generation({ requestedModel: 'm', messages }).firstToken();
+    root.generation({ requestedModel: 'm', messages }).streamFailed('x');
     root.generation({ requestedModel: 'm', messages }).end({ text: 'a' });
     root
       .tool({ name: 't', arguments: '{}' })

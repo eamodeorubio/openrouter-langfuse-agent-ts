@@ -262,6 +262,73 @@ describe('resolveConfig, Langfuse tracing', () => {
     },
   );
 
+  it('has no environment and no release unless they are set', () => {
+    const { langfuse } = resolveConfig(flags(), { ...base, ...full });
+    expect(langfuse?.environment).toBeUndefined();
+    expect(langfuse?.release).toBeUndefined();
+  });
+
+  it('reads the environment and the release, trimmed', () => {
+    const { langfuse } = resolveConfig(flags(), {
+      ...base,
+      ...full,
+      LANGFUSE_TRACING_ENVIRONMENT: ' staging ',
+      LANGFUSE_RELEASE: ' v1.2.3\n',
+    });
+    expect(langfuse?.environment).toBe('staging');
+    expect(langfuse?.release).toBe('v1.2.3');
+  });
+
+  it('counts a blank environment or release as unset', () => {
+    const { langfuse } = resolveConfig(flags(), {
+      ...base,
+      ...full,
+      LANGFUSE_TRACING_ENVIRONMENT: '  ',
+      LANGFUSE_RELEASE: '',
+    });
+    expect(langfuse?.environment).toBeUndefined();
+    expect(langfuse?.release).toBeUndefined();
+  });
+
+  it.each([
+    'Staging',
+    'has space',
+    'langfuse-internal',
+    'a'.repeat(41),
+    'dots.here',
+  ])('rejects %s as an environment, naming the variable', (environment) => {
+    expect(() =>
+      resolveConfig(flags(), {
+        ...base,
+        ...full,
+        LANGFUSE_TRACING_ENVIRONMENT: environment,
+      }),
+    ).toThrow(/LANGFUSE_TRACING_ENVIRONMENT/);
+  });
+
+  it.each(['production', 'staging-2', 'a_b', 'a'.repeat(40), 'x'])(
+    'accepts %s as an environment',
+    (environment) => {
+      expect(
+        resolveConfig(flags(), {
+          ...base,
+          ...full,
+          LANGFUSE_TRACING_ENVIRONMENT: environment,
+        }).langfuse?.environment,
+      ).toBe(environment);
+    },
+  );
+
+  it('ignores the environment and the release when tracing is off', () => {
+    expect(
+      resolveConfig(flags(), {
+        ...base,
+        LANGFUSE_TRACING_ENVIRONMENT: 'Not Valid',
+        LANGFUSE_RELEASE: 'r',
+      }).langfuse,
+    ).toBeUndefined();
+  });
+
   it('checks the key and the model before tracing', () => {
     expect(() => resolveConfig(flags(), { LANGFUSE_PUBLIC_KEY: 'pk' })).toThrow(
       /OPENROUTER_API_KEY/,

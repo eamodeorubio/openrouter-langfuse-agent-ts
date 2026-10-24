@@ -9,6 +9,10 @@ export interface LangfuseConfig {
   publicKey: string;
   secretKey: string;
   baseUrl: string;
+  /** Where the traces are filed in Langfuse, such as `staging`. */
+  environment?: string | undefined;
+  /** What the traces are attributed to, such as a git commit. */
+  release?: string | undefined;
 }
 
 export interface Config {
@@ -41,7 +45,24 @@ const resolveLangfuse = (env: Env): LangfuseConfig | undefined => {
     publicKey: value('LANGFUSE_PUBLIC_KEY') as string,
     secretKey: value('LANGFUSE_SECRET_KEY') as string,
     baseUrl: validBaseUrl(value('LANGFUSE_BASE_URL') as string),
+    environment: validEnvironment(env.LANGFUSE_TRACING_ENVIRONMENT?.trim()),
+    release: env.LANGFUSE_RELEASE?.trim() || undefined,
   };
+};
+
+/** The rule Langfuse sets for an environment name. */
+const ENVIRONMENT = /^(?!langfuse)[a-z0-9-_]{1,40}$/;
+
+const validEnvironment = (value: string | undefined): string | undefined => {
+  if (!value) {
+    return undefined;
+  }
+  if (!ENVIRONMENT.test(value)) {
+    throw new ConfigError(
+      'LANGFUSE_TRACING_ENVIRONMENT must be 1 to 40 characters of lower case letters, digits, hyphens and underscores, and must not start with "langfuse".',
+    );
+  }
+  return value;
 };
 
 const validBaseUrl = (value: string): string => {

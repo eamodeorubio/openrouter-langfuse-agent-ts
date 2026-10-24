@@ -73,7 +73,7 @@ Each traced run SHALL have one 32-character lowercase hex trace id, shared by ev
 - **THEN** stderr does not hold the trace id
 
 ### Requirement: Context to OpenRouter
-Every request the CLI sends to OpenRouter in a traced run SHALL carry a W3C `traceparent` header whose trace id is the run's and whose parent id is the observation active when the request starts. An untraced run SHALL send no `traceparent`.
+Every request the CLI sends to OpenRouter in a traced run SHALL carry a W3C `traceparent` header whose trace id is the run's and whose parent id is the observation that makes the request. An untraced run SHALL send no `traceparent`.
 
 #### Scenario: Header on a generation
 - **WHEN** a traced run sends a chat request

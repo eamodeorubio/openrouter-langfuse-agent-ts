@@ -43,12 +43,10 @@ export const runCalls = async (
     calls.map(async (call) => {
       const span = root.tool({ name: call.name, arguments: call.arguments });
       try {
-        const result = await callTool(
-          tools,
-          call.name,
-          call.arguments,
-          context,
-        );
+        const result = await callTool(tools, call.name, call.arguments, {
+          ...context,
+          traceparent: span.traceparent,
+        });
         const content = redactKey(toContent(result), apiKey);
         span.end({ output: content, failed: !result.ok });
         return { role: 'tool' as const, toolCallId: call.id, content };

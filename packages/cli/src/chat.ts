@@ -20,6 +20,7 @@ import {
   toApiError,
 } from './failures.js';
 import { backoff, mayRetry } from './retry.js';
+import { oneLine } from './text.js';
 import type { AskEvent, Usage } from './types.js';
 
 export const IDLE_TIMEOUT_MS = 60_000;
@@ -118,6 +119,7 @@ async function* readChunks(
   client: OpenRouter,
   { model, messages, tools, toolChoice }: ChatInput,
   idleTimeoutMs: number,
+  traceparent: string | undefined,
 ): AsyncGenerator<Chunk, void> {
   const controller = new AbortController();
   const sentAt = Date.now();
@@ -139,7 +141,10 @@ async function* readChunks(
               parallelToolCalls: tools ? true : undefined,
             },
           },
-          { signal: controller.signal },
+          {
+            signal: controller.signal,
+            headers: traceparent ? { traceparent } : undefined,
+          },
         ),
         idleTimeoutMs,
       );
@@ -190,6 +195,7 @@ async function* attempt(
   client: OpenRouter,
   input: ChatInput,
   idleTimeoutMs: number,
+  traceparent: string | undefined,
 ): AsyncGenerator<RoundEvent, Round> {
   // Stryker disable next-line StringLiteral: equivalent because the first chunk replaces it before it is read, and a stream without chunks fails before it is used.
   let servedModel = '';
@@ -199,7 +205,12 @@ async function* attempt(
   let usage: Chunk['usage'];
   const toolFragments: ToolCallFragment[] = [];
   const detailFragments: ReasoningDetail[] = [];
-  for await (const chunk of readChunks(client, input, idleTimeoutMs)) {
+  for await (const chunk of readChunks(
+    client,
+    input,
+    idleTimeoutMs,
+    traceparent,
+  )) {
     if (chunk.error) {
       throw new ChunkError(chunk.error.code, chunk.error.message);
     }
@@ -231,14 +242,28 @@ async function* attempt(
       totalTokens: usage.totalTokens,
       reasoningTokens:
         usage.completionTokensDetails?.reasoningTokens ?? undefined,
+      cachedTokens: usage.promptTokensDetails?.cachedTokens ?? undefined,
+      cost: usage.cost ?? undefined,
     },
   };
 }
 
-/** Told of what happens to a request that its result does not show. */
+/** A failure of the stream itself, as opposed to a refusal before it started. */
+const isStreamFailure = (error: unknown): boolean =>
+  error instanceof StreamError ||
+  error instanceof IdleTimeout ||
+  error instanceof ChunkError;
+
+/** Tags a request with its trace context, and is told of what happens to it that its result does not show. */
 export interface RoundObserver {
+  /** The trace context to send with every attempt, when the run is traced. */
+  readonly traceparent?: string | undefined;
   /** A failed attempt is about to be repeated. */
   retried(): void;
+  /** The first text or thinking of the request has arrived. */
+  firstToken(): void;
+  /** The stream broke, went idle or carried an error, and the request ends with it. `message` is one line. */
+  streamFailed(message: string): void;
 }
 
 /**
@@ -257,18 +282,30 @@ export async function* chat(
   for (let retry = 0; ; retry++) {
     let started = false;
     try {
-      const events = attempt(client, input, idleTimeoutMs);
+      const events = attempt(
+        client,
+        input,
+        idleTimeoutMs,
+        observer?.traceparent,
+      );
       for (;;) {
         const step = await events.next();
         if (step.done) {
           return step.value;
+        }
+        if (!started) {
+          observer?.firstToken();
         }
         started = true;
         yield step.value;
       }
     } catch (error) {
       if (started || !mayRetry(error, retry)) {
-        throw toApiError(error, idleTimeoutMs) ?? error;
+        const failure = toApiError(error, idleTimeoutMs) ?? error;
+        if (isStreamFailure(error)) {
+          observer?.streamFailed(oneLine((failure as Error).message));
+        }
+        throw failure;
       }
       observer?.retried();
       await backoff(retry);

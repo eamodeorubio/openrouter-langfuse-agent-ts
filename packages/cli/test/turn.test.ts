@@ -18,12 +18,14 @@ const recorder = () => {
   const log: string[] = [];
   const ended: { name: string; output: string; failed: boolean }[] = [];
   const root: RootSpan = {
+    traceId: undefined,
     generation: () => {
       throw new Error('not used');
     },
     tool: ({ name, arguments: args }) => {
       log.push(`start ${name} ${args}`);
       return {
+        traceparent: `tp-${name}`,
         end: (result) => {
           log.push(`end ${name}`);
           ended.push({ name, ...result });
@@ -153,5 +155,39 @@ describe('runCalls with a tracer', () => {
       'key',
     );
     expect(messages).toEqual([{ role: 'tool', toolCallId: '1', content: '1' }]);
+  });
+
+  it('gives each call the traceparent of its own span, so that parallel calls do not swap them', async () => {
+    const { root } = recorder();
+    const seen: Record<string, string | undefined> = {};
+    const spy = (name: string) =>
+      tool(name, async (_args, ctx) => {
+        seen[name] = ctx.traceparent;
+        return { ok: true, value: 1 };
+      });
+    await runCalls(
+      [spy('a'), spy('b')],
+      [call('1', 'a'), call('2', 'b')],
+      context,
+      'key',
+      root,
+    );
+    expect(seen).toEqual({ a: 'tp-a', b: 'tp-b' });
+  });
+
+  it('gives a call no traceparent when its span has none', async () => {
+    let seen: string | undefined = 'unset';
+    await runCalls(
+      [
+        tool('t', async (_args, ctx) => {
+          seen = ctx.traceparent;
+          return { ok: true, value: 1 };
+        }),
+      ],
+      [call('1', 't')],
+      context,
+      'key',
+    );
+    expect(seen).toBeUndefined();
   });
 });
