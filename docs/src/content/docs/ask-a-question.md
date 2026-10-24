@@ -1,15 +1,15 @@
 ---
 title: Ask a question
-description: Send one question to an OpenRouter model from the command line, let it check the live catalog and do its sums, watch the answer and the model's thinking arrive, and see which model answered and how many tokens it used.
+description: Send one question to an OpenRouter model from the command line, let it check the live catalog and do its sums, watch the answer and the model's thinking arrive, see which model answered and how many tokens it used, and keep a trace of the run in Langfuse.
 ---
 
-The tool sends one question to one OpenRouter model and prints the answer as it arrives, word by word, without waiting for the end. If the model thinks before it answers, the tool shows that too. Before it answers, the model may also check OpenRouter's live catalog for the facts it needs and work out the arithmetic with a calculator, and you still see one question and one answer. On the side, the tool tells you which model answered and how many tokens the exchange used.
+The tool sends one question to one OpenRouter model and prints the answer as it arrives, word by word, without waiting for the end. If the model thinks before it answers, the tool shows that too. Before it answers, the model may also check OpenRouter's live catalog for the facts it needs and work out the arithmetic with a calculator, and you still see one question and one answer. On the side, the tool tells you which model answered and how many tokens the exchange used. Give it the credentials of a Langfuse project and it also leaves a trace of the run behind.
 
 ## Before you start
 
 Install the dependencies with `pnpm install`. You need Node.js 26 or newer. You also need an OpenRouter key, which you can create at [openrouter.ai/keys](https://openrouter.ai/keys), and the name of a model.
 
-The tool reads two settings:
+The tool reads two settings to ask a question, and three more if you want a trace of the run (see [Tracing with Langfuse](#tracing-with-langfuse)):
 
 | Setting              | Meaning                                                                                     |
 | -------------------- | ------------------------------------------------------------------------------------------- |
@@ -168,9 +168,46 @@ tokens: 10004 prompt, 411 completion, 10415 total
 
 The line "Now I'll calculate the costs for each model:" is a remark the instructions ask the model not to make. The tool prints it, as it prints everything the model writes.
 
+## Tracing with Langfuse
+
+A run can leave a record. Give the tool the credentials of a [Langfuse](https://langfuse.com) project and it sends one trace for every question: what you asked, each request to the model with the messages it carried, what the model sent back, each tool call and what it returned, and the answer. Open the trace in Langfuse and you can see what the model was shown, why it reached for a tool, and where the time went.
+
+Three settings switch it on:
+
+| Setting               | Meaning                                                                                                                             |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `LANGFUSE_PUBLIC_KEY` | The public key of the project, from its settings under API keys. It starts with `pk-lf-`.                                           |
+| `LANGFUSE_SECRET_KEY` | The secret key of the same pair. It starts with `sk-lf-`.                                                                           |
+| `LANGFUSE_BASE_URL`   | Where Langfuse lives: `https://cloud.langfuse.com` (EU), `https://us.cloud.langfuse.com` (US) or your own server. An `http(s)` URL. |
+
+They live in the same two places as the other settings, the environment and `.env`, and the environment wins. The tool works with Langfuse Cloud and with a self-hosted Langfuse server from version 4.59.0.
+
+Set all three or none. With none, the tool runs untraced and writes one line to stderr to say so. That line is a reminder, not an error: stdout and the exit code stay as they were. With one or two, the tool stops before it reads your question, exits with code 1 and names the settings that are missing. A half-configured setup is almost always a typo, and a trace that quietly never arrives is worse than a refusal.
+
+With all three, the tool checks the keys before it asks the model anything. It asks Langfuse for the project the keys belong to. If Langfuse rejects the keys, or does not answer within ten seconds, the tool prints one line, sends nothing to OpenRouter and exits with code 2. You find out in the first second, and no tokens were spent.
+
+### What the trace holds
+
+The root of the trace is an `agent` observation named `answer-question`. Its input is your question and its output is the final answer. Under it, in the order they happened:
+
+- One `generation` named `generate-response` for each request to the model. It holds the model you asked for and the model that served the request, the messages that went out as a conversation (system, user, assistant and tool messages, with each tool result matched to its call), the reply with its text, its tool calls and its thinking, and the reason the model stopped. A request that was retried after a failure is still one generation, with the number of retries in its metadata.
+- One `tool` for each tool call, named after the tool: `get_model`, `search_models` or `calculate`. It holds the arguments the model sent and the result that went back. A call that failed is marked as an error, with the reason as its status message. A tool sits beside the generation that asked for it, never inside it, so the tree reads like the run did.
+
+When a run fails, the error marks the root and the request that failed. The trace of a failed run is delivered like any other.
+
+### What leaves your machine
+
+The question, the answer, the thinking, and the arguments and results of every tool call go to Langfuse in full. That is the point of a trace, and it is also a decision to make with open eyes. The tool replaces your OpenRouter key and the two Langfuse keys with `[REDACTED]` wherever they appear in what it sends. It looks for nothing else. A name, an address or a number that you type into a question, or that a model repeats, is stored as it is. Do not ask a traced run what you would not want written on that server.
+
+### When the run ends
+
+The tool sends the trace before it exits and waits at most ten seconds for Langfuse to take it. If it cannot, it writes one line saying the trace may be incomplete. A run that would have exited with 0 then exits with 2, so a script notices that the record is missing. A run that had already failed keeps its own exit code.
+
+Press Ctrl-C, or stop the process with `SIGTERM`, and the tool does not walk away from the trace. The observations still open are closed and marked as interrupted, the trace is sent, and the exit code is 130 for Ctrl-C and 143 for `SIGTERM`, the codes a shell shows for a process a signal killed.
+
 ## What you see
 
-The tool writes to two channels. Stdout carries the result: the answer, as it arrives. Stderr carries everything else that is about the run rather than the result, which means the model's thinking (when there is some and when it is shown), the lookup lines (when you ask for them with `--verbose`) and two status lines once the answer is complete:
+The tool writes to two channels. Stdout carries the result: the answer, as it arrives. Stderr carries everything else that is about the run rather than the result, which means the model's thinking (when there is some and when it is shown), the lookup lines (when you ask for them with `--verbose`), one line saying tracing is off when no Langfuse settings are present, and two status lines once the answer is complete:
 
 ```text
 $ pnpm dev -q "Name three primary colors, one per line."
@@ -223,16 +260,17 @@ Only readable thinking is shown. Some providers return their reasoning encrypted
 
 ## When it fails
 
-| Exit code | Meaning                                                                                                                |
-| --------- | ---------------------------------------------------------------------------------------------------------------------- |
-| 0         | The model answered, completely.                                                                                        |
-| 1         | Something you can fix: no question, an unknown option, both thinking flags, no key, no model, or an unreadable `.env`. |
-| 2         | The call failed, in one of the ways listed next.                                                                       |
-| 3         | The model was stopped at a limit: it kept calling tools after eight rounds of them.                                    |
+| Exit code | Meaning                                                                                                                                                              |
+| --------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 0         | The model answered, completely.                                                                                                                                      |
+| 1         | Something you can fix: no question, an unknown option, both thinking flags, no key, no model, an unreadable `.env`, or Langfuse settings that are only partly there. |
+| 2         | The call failed, in one of the ways listed next.                                                                                                                     |
+| 3         | The model was stopped at a limit: it kept calling tools after eight rounds of them.                                                                                  |
 
 Exit code 2 covers these cases:
 
 - The API refused the request, for example because of a bad key or a rate limit.
+- Langfuse rejected the keys or did not answer, or the trace could not be delivered at the end.
 - The network was down.
 - The model went quiet for 60 seconds.
 - The response held no answer or no token count.
@@ -249,4 +287,4 @@ The tool waits up to 60 seconds for the first sign of life from the model, and u
 
 ## What is not here yet
 
-The status lines show model and tokens only. The cost in dollars and a link to the trace in Langfuse arrive with the slices that build them.
+The status lines show model and tokens only. The trace does not carry token counts or costs yet, and nothing prints its id. Those arrive with the next piece, together with the masking of email addresses and bearer tokens.

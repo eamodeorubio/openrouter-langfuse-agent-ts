@@ -34,6 +34,7 @@ interface Chunk {
       toolCalls?: ToolCallFragment[] | undefined;
       reasoningDetails?: ReasoningDetail[] | undefined;
     };
+    finishReason?: string | null | undefined;
   }[];
   usage?: ChatStreamChunk['usage'];
   /** Set only by a streamed chunk that carries an error. */
@@ -43,7 +44,8 @@ interface Chunk {
 /** A complete response, from a server that did not stream, read as the single chunk of a stream. */
 const asChunk = (result: ChatResult): Chunk => ({
   model: result.model,
-  choices: result.choices.map(({ message }) => ({
+  choices: result.choices.map(({ message, finishReason }) => ({
+    finishReason,
     delta: {
       content:
         typeof message.content === 'string' ? message.content : undefined,
@@ -77,6 +79,10 @@ export interface Round {
   /** The model that served it. */
   model: string;
   text: string;
+  /** The thinking the model streamed, as text. Empty when it showed none. */
+  thinking: string;
+  /** Why the model stopped, as the API says. */
+  finishReason: string | undefined;
   toolCalls: ToolCall[];
   reasoningDetails: ReasoningDetail[];
   /** Missing when the response held none. */
@@ -188,6 +194,8 @@ async function* attempt(
   // Stryker disable next-line StringLiteral: equivalent because the first chunk replaces it before it is read, and a stream without chunks fails before it is used.
   let servedModel = '';
   let text = '';
+  let thinking = '';
+  let finishReason: string | undefined;
   let usage: Chunk['usage'];
   const toolFragments: ToolCallFragment[] = [];
   const detailFragments: ReasoningDetail[] = [];
@@ -197,9 +205,11 @@ async function* attempt(
     }
     servedModel = chunk.model;
     const delta = chunk.choices[0]?.delta;
+    finishReason = chunk.choices[0]?.finishReason ?? finishReason;
     toolFragments.push(...(delta?.toolCalls ?? []));
     detailFragments.push(...(delta?.reasoningDetails ?? []));
     if (delta?.reasoning) {
+      thinking += delta.reasoning;
       yield { kind: 'thinking', text: delta.reasoning };
     }
     if (delta?.content) {
@@ -211,6 +221,8 @@ async function* attempt(
   return {
     model: servedModel,
     text,
+    thinking,
+    finishReason,
     toolCalls: joinToolCalls(toolFragments),
     reasoningDetails: joinReasoningDetails(detailFragments),
     usage: usage && {
@@ -221,6 +233,12 @@ async function* attempt(
         usage.completionTokensDetails?.reasoningTokens ?? undefined,
     },
   };
+}
+
+/** Told of what happens to a request that its result does not show. */
+export interface RoundObserver {
+  /** A failed attempt is about to be repeated. */
+  retried(): void;
 }
 
 /**
@@ -234,6 +252,7 @@ export async function* chat(
   client: OpenRouter,
   input: ChatInput,
   idleTimeoutMs: number = IDLE_TIMEOUT_MS,
+  observer?: RoundObserver,
 ): AsyncGenerator<RoundEvent, Round> {
   for (let retry = 0; ; retry++) {
     let started = false;
@@ -251,6 +270,7 @@ export async function* chat(
       if (started || !mayRetry(error, retry)) {
         throw toApiError(error, idleTimeoutMs) ?? error;
       }
+      observer?.retried();
       await backoff(retry);
     }
   }

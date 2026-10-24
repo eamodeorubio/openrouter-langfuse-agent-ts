@@ -11,7 +11,7 @@ import {
   it,
   vi,
 } from 'vitest';
-import { run } from '../src/cli.js';
+import { NOT_TRACED, run } from '../src/cli.js';
 import { type FakeApi, startFakeApi } from './fakeApi.js';
 import {
   contentChunk,
@@ -118,7 +118,10 @@ const start = ({
     stderr: {
       isTTY: stderrIsTTY,
       write: (text: string) => {
-        out.stderr += text;
+        // The warning of an untraced run is covered in cli.trace.test.ts.
+        if (text !== NOT_TRACED) {
+          out.stderr += text;
+        }
       },
     },
   });
@@ -814,7 +817,9 @@ describe('key redaction', () => {
       },
       stderr: {
         write: (text: string) => {
-          stderr += text;
+          if (text !== NOT_TRACED) {
+            stderr += text;
+          }
         },
       },
     };
@@ -844,7 +849,9 @@ describe('a stdout that stops working mid-run', () => {
       },
       stderr: {
         write: (text: string) => {
-          stderr += text;
+          if (text !== NOT_TRACED) {
+            stderr += text;
+          }
         },
       },
     };
@@ -871,7 +878,9 @@ describe('unexpected failure', () => {
       },
       stderr: {
         write: (text: string) => {
-          stderr += text;
+          if (text !== NOT_TRACED) {
+            stderr += text;
+          }
         },
       },
     };
