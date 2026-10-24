@@ -10,7 +10,7 @@ The stack, scripts and CI are in `package.json`, the config files and `.github/w
 
 These bind every spec, design and implementation.
 
-- Tests never reach the public network. Mock HTTP with `nock`. Where a test must cancel, cut or stall a response stream, use a real server on `127.0.0.1` instead (`packages/cli/test/fakeApi.ts`): `nock`'s mock sockets cannot survive a cancel, and the failures they cause are intermittent.
+- Tests never reach the public network. Mock HTTP with `nock`. Where a test must cancel, cut or stall a response stream, use a real server on `127.0.0.1` instead (`packages/cli/test/fakeApi.ts`): `nock`'s mock sockets cannot survive a cancel, and the failures they cause are intermittent. The Langfuse tests (the credential check, which uses `fetch`, and the OTLP exporter) use a real server too, because `nock` failed with them intermittently.
 - API keys come from the environment (see `.env.example`). Never log them, print them, commit them, or send them to Langfuse in traces or metadata. Never read or print `.env` contents.
 - Use pnpm, never npm or yarn.
 - Validate untrusted input (arguments, environment, API responses) at the boundary, with clear error messages.

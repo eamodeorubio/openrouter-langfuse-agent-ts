@@ -32,5 +32,5 @@ Langfuse is the tracing backend the project chose from the start. The SDK that f
 - `packages/cli/src`: a new `tracing` module (setup, masking, flush), wiring in `cli.ts` and `ask.ts`, one observation per round in `chat.ts` and per call in `turn.ts`, the `traceparent` header in the request options of `chat.ts` and the two tools that call the SDK. `Usage` gains the cost and cached-token counts the API already returns.
 - Dependencies: `@langfuse/tracing`, `@langfuse/otel` and the OpenTelemetry packages they need (`api`, `core`, `resources`, `sdk-trace-base`, `sdk-trace-node` and the OTLP exporter), all at the versions the design pins.
 - `.env.example` already lists the Langfuse variables; the usage guide and README describe the new behavior.
-- Tests stay offline: `nock` for Langfuse, an in-memory span exporter for the tree, the local server for cancelled streams.
+- Tests stay offline. In the tracing tests, an in-memory span exporter holds the tree, and a real server on `127.0.0.1` stands in for Langfuse and OpenRouter (see the design for why not `nock`).
 - Bump: minor (`feat:`).
