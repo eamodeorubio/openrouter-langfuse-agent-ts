@@ -20,7 +20,7 @@ import {
 } from 'vitest';
 import { afterFlush, run } from '../src/cli.js';
 import { type FakeApi, startFakeApi, withServer } from './fakeApi.js';
-import { contentChunk, sseBody, usageChunk } from './fixtures.js';
+import { contentChunk, sseBody, toolRound, usageChunk } from './fixtures.js';
 import { sink } from './sink.js';
 
 vi.mock('node:timers/promises', () => ({ setTimeout: async () => undefined }));
@@ -173,6 +173,62 @@ describe('delivering the trace', () => {
       lines(result.stderr).filter((line) => /incomplete/i.test(line)),
     ).toEqual([expect.stringMatching(/trace .*incomplete/i)]);
     expect(result.code).toBe(2);
+  });
+});
+
+describe('a failed run whose trace is lost', () => {
+  it('keeps the exit code of the run and writes both lines', async () => {
+    projectsOk();
+    // The model calls a tool in every response, so that the run ends at the round limit.
+    for (let i = 0; i < 9; i++) {
+      api.reply(
+        200,
+        toolRound([
+          { id: `c${i}`, name: 'calculate', arguments: '{"expression":"1+1"}' },
+        ]),
+      );
+    }
+    const refusing: SpanExporter = {
+      export: (_spans, done) =>
+        done({ code: ExportResultCode.FAILED, error: new Error('refused') }),
+      shutdown: async () => {},
+    };
+    const result = await cli(full(), { exportTo: refusing });
+    expect(result.code).toBe(3);
+    expect(result.stderr).toMatch(/kept calling tools/i);
+    expect(result.stderr).toMatch(/trace .*incomplete/i);
+  });
+});
+
+describe('the stream, with tracing on', () => {
+  it('writes each piece of the answer as it arrives, not at the end of the run', async () => {
+    projectsOk();
+    const stream = api.open();
+    const out = { stdout: '', stderr: '' };
+    const running = run(
+      ['-q', 'hi'],
+      { OPENROUTER_API_KEY: OR_KEY, OPENROUTER_MODEL: 'm', ...full() },
+      {
+        serverURL: api.url,
+        tracing: { exporter },
+        cwd: dir,
+        stdin: { isTTY: false, read: async () => '' },
+        stdout: sink(out, 'stdout'),
+        stderr: sink(out, 'stderr'),
+      },
+    );
+    const piece = (text: string) =>
+      `data: ${JSON.stringify({ id: 'x', object: 'chat.completion.chunk', created: 1, model: 'm', choices: [{ index: 0, delta: { content: text }, finish_reason: null }] })}\n\n`;
+    stream.write(piece('First. '));
+    // The stream is still open, so nothing has been flushed and the run has not ended.
+    await vi.waitFor(() => expect(out.stdout).toBe('First. '));
+    stream.write(piece('Second.'));
+    await vi.waitFor(() => expect(out.stdout).toBe('First. Second.'));
+    stream.end(
+      `data: ${JSON.stringify({ id: 'x', object: 'chat.completion.chunk', created: 1, model: 'm', choices: [], usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2 } })}\n\n`,
+    );
+    expect(await running).toBe(0);
+    expect(exporter.getFinishedSpans().length).toBeGreaterThan(0);
   });
 });
 

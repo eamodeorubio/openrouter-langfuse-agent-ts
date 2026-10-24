@@ -20,8 +20,10 @@ import {
   contentChunk,
   RECORDED_TOOL_ROUND,
   recordedModel,
+  recordedModelsList,
   recordedToolStream,
   sseBody,
+  toolRound,
   usageChunk,
 } from './fixtures.js';
 import { sink } from './sink.js';
@@ -325,5 +327,71 @@ describe('a traced question that needs tools', () => {
     for (const secret of Object.values(keys)) {
       expect(everything).not.toContain(secret);
     }
+  });
+
+  it('sends a search the traceparent of its own tool observation', async () => {
+    api.replyGet('/api/public/projects', 200, { data: [] });
+    api.reply(
+      200,
+      toolRound([
+        {
+          id: 'c1',
+          name: 'search_models',
+          arguments: JSON.stringify({ sort: 'pricing-low-to-high', limit: 2 }),
+        },
+      ]),
+    );
+    api.replyGet('/models', 200, recordedModelsList);
+    api.reply(200, sseBody(contentChunk('Free.'), usageChunk()));
+    await cli(['-q', 'Cheapest?']);
+    const [search] = exporter
+      .getFinishedSpans()
+      .filter((span) => span.name === 'search_models');
+    const catalog = api.sent.find(
+      (sent) => sent.method === 'GET' && sent.path === '/api/v1/models',
+    );
+    expect(search).toBeDefined();
+    expect(catalog?.traceparent).toBe(
+      `00-${search?.spanContext().traceId}-${search?.spanContext().spanId}-01`,
+    );
+  });
+
+  it('files the traces under the environment and the release the settings name', async () => {
+    queueTwoRounds();
+    await cli(['-q', QUESTION], {
+      LANGFUSE_TRACING_ENVIRONMENT: 'staging',
+      LANGFUSE_RELEASE: 'abc123',
+    });
+    const spans = exporter.getFinishedSpans();
+    expect(spans.length).toBeGreaterThan(0);
+    for (const span of spans) {
+      expect(span.attributes['langfuse.environment']).toBe('staging');
+      expect(span.attributes['langfuse.release']).toBe('abc123');
+    }
+  });
+
+  it('stops a run whose environment is not a name Langfuse accepts, before any request', async () => {
+    const result = await cli(['-q', QUESTION], {
+      LANGFUSE_TRACING_ENVIRONMENT: 'Not Valid',
+    });
+    expect(result.code).toBe(1);
+    expect(result.stderr).toContain('LANGFUSE_TRACING_ENVIRONMENT');
+    expect(api.sent).toEqual([]);
+  });
+
+  it('holds one first-token event, and no other event, for a response of 500 chunks', async () => {
+    api.replyGet('/api/public/projects', 200, { data: [] });
+    const chunks = Array.from({ length: 500 }, (_, i) =>
+      contentChunk(`word${i} `),
+    );
+    api.reply(200, sseBody(...chunks, usageChunk()));
+    const result = await cli(['-q', QUESTION]);
+    expect(result.code).toBe(0);
+    const events = exporter
+      .getFinishedSpans()
+      .filter(
+        (span) => span.attributes['langfuse.observation.type'] === 'event',
+      );
+    expect(events.map((event) => event.name)).toEqual(['receive-first-token']);
   });
 });
