@@ -273,7 +273,7 @@ When the server answers with one complete response instead of a stream, the CLI 
 - **THEN** stderr holds one line saying the response held no answer, stdout is empty, and the exit code is 2
 
 ### Requirement: Verbose flag
-The CLI SHALL accept `--verbose`. It SHALL list the flag in the usage message. It turns on the `tool:` lines of `agent-loop` and nothing else.
+The CLI SHALL accept `--verbose`. It SHALL list the flag in the usage message. It turns on the `tool:` lines of `agent-loop` and, in a traced run, the trace id line of `tracing-setup`, and nothing else.
 
 #### Scenario: Flag accepted
 - **WHEN** the CLI runs with `-q "hi" --verbose`

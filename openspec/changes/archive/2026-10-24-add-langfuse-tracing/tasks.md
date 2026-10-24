@@ -41,4 +41,4 @@ Specs: *Verbose flag* (modified in `ask-question`), *Usage and cost*, *Stream ev
 
 ## 3. Close
 
-- [ ] 3.1 After the last slice: `/opsx:verify add-langfuse-tracing`, fix what it finds, then archive as the last commit: `chore: archive add-langfuse-tracing`, once the user approves.
+- [x] 3.1 After the last slice: `/opsx:verify add-langfuse-tracing`, fix what it finds, then archive as the last commit: `chore: archive add-langfuse-tracing`, once the user approves.
