@@ -7,7 +7,34 @@ export default defineConfig({
   base: process.env.BASE,
   integrations: [
     starlight({
-      title: 'openrouter-langfuse-agent-ts',
+      title: 'ask-openrouter',
+      social: [
+        {
+          icon: 'github',
+          label: 'GitHub',
+          href: 'https://github.com/eamodeorubio/openrouter-langfuse-agent-ts',
+        },
+      ],
+      sidebar: [
+        {
+          label: 'Start here',
+          items: [
+            { label: 'Overview', slug: '' },
+            'install',
+            'set-up',
+            'ask-a-question',
+            'troubleshooting',
+          ],
+        },
+        {
+          label: 'Reference',
+          items: ['command-line', 'tools', 'tracing', 'json-output'],
+        },
+        {
+          label: 'Contributing',
+          items: ['how-changes-are-made'],
+        },
+      ],
     }),
   ],
 });

@@ -11,7 +11,7 @@ A person reads the tool's normal output. The answer streams to stdout, the think
 Add `--json` and the tool changes its manner. Nothing appears while the model works. When the run is over, the tool writes one JSON object and one newline, then exits with the same code it always does. The conversation with the model still streams underneath; you just don't watch it.
 
 ```sh
-pnpm dev --json -q "What is a token?"
+ask-openrouter --json -q "What is a token?"
 ```
 
 ## A run that succeeds
@@ -72,12 +72,12 @@ The same object, with `success` set to `false`, goes to stderr instead. Stdout s
   "success": false,
   "error": {
     "code": "API_ERROR",
-    "message": "API error 401: No auth credentials found"
+    "message": "API error 401: No auth credentials found. Check OPENROUTER_API_KEY."
   }
 }
 ```
 
-The object carries whatever the tool knew when the run broke, with one exception: it never has a `model` or a `usage`. A failed run has no final response, and a sum over the requests that did finish would look complete when it is not. A failure before the question was read has no `question`. A stream that dies halfway has the `answer` that arrived, since the tool keeps partial text as it always has. The `message` is the sentence the tool would have written to stderr, without the help text. The tool never puts your API key or your Langfuse keys in the `message`. The answer and the thinking pass through as the model wrote them.
+The object carries whatever the tool knew when the run broke, with one exception: it never has a `model` or a `usage`. A failed run has no final response, and a sum over the requests that did finish would look complete when it is not. A failure before the question was read has no `question`. A stream that dies halfway has the `answer` that arrived, since the tool keeps partial text as it always has. The `message` is the sentence the tool would have written to stderr, without the help text and without the `detail:` line that `--verbose` adds to an unexpected failure. The tool never puts your API key or your Langfuse keys in the `message`. The answer and the thinking pass through as the model wrote them.
 
 The `code` is a short word in capitals and underscores. It is never a number. Branch on it, and leave the message to people.
 
@@ -86,7 +86,7 @@ The `code` is a short word in capitals and underscores. It is never a number. Br
 | `USAGE_ERROR`        | Bad arguments, or no question.                                                                   | 1         |
 | `CONFIG_ERROR`       | No key, no model, an unreadable `.env`, or Langfuse settings only partly there.                  | 1         |
 | `API_ERROR`          | The API refused the request, the network failed, the stream broke, or the response was unusable. | 2         |
-| `TIMEOUT`            | The model went quiet for 60 seconds.                                                             | 2         |
+| `TIMEOUT`            | The model went quiet for 60 seconds, or OpenRouter did not answer a request in time.             | 2         |
 | `LIMIT_EXCEEDED`     | The model kept calling tools after eight rounds of them.                                         | 3         |
 | `UNEXPECTED_ERROR`   | Something failed inside the tool itself.                                                         | 2         |
 | `TRACE_FLUSH_FAILED` | The answer arrived, but the trace could not be delivered.                                        | 2         |
@@ -109,7 +109,7 @@ Check the output of a run with any validator. With [`ajv-cli`](https://github.co
 
 ```sh
 curl -O https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/schemas/json-output.schema.json
-pnpm dev --json -q "What is a token?" > out.json
+ask-openrouter --json -q "What is a token?" > out.json
 pnpm dlx ajv-cli validate --spec=draft2020 -s json-output.schema.json -d out.json
 ```
 

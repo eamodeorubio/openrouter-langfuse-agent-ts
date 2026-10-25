@@ -39,10 +39,10 @@ Pull request title: `feat: publish the CLI to npm, with --help, --version and cl
 
 ## 4. Docs revamp (`docs:`)
 
-- [ ] 4.1 Rewrite the README for a first-time visitor (Node 22 or newer for users; contributors use the version in `.nvmrc`), with absolute links (the npm page cannot resolve relative ones): what it is, install, set up, first question, links to the site, license. Move contributor material to the end. Verify every command in it runs as written, apart from the ones that need a real key.
-- [ ] 4.2 Restructure the docs site: Overview, Install, Set up, Ask a question, JSON output, Tracing with Langfuse, Troubleshooting, How changes are made. Fix the sidebar order in `astro.config.mjs`. Remove "no release yet" and the `pnpm dev` first path. Verify `pnpm docs:build` passes and no link is broken.
-- [ ] 4.3 Check each page against the code: flags against `--help`, variables against `.env.example`, exit codes against `classify.ts`, JSON fields against the schema.
-- [ ] 4.4 Run `pnpm check`. Run `reviewer-docs` in depth on every page, read-through for a stranger's path from nothing to a first answer. Fix every must-fix finding.
+- [x] 4.1 Rewrite the README for a first-time visitor (Node 22 or newer for users; contributors use the version in `.nvmrc`), with absolute links (the npm page cannot resolve relative ones): what it is, install, set up, first question, links to the site, license. Move contributor material to the end. Verify every command in it runs as written, apart from the ones that need a real key.
+- [x] 4.2 Restructure the docs site: Overview, Install, Set up, Ask a question, JSON output, Tracing with Langfuse, Troubleshooting, How changes are made. Fix the sidebar order in `astro.config.mjs`. Remove "no release yet" and the `pnpm dev` first path. Verify `pnpm docs:build` passes and no link is broken.
+- [x] 4.3 Check each page against the code: flags against `--help`, variables against `.env.example`, exit codes against `classify.ts`, JSON fields against the schema.
+- [x] 4.4 Run `pnpm check`. Run `reviewer-docs` in depth on every page, read-through for a stranger's path from nothing to a first answer. Fix every must-fix finding.
 - [ ] 4.5 Write the short report. Wait for approval, then commit `docs: rewrite the user documentation for the first release`.
 
 ## 5. Close
@@ -53,7 +53,5 @@ Pull request title: `feat: publish the CLI to npm, with --help, --version and cl
 
 ## Workflow follow-up
 
-- Document in CONTRIBUTING.md that a failed publish is recovered by re-running the failed job.
-
 - The `NPM_TOKEN` secret exists and expires seven days after creation. Merge the release pull request, and then the trusted-publisher chore, before it lapses. If it lapses first, the maintainer issues a new token.
-- After 1.0.0 is published, open a `chore:` pull request that removes `release-as`, `bump-minor-pre-major` and `bump-patch-for-minor-pre-major`, and switches the publish step to npm trusted publishing (check first that the runner's npm meets npm's minimum version for it): configure the trusted publisher for `ask-openrouter` on npmjs.com (this repository, the workflow file, the environment if any), drop the `NPM_TOKEN` secret and `NODE_AUTH_TOKEN` from `ci.yml`, keep `id-token: write`, and delete the secret once a release has published without it.
+- After 1.0.0 is published, open a `chore:` pull request that removes `release-as`, `bump-minor-pre-major` and `bump-patch-for-minor-pre-major`, adds the npm version badge to the README (it needs the package to exist), and switches the publish step to npm trusted publishing (check first that the runner's npm meets npm's minimum version for it): configure the trusted publisher for `ask-openrouter` on npmjs.com (this repository, the workflow file, the environment if any), drop the `NPM_TOKEN` secret and `NODE_AUTH_TOKEN` from `ci.yml`, keep `id-token: write`, and delete the secret once a release has published without it.
