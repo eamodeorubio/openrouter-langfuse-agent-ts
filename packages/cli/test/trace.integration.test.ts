@@ -394,4 +394,81 @@ describe('a traced question that needs tools', () => {
       );
     expect(events.map((event) => event.name)).toEqual(['receive-first-token']);
   });
+
+  describe('which generation is the answer', () => {
+    /** Round 1: the recorded `get_model` calls. Round 2: one `calculate`. Round 3: the answer. */
+    const queueThreeRounds = () => {
+      api.replyGet('/api/public/projects', 200, { data: [] });
+      api.reply(200, recordedToolStream);
+      for (const call of RECORDED_TOOL_ROUND.calls) {
+        const slug = (JSON.parse(call.arguments) as { slug: string }).slug;
+        api.replyGet(`/model/${slug}`, 200, {
+          data: { ...recordedModel.data, id: slug },
+        });
+      }
+      api.reply(
+        200,
+        toolRound([
+          {
+            id: 'calc-1',
+            name: 'calculate',
+            arguments: '{"expression":"1 + 1"}',
+          },
+        ]),
+      );
+      api.reply(200, sseBody(contentChunk('Two.'), usageChunk()));
+    };
+
+    const FLAG = 'langfuse.observation.metadata.final_answer';
+
+    it('flags an answer that was written although the response held no usage, and the run exits 2 with no output on the root', async () => {
+      api.replyGet('/api/public/projects', 200, { data: [] });
+      api.reply(200, sseBody(contentChunk('Written.')));
+      const result = await cli(['-q', QUESTION]);
+      expect(result.code).toBe(2);
+      expect(result.stdout).toBe('Written.\n');
+      const [generation] = named('generate-response');
+      const root = named('answer-question')[0];
+      expect(JSON.parse(String(attribute(generation, FLAG)))).toBe(true);
+      expect(attribute(root, 'langfuse.observation.output')).toBeUndefined();
+      expect(attribute(root, 'langfuse.observation.level')).toBe('ERROR');
+    });
+
+    it('flags no generation of a run whose first request is refused', async () => {
+      api.replyGet('/api/public/projects', 200, { data: [] });
+      api.reply(401, { error: { code: 401, message: 'No auth.' } });
+      const result = await cli(['-q', QUESTION]);
+      expect(result.code).toBe(2);
+      const generations = named('generate-response');
+      expect(generations).toHaveLength(1);
+      expect(
+        generations.map((span) => JSON.parse(String(attribute(span, FLAG)))),
+      ).toEqual([false]);
+    });
+
+    it('flags the generation whose text is the answer, and no other observation', async () => {
+      queueThreeRounds();
+      const result = await cli(['-q', QUESTION]);
+      expect(result.code).toBe(0);
+      const generations = named('generate-response');
+      expect(generations).toHaveLength(3);
+      expect(
+        generations.map((span) => JSON.parse(String(attribute(span, FLAG)))),
+      ).toEqual([false, false, true]);
+      const [, , last] = generations;
+      const root = named('answer-question')[0];
+      expect(
+        JSON.parse(String(attribute(last, 'langfuse.observation.output'))),
+      ).toMatchObject({
+        content: attribute(root, 'langfuse.observation.output'),
+      });
+      const others = exporter
+        .getFinishedSpans()
+        .filter((span) => span.name !== 'generate-response');
+      expect(others.length).toBeGreaterThan(0);
+      for (const span of others) {
+        expect(span.attributes[FLAG]).toBeUndefined();
+      }
+    });
+  });
 });

@@ -38,6 +38,10 @@ export interface AskOptions {
   tracer?: Tracer;
 }
 
+/** The response is the answer the user gets: it has text, and no tool call to follow. */
+const isAnswer = (round: Round): boolean =>
+  round.toolCalls.length === 0 && round.text !== '';
+
 const describe = (error: unknown): string =>
   oneLine(error instanceof Error ? error.message : String(error));
 
@@ -136,6 +140,7 @@ async function* converse(
         thinking: response.thinking,
         finishReason: response.finishReason,
         usage: response.usage,
+        final: isAnswer(response),
       };
     } catch (error) {
       outcome = { error: describe(error) };
@@ -144,14 +149,14 @@ async function* converse(
       generation.end(outcome);
     }
 
-    if (response.toolCalls.length === 0 && !response.text) {
+    if (!isAnswer(response) && response.toolCalls.length === 0) {
       throw new ApiError('The API response held no answer.');
     }
     if (!response.usage) {
       throw new ApiError('The API response held no token usage.');
     }
     total = addUsage(total, response.usage);
-    if (response.toolCalls.length === 0) {
+    if (isAnswer(response)) {
       answered(response.text);
       yield { kind: 'done', model: response.model, usage: total };
       return;

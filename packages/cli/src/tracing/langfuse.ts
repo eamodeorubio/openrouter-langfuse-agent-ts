@@ -93,7 +93,7 @@ interface Context {
 const failed = (error: string, redact: Redact, retries: number) => ({
   level: 'ERROR' as const,
   statusMessage: redact(error),
-  metadata: retries ? { retries } : {},
+  metadata: { final_answer: false, ...(retries ? { retries } : {}) },
 });
 
 /** What a generation that was answered records: the reply, the buckets, the cost, and the counts that did not fit. */
@@ -112,6 +112,7 @@ const succeeded = (
         ? { total: result.usage.cost }
         : undefined,
     metadata: {
+      final_answer: result.final === true,
       ...(result.finishReason ? { finish_reason: result.finishReason } : {}),
       ...buckets?.metadata,
       ...(retries ? { retries } : {}),
@@ -137,7 +138,11 @@ const generationSpan = (
     { asType: 'generation' },
   );
   const [finish, isOpen] = lifecycle(open, (reason) => {
-    started.update({ level: 'ERROR', statusMessage: redact(reason) });
+    started.update({
+      level: 'ERROR',
+      statusMessage: redact(reason),
+      metadata: { final_answer: false },
+    });
     started.end();
   });
   let retries = 0;
