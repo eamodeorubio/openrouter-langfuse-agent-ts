@@ -24,18 +24,18 @@ No existing behavior breaks. The CLI flags, output and exit codes are unchanged.
 
 - `cli-help`: the full help text, how `--help` and `-h` print it, when a usage error prints it, and how `--version` and `-v` print the version.
 - `npm-distribution`: what the published package contains, how it is installed and run, how a release publishes it, and how its version and the schema `$id` follow the release.
-
 - `error-guidance`: the cause-and-remedy rule, the exact messages for usage and configuration errors, and the remedies appended to service errors.
 
 ### Modified Capabilities
 
 - `ask-question`: "Unknown arguments" now prints the full help, as `cli-help` defines it.
+- `agent-loop`: "Malformed tool call" says so in words the user can follow.
 
 ## Impact
 
-- `packages/cli/package.json`, `packages/cli/src/index.ts` (shebang), `packages/cli/src/args.ts`, `packages/cli/src/cli.ts`, a new help module, a pack script.
-- `.github/workflows/ci.yml` (publish step), `release-please-config.json` (`release-as`), `.gitignore`.
+- `packages/cli/package.json`, `packages/cli/src/index.ts` (shebang), `packages/cli/src/cli.ts`, a new help module, the pack scripts.
+- `.github/workflows/ci.yml` (a publish job and a pack check), `release-please-config.json` (`release-as`), `.gitignore`.
 - `README.md`, `docs/src/content/docs/*`, `docs/astro.config.mjs` (sidebar).
 - Uses the `NPM_TOKEN` repository secret for the first release. The maintainer has created it, and it expires seven days after creation, so the move to trusted publishing must land before then.
-- `packages/cli/src/args.ts`, `config.ts`, `input.ts`, `failures.ts`, `tracing/credentials.ts` and `tracing/langfuse.ts` (message wording only).
+- `packages/cli/src/args.ts` (also the new flags), `config.ts`, `input.ts`, `failures.ts`, `tracing/credentials.ts` and `tracing/langfuse.ts` (message wording only).
 - The tests that read the usage text change to read the help text.

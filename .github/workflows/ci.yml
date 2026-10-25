@@ -49,8 +49,31 @@ jobs:
         run: pnpm test
       - name: Build
         run: pnpm build
+      # The same check the release runs before it publishes, so that a pull
+      # request that would break the archive fails here.
+      - name: Check the package archive
+        run: pnpm --filter ask-openrouter run pack:check
       - name: Build docs
         run: pnpm docs:build
+
+  # The package asks for the oldest Node its dependencies allow (engines in
+  # packages/cli/package.json). This job runs the tests on that version, while
+  # the check job runs everything else on the version in .nvmrc.
+  node-minimum:
+    # The "edited" event only matters to the title lint.
+    if: github.event_name == 'push' || github.event.action != 'edited'
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Test on the oldest Node the package supports
+        run: pnpm test
 
   # Mutation testing checks that the tests would notice a bug. On a pull
   # request it runs on the source files the pull request changed. On main it
@@ -108,7 +131,9 @@ jobs:
           if-no-files-found: warn
           retention-days: 7
 
-  # Runs only on main, and only after every check above has passed.
+  # Runs only on main, and only after every check above has passed. It opens
+  # or updates the release pull request. When that pull request has just been
+  # merged, it tags the release and says so in its outputs.
   release:
     needs: check
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -117,10 +142,50 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+    outputs:
+      released: ${{ steps.release.outputs['packages/cli--release_created'] }}
+      tag: ${{ steps.release.outputs['packages/cli--tag_name'] }}
     steps:
       # A token other than GITHUB_TOKEN lets the release PR trigger CI.
       - uses: googleapis/release-please-action@v5
+        id: release
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
           manifest-file: .release-please-manifest.json
+
+  # Sends the package to npm, in a run that has just created a release and in
+  # no other. It is a job of its own so that the repository stays read-only
+  # while it runs the code of the package, and so that only this job can ask
+  # for an identity token (npm signs the provenance with it). If it fails,
+  # re-run the failed job: a later push to main would not create the release
+  # again.
+  publish:
+    needs: release
+    if: ${{ needs.release.outputs.released == 'true' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.release.outputs.tag }}
+          persist-credentials: false
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+          registry-url: https://registry.npmjs.org
+      - run: pnpm install --frozen-lockfile
+      # Builds the package and fails on anything the archive should not hold.
+      - name: Check the archive
+        run: pnpm --filter ask-openrouter run pack:check
+      # The manifest asks for public access and for provenance.
+      - name: Publish to npm
+        env:
+          # Temporary: npm trusted publishing replaces the token after 1.0.0.
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: pnpm --filter ask-openrouter publish --no-git-checks

@@ -28,7 +28,7 @@ const section = (heading: string): string[] => {
   const start = lines.findIndex((line) => line.startsWith(heading));
   expect(start, `no section ${heading}`).toBeGreaterThan(-1);
   const rest = lines.slice(start + 1);
-  const end = rest.findIndex((line) => line === '');
+  const end = rest.indexOf('');
   return rest.slice(0, end === -1 ? undefined : end);
 };
 

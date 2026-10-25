@@ -10,12 +10,16 @@ Defines how the CLI reaches users as an npm package, and how a release publishes
 The `packages/cli` package SHALL be public on npm as `ask-openrouter`, with one executable of the same name. It SHALL run with `npx`, and after `npm i -g` or `pnpm add -g`.
 
 #### Scenario: Run without installing
-- **WHEN** a user runs `npx ask-openrouter --help` with Node 26 or newer
+- **WHEN** a user runs `npx ask-openrouter --help` with Node 22 or newer
 - **THEN** the help text is printed and the exit code is 0
 
 #### Scenario: Global install
 - **WHEN** a user installs the package globally and runs `ask-openrouter -q "hi"` in a directory
 - **THEN** the CLI runs there, reads `.env` from that directory, and behaves as in `ask-question`
+
+#### Scenario: Oldest Node
+- **WHEN** the manifest is compared with the production dependencies
+- **THEN** `engines.node` is `>=N`, where N is the highest `>=` floor any direct dependency declares, and the CI workflow runs the tests on Node N
 
 #### Scenario: Old Node
 - **WHEN** the package is installed with a Node older than the `engines` range
@@ -46,14 +50,14 @@ The release job SHALL publish the package to npm, with provenance, only in a run
 
 #### Scenario: Release created
 - **WHEN** Release Please reports a created release for `packages/cli`
-- **THEN** the job builds, tests the pack list, and publishes that version
+- **THEN** the workflow builds, checks the pack list, and publishes that version
 
 #### Scenario: No release
 - **WHEN** Release Please only opens or updates a release pull request
 - **THEN** the job publishes nothing
 
 ### Requirement: First release is 1.0.0
-The first release after this change SHALL be 1.0.0, whatever the commits since v0.5.0 would otherwise bump. Afterwards the version SHALL follow the commits again.
+The first release after this change SHALL be 1.0.0, regardless of the bump the commits since v0.5.0 imply. Afterwards the version SHALL follow the commits again.
 
 #### Scenario: Release pull request
 - **WHEN** Release Please opens the release pull request with the override set

@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 import { text } from 'node:stream/consumers';
 import { run } from './cli.js';
 

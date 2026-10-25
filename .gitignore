@@ -26,3 +26,7 @@ Thumbs.db
 
 # Stryker mutation testing: results, report and sandbox
 .stryker/
+
+# Copied into packages/cli when the archive is made (see scripts/prepack.ts)
+packages/cli/README.md
+packages/cli/LICENSE

@@ -29,17 +29,17 @@ Pull request title: `feat: publish the CLI to npm, with --help, --version and cl
 
 ## 3. Slice 3: publish to npm (`feat:`)
 
-- [ ] 3.1 Write the failing pack test: it packs `packages/cli` into a temporary directory, lists the archive, and expects exactly the paths of the Package contents table, a shebang on the `bin` file, and the manifest fields. Verify it fails on the private manifest.
-- [ ] 3.2 Edit `packages/cli/package.json`: rename the package to `ask-openrouter`, update the `--filter` in the root `package.json` scripts and any workflow that names the old package, remove `private`, add `bin`, `files`, `keywords`, `publishConfig`, `prepack`. Add the shebang to `src/index.ts` and the pack script, and ignore the copies. Verify 2.1 passes.
-- [ ] 3.3 Verify by hand, outside the repository: install the packed archive into an empty directory and run `--help`, then run a question against a local fake server with `.env` in the directory. State what was and was not run.
-- [ ] 3.4 Edit `ci.yml`: add `id-token: write`, the step output, and the gated publish step. Edit `release-please-config.json`: add `release-as: 1.0.0`. Verify with `actionlint` or a read-through that the gate is the created-release output, and with a dry run that Release Please proposes 1.0.0 from the branch config.
-- [ ] 3.5 Run the real `release-please` generic updater on the schema file with version `1.0.0`. Verify only the `$id` line changes and that `json.schema.test.ts` still guards the marker.
-- [ ] 3.6 Run `pnpm check`, `pnpm typecheck`, `pnpm test`. Run `reviewer-code-low` and `reviewer-code-high` on the code and workflow, and `reviewer-docs` on the docs it touches. Fix every must-fix finding.
+- [x] 3.1 Write the failing pack test: it packs `packages/cli` into a temporary directory, lists the archive, and expects exactly the paths of the Package contents table, a shebang on the `bin` file, and the manifest fields. Verify it fails on the private manifest.
+- [x] 3.2 Edit `packages/cli/package.json`: rename the package to `ask-openrouter`, update the `--filter` in the root `package.json` scripts and any workflow that names the old package, remove `private`, add `bin`, `files`, `keywords`, `publishConfig`, `prepack`. Add the shebang to `src/index.ts` and the pack script, and ignore the copies. Verify 3.1 passes.
+- [x] 3.3 Verify by hand, outside the repository: install the packed archive into an empty directory and run `--help`, then run a question against a local fake server with `.env` in the directory. State what was and was not run.
+- [x] 3.4 Edit `ci.yml`: split the release job from a gated `publish` job (read-only, alone with `id-token: write` and the token), and run the pack check in the `check` job too. Edit `release-please-config.json`: add `release-as: 1.0.0`. Verify with `actionlint` or a read-through that the gate is the created-release output, and with a dry run that Release Please proposes 1.0.0 from the branch config.
+- [x] 3.5 Run the real `release-please` generic updater on the schema file with version `1.0.0`. Verify only the `$id` line changes and that `json.schema.test.ts` still guards the marker.
+- [x] 3.6 Run `pnpm check`, `pnpm typecheck`, `pnpm test`. Run `reviewer-code-low` and `reviewer-code-high` on the code and workflow, and `reviewer-docs` on the docs it touches. Fix every must-fix finding.
 - [ ] 3.7 Write the full report, listing what only CI can show (the publish itself, provenance, the 1.0.0 proposal). Wait for approval, then commit `feat: publish the CLI to npm`.
 
 ## 4. Docs revamp (`docs:`)
 
-- [ ] 4.1 Rewrite the README for a first-time visitor: what it is, install, set up, first question, links to the site, license. Move contributor material to the end. Verify every command in it runs as written, apart from the ones that need a real key.
+- [ ] 4.1 Rewrite the README for a first-time visitor (Node 22 or newer for users; contributors use the version in `.nvmrc`), with absolute links (the npm page cannot resolve relative ones): what it is, install, set up, first question, links to the site, license. Move contributor material to the end. Verify every command in it runs as written, apart from the ones that need a real key.
 - [ ] 4.2 Restructure the docs site: Overview, Install, Set up, Ask a question, JSON output, Tracing with Langfuse, Troubleshooting, How changes are made. Fix the sidebar order in `astro.config.mjs`. Remove "no release yet" and the `pnpm dev` first path. Verify `pnpm docs:build` passes and no link is broken.
 - [ ] 4.3 Check each page against the code: flags against `--help`, variables against `.env.example`, exit codes against `classify.ts`, JSON fields against the schema.
 - [ ] 4.4 Run `pnpm check`. Run `reviewer-docs` in depth on every page, read-through for a stranger's path from nothing to a first answer. Fix every must-fix finding.
@@ -53,5 +53,7 @@ Pull request title: `feat: publish the CLI to npm, with --help, --version and cl
 
 ## Workflow follow-up
 
+- Document in CONTRIBUTING.md that a failed publish is recovered by re-running the failed job.
+
 - The `NPM_TOKEN` secret exists and expires seven days after creation. Merge the release pull request, and then the trusted-publisher chore, before it lapses. If it lapses first, the maintainer issues a new token.
-- After 1.0.0 is published, open a `chore:` pull request that removes `release-as`, `bump-minor-pre-major` and `bump-patch-for-minor-pre-major`, and switches the publish step to npm trusted publishing: configure the trusted publisher for `ask-openrouter` on npmjs.com (this repository, the workflow file, the environment if any), drop the `NPM_TOKEN` secret and `NODE_AUTH_TOKEN` from `ci.yml`, keep `id-token: write`, and delete the secret once a release has published without it.
+- After 1.0.0 is published, open a `chore:` pull request that removes `release-as`, `bump-minor-pre-major` and `bump-patch-for-minor-pre-major`, and switches the publish step to npm trusted publishing (check first that the runner's npm meets npm's minimum version for it): configure the trusted publisher for `ask-openrouter` on npmjs.com (this repository, the workflow file, the environment if any), drop the `NPM_TOKEN` secret and `NODE_AUTH_TOKEN` from `ci.yml`, keep `id-token: write`, and delete the secret once a release has published without it.

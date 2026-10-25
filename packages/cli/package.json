@@ -1,13 +1,32 @@
 {
-  "name": "openrouter-langfuse-agent-ts",
+  "name": "ask-openrouter",
   "version": "0.5.0",
   "description": "A small CLI that answers questions about OpenRouter, helping users discover the most cost-effective model for their use case.",
   "license": "MIT",
-  "private": true,
   "author": "Enrique Javier Amodeo Rubio <eamodeorubio@gmail.com>",
   "type": "module",
+  "bin": {
+    "ask-openrouter": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "keywords": [
+    "openrouter",
+    "llm",
+    "cli",
+    "ai",
+    "models",
+    "pricing",
+    "cost",
+    "langfuse"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "engines": {
-    "node": ">=26"
+    "node": ">=22"
   },
   "scripts": {
     "dev": "tsx src/index.ts",
@@ -18,7 +37,9 @@
     "test:coverage": "vitest run --coverage",
     "mutation": "stryker run",
     "mutation:full": "stryker run --force",
-    "schema:generate": "tsx scripts/generate-schema.ts"
+    "schema:generate": "tsx scripts/generate-schema.ts",
+    "prepack": "rm -rf dist && pnpm run build && tsx scripts/prepack.ts",
+    "pack:check": "tsx scripts/check-pack.ts"
   },
   "devDependencies": {
     "@stryker-mutator/core": "^10.0.0",
