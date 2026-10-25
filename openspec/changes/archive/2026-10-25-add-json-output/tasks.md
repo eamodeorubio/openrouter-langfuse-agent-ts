@@ -39,7 +39,7 @@ Commit type `feat:`, on `feat/json-output`, in the open PR #26. The PR title sta
 The change was archived once, for the first slice, before this amend. Archiving it again is the last commit before merge.
 
 - [x] 3.1 Verify the change with `/opsx:verify` and fix what it finds.
-- [ ] 3.2 Once the user approves, archive it as `chore: archive add-json-output`, as the last commit before merge. The commit also moves the change back to `openspec/changes/archive/` and restores `openspec/specs/json-output/spec.md`, now with model and usage.
+- [x] 3.2 Once the user approves, archive it as `chore: archive add-json-output`, as the last commit before merge. The commit also moves the change back to `openspec/changes/archive/` and restores `openspec/specs/json-output/spec.md`, now with model and usage.
 
 ## Workflow follow-up
 
