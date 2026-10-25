@@ -47,7 +47,7 @@ The CLI compiles with `tsc` to `dist/`, and `src/index.ts` is the entry point. `
 
 *Alternative:* one catalogue module holding all messages. It would separate each message from the condition that raises it, for no gain with about twenty messages.
 
-**The docs are reorganised, not appended.** User pages: Overview, Install, Set up, Ask a question, JSON output, Tracing with Langfuse, Troubleshooting. Contributor pages: How changes are made. The README shrinks to what a visitor needs, with a pointer to the site. The existing usage guide is split so no page holds both setup and reference.
+**The docs are reorganised, not appended.** User pages, in two groups. Start here: Overview, Install, Set up, Ask a question, Troubleshooting. Reference: Command line (every flag, setting and exit code, mirroring `--help`), How the model finds answers (the three tools), Tracing with Langfuse, JSON output. Contributor page: How changes are made. The README shrinks to what a visitor needs, with a pointer to the site. The existing usage guide is split so no page holds both setup and reference.
 
 ## Risks / Trade-offs
 

@@ -39,11 +39,11 @@ The CLI SHALL print a usage message to stderr and exit 1 when no question is ava
 - **THEN** stderr holds the usage message, stdout is empty, the exit code is 1, and no request is sent
 
 ### Requirement: Unknown arguments
-The CLI SHALL reject unknown options and positional arguments with a usage message on stderr and exit 1.
+The CLI SHALL reject unknown options and positional arguments with an error message and the full help text on stderr, as `cli-help` defines, and exit 1.
 
 #### Scenario: Stray positional
 - **WHEN** the CLI runs with `-q "hi" extra`
-- **THEN** stderr holds the usage message, the exit code is 1, and no request is sent
+- **THEN** stderr holds the error message and the help text, the exit code is 1, and no request is sent
 
 ### Requirement: Model selection
 The CLI SHALL use the model named by `--model`, else by `OPENROUTER_MODEL`. It SHALL have no default. When neither is set or both are blank, it SHALL print a message naming both to stderr and exit 1.
