@@ -158,7 +158,7 @@ Never edit the version by hand, and never tag or release. [release-please](https
 
 ### Releases
 
-On every push to `main`, once the checks pass, release-please opens or updates a release pull request with the next version and the changelog. Merging that pull request tags the release (`v1.0.0` and so on), creates the GitHub release, and publishes the `ask-openrouter` package to npm with provenance, from a job of its own that is read-only and alone holds the npm token.
+On every push to `main`, once the checks pass, release-please opens or updates a release pull request with the next version and the changelog. Merging that pull request tags the release (`v1.0.0` and so on), creates the GitHub release, and publishes the `ask-openrouter` package to npm, from a job of its own that is read-only and alone may ask GitHub for an identity token. The publish uses [npm trusted publishing](https://docs.npmjs.com/trusted-publishers). The trusted-publisher setting of the package on npmjs.com names the repository `eamodeorubio/openrouter-langfuse-agent-ts` and the workflow file `ci.yml`, with no environment because the `publish` job uses none. The repository stores no npm token, and npm attaches the provenance by itself. npm does not check that setting when it is saved, so a mistake in the repository, the file name or the environment shows up only at the next publish, after the tag exists, and the job fails until the setting matches again.
 
 If that publish job fails after the tag exists, re-run the failed job from the Actions tab. Do not push another commit to try again: a later push to `main` creates no release, so nothing would publish the tag. An npm version, once published, cannot be reused, so a fix that must ship is a new patch release.
 
