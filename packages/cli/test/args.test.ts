@@ -10,6 +10,7 @@ describe('parseCliArgs', () => {
       model: undefined,
       thinking: undefined,
       verbose: false,
+      json: false,
     });
   });
 
@@ -29,6 +30,7 @@ describe('parseCliArgs', () => {
       model: 'a/b',
       thinking: undefined,
       verbose: false,
+      json: false,
     });
   });
 
@@ -45,6 +47,24 @@ describe('parseCliArgs', () => {
     ['no flag', [], false],
   ])('reads %s as verbose = %s', (_name, argv, verbose) => {
     expect(parseCliArgs(argv).verbose).toBe(verbose);
+  });
+
+  it.each([
+    ['--json', ['--json'], true],
+    ['no flag', [], false],
+  ])('reads %s as json = %s', (_name, argv, json) => {
+    expect(parseCliArgs(argv).json).toBe(json);
+  });
+
+  it('lets --json go with the other flags', () => {
+    expect(
+      parseCliArgs(['--json', '-q', 'hi', '--verbose', '--no-thinking']),
+    ).toMatchObject({
+      question: 'hi',
+      json: true,
+      verbose: true,
+      thinking: false,
+    });
   });
 
   it('lets --verbose go with the other flags', () => {
@@ -80,6 +100,7 @@ describe('parseCliArgs', () => {
       model: 'a/b',
       thinking: undefined,
       verbose: false,
+      json: false,
     });
   });
 
@@ -120,14 +141,18 @@ describe('parseCliArgs', () => {
         fc.boolean(),
         fc.constantFrom(undefined, true, false),
         fc.boolean(),
-        (question, model, modelFirst, thinking, verbose) => {
+        fc.boolean(),
+        (question, model, modelFirst, thinking, verbose, json) => {
           const q = question === undefined ? [] : ['-q', question];
           const m = model === undefined ? [] : ['--model', model];
           const t =
             thinking === undefined
               ? []
               : [thinking ? '--thinking' : '--no-thinking'];
-          const v = verbose ? ['--verbose'] : [];
+          const v = [
+            ...(verbose ? ['--verbose'] : []),
+            ...(json ? ['--json'] : []),
+          ];
           const argv = modelFirst
             ? [...m, ...t, ...v, ...q]
             : [...q, ...v, ...t, ...m];
@@ -136,6 +161,7 @@ describe('parseCliArgs', () => {
             model,
             thinking,
             verbose,
+            json,
           });
         },
       ),

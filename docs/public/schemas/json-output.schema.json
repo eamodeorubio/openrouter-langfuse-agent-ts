@@ -1,0 +1,92 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/eamodeorubio/openrouter-langfuse-agent-ts/v0.4.0/docs/public/schemas/json-output.schema.json", "$comment": "x-release-please-version",
+  "oneOf": [
+    {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "The question the model received."
+        },
+        "answer": {
+          "type": "string",
+          "description": "The answer, or the part of it written before a failure."
+        },
+        "success": {
+          "type": "boolean",
+          "const": true
+        },
+        "thinking": {
+          "type": "string",
+          "description": "The readable thinking of the model. Absent when there is none."
+        },
+        "traceId": {
+          "type": "string",
+          "description": "The Langfuse trace id. Absent when the run is not traced."
+        }
+      },
+      "required": [
+        "question",
+        "answer",
+        "success"
+      ],
+      "additionalProperties": false,
+      "title": "Success",
+      "description": "The run ended with an answer. Written to stdout."
+    },
+    {
+      "type": "object",
+      "properties": {
+        "question": {
+          "type": "string",
+          "description": "The question. Absent when the failure came before it was known."
+        },
+        "answer": {
+          "type": "string",
+          "description": "The text written before the failure. Absent when there is none."
+        },
+        "success": {
+          "type": "boolean",
+          "const": false
+        },
+        "thinking": {
+          "type": "string",
+          "description": "The readable thinking of the model. Absent when there is none."
+        },
+        "traceId": {
+          "type": "string",
+          "description": "The Langfuse trace id. Absent when the run is not traced."
+        },
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "pattern": "^[A-Z]+(_[A-Z]+)*$",
+              "description": "A short stable name for the kind of failure, such as API_ERROR."
+            },
+            "message": {
+              "type": "string",
+              "description": "What went wrong, in words for the user."
+            }
+          },
+          "required": [
+            "code",
+            "message"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "required": [
+        "success",
+        "error"
+      ],
+      "additionalProperties": false,
+      "title": "Failure",
+      "description": "The run failed. Written to stderr."
+    }
+  ],
+  "title": "openrouter-langfuse-agent-ts --json output",
+  "description": "The object the CLI writes under --json: a success on stdout, a failure on stderr."
+}

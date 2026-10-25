@@ -29,7 +29,7 @@ const NO_USAGE: Usage = {
   totalTokens: 0,
 };
 
-/** Test seams: a short idle limit (never set by `run`) and a local server (`run` forwards its `Io.serverURL`; production leaves it unset). */
+/** Test seams: a short idle limit and a local server. `run` forwards its `Io.idleTimeoutMs` and `Io.serverURL`; production leaves both unset. */
 export interface AskOptions {
   idleTimeoutMs?: number;
   toolTimeoutMs?: number;

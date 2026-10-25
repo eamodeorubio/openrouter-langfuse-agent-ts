@@ -250,7 +250,7 @@ Press Ctrl-C, or stop the process with `SIGTERM`, and the tool does not walk awa
 
 ## What you see
 
-The tool writes to two channels. Stdout carries the result: the answer, as it arrives. Stderr carries everything else that is about the run rather than the result, which means the model's thinking (when there is some and when it is shown), the lookup lines (when you ask for them with `--verbose`), one line saying tracing is off when no Langfuse settings are present, the id of the trace (with `--verbose` and tracing on), and two status lines once the answer is complete:
+The tool writes to two channels (with `--json` it writes one object instead; see [For scripts](#for-scripts)). Stdout carries the result: the answer, as it arrives. Stderr carries everything else that is about the run rather than the result, which means the model's thinking (when there is some and when it is shown), the lookup lines (when you ask for them with `--verbose`), one line saying tracing is off when no Langfuse settings are present, the id of the trace (with `--verbose` and tracing on), and two status lines once the answer is complete:
 
 ```text
 $ pnpm dev -q "Name three primary colors, one per line."
@@ -327,6 +327,10 @@ Before any text has appeared, a failure leaves stdout empty. After text has star
 Brief trouble on the API side does not end the run at once. When OpenRouter answers 429 (too many requests) or any 5xx error, when an error arrives before any answer or thinking has, or when the connection fails or the stream drops before any output, the tool waits and tries again, up to four more times. The first wait is about 300 milliseconds, and each one doubles: roughly 0.3, 0.6, 1.2 and 2.4 seconds, each varied by a quarter either way so that many clients do not retry in step. If the last attempt fails, you get that error and exit code 2. Nothing else is retried: a bad key, a malformed request, a timeout and a response with no answer fail on the first attempt. Retrying also stops the moment a request has produced its first piece of answer or thinking, shown or not, because a second attempt could repeat words you have already read. The rule applies to each request on its own. If the request for the third round fails before it has produced any text, it is retried, even though the first two rounds wrote some. In the worst case the waiting adds a little over five and a half seconds to each request.
 
 The tool waits up to 60 seconds for the first sign of life from the model, and up to 60 seconds between one piece of the stream and the next. There is no limit on the total time, so a long answer that keeps flowing is never cut off. A silence longer than 60 seconds ends the run with exit code 2.
+
+## For scripts
+
+Add `--json` and the tool writes a single JSON object when the run ends: to stdout on success, to stderr on failure, with a stable error code. Exit codes do not change. [JSON output](../json-output/) has the details and the JSON Schema.
 
 ## What is not here yet
 

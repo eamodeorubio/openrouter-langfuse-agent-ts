@@ -14,7 +14,8 @@
       "!.claude",
       "!pnpm-lock.yaml",
       "!skills-lock.json",
-      "!docs/.astro"
+      "!docs/.astro",
+      "!docs/public/schemas"
     ]
   },
   "formatter": {

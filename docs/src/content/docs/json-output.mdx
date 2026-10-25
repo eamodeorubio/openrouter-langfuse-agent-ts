@@ -1,0 +1,94 @@
+---
+title: JSON output
+description: Run the tool with --json to get one JSON object per run, with the question, the answer, the thinking, the trace id and, on failure, a stable error code. A JSON Schema describes the object.
+---
+
+import { Code } from '@astrojs/starlight/components';
+import schema from '../../../public/schemas/json-output.schema.json?raw';
+
+A person reads the tool's normal output. The answer streams to stdout, the thinking and the status lines go to stderr, and a failure is a sentence. A script has a harder time. It has to scrape the sentence to learn why a run failed, and it has no steady place to find the trace id.
+
+Add `--json` and the tool changes its manner. Nothing appears while the model works. When the run is over, the tool writes one JSON object and one newline, then exits with the same code it always does. The conversation with the model still streams underneath; you just don't watch it.
+
+```sh
+pnpm dev --json -q "What is a token?"
+```
+
+## A run that succeeds
+
+The object goes to stdout. Stderr stays empty.
+
+```json
+{
+  "question": "What is a token?",
+  "answer": "A token is a chunk of text, often a word or part of one, that a model reads and writes.",
+  "success": true,
+  "thinking": "The user wants a short definition.",
+  "traceId": "0123456789abcdef0123456789abcdef"
+}
+```
+
+| Field      | Meaning                                                                                                                                |
+| ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `question` | The question the model received, trimmed.                                                                                              |
+| `answer`   | The whole answer. When the model used tools along the way, the same text stdout would carry without `--json`, minus the final newline. |
+| `success`  | `true`.                                                                                                                                |
+| `thinking` | The model's readable thinking. Left out when there is none.                                                                            |
+| `traceId`  | The Langfuse trace id. Left out when the run is not traced.                                                                            |
+
+A field with nothing to say is left out, not written as `null`. The thinking is always collected, whatever `--thinking` and `--no-thinking` say, because those flags decide what a person sees on a terminal and nobody is watching one here.
+
+## A run that fails
+
+The same object, with `success` set to `false`, goes to stderr instead. Stdout stays empty. The exit code is the one the tool would have used anyway, so a script that checks it needs no change.
+
+```json
+{
+  "question": "What is a token?",
+  "success": false,
+  "error": {
+    "code": "API_ERROR",
+    "message": "API error 401: No auth credentials found"
+  }
+}
+```
+
+The object carries whatever the tool knew when the run broke. A failure before the question was read has no `question`. A stream that dies halfway has the `answer` that arrived, since the tool keeps partial text as it always has. The `message` is the sentence the tool would have written to stderr, without the usage text. The tool never puts your API key or your Langfuse keys in the `message`. The answer and the thinking pass through as the model wrote them.
+
+The `code` is a short word in capitals and underscores. It is never a number. Branch on it, and leave the message to people.
+
+| Code                 | Meaning                                                                                          | Exit code |
+| -------------------- | ------------------------------------------------------------------------------------------------ | --------- |
+| `USAGE_ERROR`        | Bad arguments, or no question.                                                                   | 1         |
+| `CONFIG_ERROR`       | No key, no model, an unreadable `.env`, or Langfuse settings only partly there.                  | 1         |
+| `API_ERROR`          | The API refused the request, the network failed, the stream broke, or the response was unusable. | 2         |
+| `TIMEOUT`            | The model went quiet for 60 seconds.                                                             | 2         |
+| `LIMIT_EXCEEDED`     | The model kept calling tools after eight rounds of them.                                         | 3         |
+| `UNEXPECTED_ERROR`   | Something failed inside the tool itself.                                                         | 2         |
+| `TRACE_FLUSH_FAILED` | The answer arrived, but the trace could not be delivered.                                        | 2         |
+
+`TRACE_FLUSH_FAILED` is the one code that can follow a success. Stdout holds the success object, the lost trace makes the tool exit 2, and stderr gets a failure object with this code. If the run had already failed, you get that failure alone: one object per stream, never two.
+
+An argument mistake is reported as JSON too, as long as `--json` is among the arguments. A question that happens to be the text `--json`, as in `-q --json`, is a question.
+
+## What is silenced
+
+With `--json` the tool writes nothing else. No thinking stream, no `model:` and `tokens:` lines, no `tool:` or `trace:` lines, and no note that tracing is off. `--verbose`, `--thinking` and `--no-thinking` are accepted and change nothing. Model and token counts are not in the object yet. Look in the trace for them.
+
+A run that you stop with Ctrl-C writes no object. The exit code is 130 or 143, as it was.
+
+## The JSON Schema
+
+The object has a [JSON Schema](https://json-schema.org) (draft 2020-12). It is generated from the same definition the tool uses to build the object, and a test fails if the two drift apart. The file is published with this site at `schemas/json-output.schema.json`, and its `$id` is the raw GitHub URL of the file at the tag of the release. Pin your validation to the release you run.
+
+Check the output of a run with any validator. With [`ajv-cli`](https://github.com/ajv-validator/ajv-cli), for example:
+
+```sh
+curl -O https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/schemas/json-output.schema.json
+pnpm dev --json -q "What is a token?" > out.json
+pnpm dlx ajv-cli validate --spec=draft2020 -s json-output.schema.json -d out.json
+```
+
+The schema says that a success object has no `error`, that a failure object has one, that no other field exists, and that `error.code` matches `^[A-Z]+(_[A-Z]+)*$`.
+
+<Code code={schema} lang="json" title="json-output.schema.json" />

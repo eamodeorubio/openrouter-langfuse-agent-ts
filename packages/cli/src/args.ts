@@ -8,6 +8,8 @@ export interface CliArgs {
   thinking: boolean | undefined;
   /** Show the tool calls on stderr. */
   verbose: boolean;
+  /** Write one JSON object when the run has ended, and nothing else. */
+  json: boolean;
 }
 
 /**
@@ -40,6 +42,7 @@ export const parseCliArgs = (argv: string[]): CliArgs => {
         thinking: { type: 'boolean' },
         'no-thinking': { type: 'boolean' },
         verbose: { type: 'boolean' },
+        json: { type: 'boolean' },
       },
       strict: true,
       allowPositionals: false,
@@ -58,6 +61,7 @@ export const parseCliArgs = (argv: string[]): CliArgs => {
       model: values.model,
       thinking,
       verbose: Boolean(values.verbose),
+      json: Boolean(values.json),
     };
   } catch (error) {
     throw new UsageError(
