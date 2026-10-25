@@ -12,6 +12,7 @@ import {
   type ToolCall,
   type ToolCallFragment,
 } from './assemble.js';
+import { withSignal } from './client.js';
 import {
   ChunkError,
   IdleTimeout,
@@ -130,21 +131,23 @@ async function* readChunks(
     let response: Awaited<ReturnType<typeof client.chat.send>>;
     try {
       response = await within(
-        client.chat.send(
-          {
-            chatRequest: {
-              model,
-              stream: true,
-              messages,
-              tools,
-              toolChoice,
-              parallelToolCalls: tools ? true : undefined,
+        withSignal(controller.signal, () =>
+          client.chat.send(
+            {
+              chatRequest: {
+                model,
+                stream: true,
+                messages,
+                tools,
+                toolChoice,
+                parallelToolCalls: tools ? true : undefined,
+              },
             },
-          },
-          {
-            signal: controller.signal,
-            headers: traceparent ? { traceparent } : undefined,
-          },
+            {
+              signal: controller.signal,
+              headers: traceparent ? { traceparent } : undefined,
+            },
+          ),
         ),
         idleTimeoutMs,
       );

@@ -34,6 +34,7 @@ import {
   usageChunk,
   usageOnlyChunk,
 } from './fixtures.js';
+import { collectGarbage } from './gc.js';
 
 // Every test here opens a stream and most abandon or cut one. They run against
 // a real loopback server (see fakeApi.ts), not `nock`, whose mock sockets
@@ -96,14 +97,20 @@ const textOf = (events: AskEvent[], kind: 'thinking' | 'content') =>
 const streamHead = (response: ServerResponse) =>
   response.writeHead(200, { 'content-type': 'text/event-stream' });
 
+/** How long the server may take to see a client hang up, after the failure. */
+const HANG_UP_LIMIT_MS = 1_000;
+
 /**
  * Waits for something the server should see, such as the client hanging up.
  * The limit is a ceiling for a slow machine, not a delay: the wait ends as
  * soon as the condition holds, and a miss means it never happened.
  */
 const EVENTUALLY_LIMIT_MS = 10_000;
-const eventually = async (condition: () => boolean) => {
-  for (let i = 0; i < EVENTUALLY_LIMIT_MS / 10 && !condition(); i++) {
+const eventually = async (
+  condition: () => boolean,
+  limitMs = EVENTUALLY_LIMIT_MS,
+) => {
+  for (let i = 0; i < limitMs / 10 && !condition(); i++) {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   expect(condition()).toBe(true);
@@ -532,7 +539,7 @@ describe('ask: a stream that is cut off or goes quiet', {
         );
         expect(events).toEqual([]);
         expect(Date.now() - started).toBeGreaterThanOrEqual(IDLE - 20);
-        await eventually(() => hungUp);
+        await eventually(() => hungUp, HANG_UP_LIMIT_MS);
       },
     );
     expect(hits).toBe(1);
@@ -597,11 +604,48 @@ describe('ask: a stream that is cut off or goes quiet', {
           'Request timed out: no data for 0.3 s. Try again, or choose another model.',
         );
         expect(events).toEqual([{ kind: 'content', text: 'Hel' }]);
-        await eventually(() => hungUp);
+        await eventually(() => hungUp, HANG_UP_LIMIT_MS);
       },
     );
     expect(hits).toBe(1);
     expect(waits).toEqual([]);
+  });
+
+  it('hangs up within a second even when a garbage collection runs in between', async () => {
+    let hits = 0;
+    let hungUp = false;
+    let collected = false;
+    await withServer(
+      (_request, response) => {
+        hits++;
+        response.on('close', () => {
+          hungUp = true;
+        });
+        streamHead(response);
+        response.write(sseEvent(contentChunk('Hel')));
+        // The client has the first chunk by now, and its idle limit is far off.
+        // The weak links need more than one pass to clear.
+        setTimeout(() => {
+          for (let i = 0; i < 3; i++) {
+            collectGarbage();
+          }
+          collected = true;
+        }, 50);
+      },
+      async (serverURL) => {
+        const { events, message } = await failure(options(serverURL));
+        // A collection that came late would leave the scenario untested.
+        expect(collected, 'the collection ran before the client gave up').toBe(
+          true,
+        );
+        expect(message).toBe(
+          'Request timed out: no data for 0.3 s. Try again, or choose another model.',
+        );
+        expect(events).toEqual([{ kind: 'content', text: 'Hel' }]);
+        await eventually(() => hungUp, HANG_UP_LIMIT_MS);
+      },
+    );
+    expect(hits).toBe(1);
   });
 
   it('lets go of the connection when the stream fails with an error chunk', async () => {
@@ -621,7 +665,7 @@ describe('ask: a stream that is cut off or goes quiet', {
         expect(message).toBe(
           'API error 500: provider failed. OpenRouter is having trouble. Try again later.',
         );
-        await eventually(() => hungUp);
+        await eventually(() => hungUp, HANG_UP_LIMIT_MS);
       },
     );
   });
