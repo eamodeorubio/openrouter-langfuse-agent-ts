@@ -54,6 +54,11 @@ const watcher = () => ({
   streamFailed: vi.fn(),
 });
 
+// How long a test lets the stream stay silent. Short enough to be quick, long
+// enough for the request to reach the server on a loaded machine: a request the
+// client gave up on before that would arrive in the next test and take its reply.
+const SILENT_MS = 200;
+
 const roundOf = async (observer?: Partial<Watcher>, idleTimeoutMs?: number) => {
   const gen = chat(client, request, idleTimeoutMs, observer as Watcher);
   for (;;) {
@@ -211,9 +216,13 @@ describe('chat round details', () => {
       const observer = watcher();
       const pass = api.open();
       pass.write(`data: ${JSON.stringify(contentChunk('a'))}\n\n`);
-      await expect(roundOf(observer, 30)).rejects.toThrow();
-      expect(observer.streamFailed).toHaveBeenCalledTimes(1);
-      pass.destroy();
+      try {
+        await expect(roundOf(observer, SILENT_MS)).rejects.toThrow();
+        await vi.waitFor(() => expect(api.sent).toHaveLength(1));
+        expect(observer.streamFailed).toHaveBeenCalledTimes(1);
+      } finally {
+        pass.destroy();
+      }
     });
 
     it('is reported when a chunk carries an error', async () => {
@@ -232,8 +241,12 @@ describe('chat round details', () => {
     it('still ends in the same error when nobody is watching', async () => {
       const pass = api.open();
       pass.write(`data: ${JSON.stringify(contentChunk('a'))}\n\n`);
-      await expect(roundOf(undefined, 30)).rejects.toThrow(ApiError);
-      pass.destroy();
+      try {
+        await expect(roundOf(undefined, SILENT_MS)).rejects.toThrow(ApiError);
+        await vi.waitFor(() => expect(api.sent).toHaveLength(1));
+      } finally {
+        pass.destroy();
+      }
     });
 
     it('is not reported for an attempt that is retried', async () => {

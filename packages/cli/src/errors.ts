@@ -9,3 +9,6 @@ export class ApiError extends Error {}
 
 /** The run was stopped by a limit the CLI sets, such as the number of tool rounds. Exit code 3. */
 export class LimitError extends Error {}
+
+/** The API went quiet for longer than the idle limit. An `ApiError` with its own code in the JSON output. Exit code 2. */
+export class TimeoutError extends ApiError {}

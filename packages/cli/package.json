@@ -17,13 +17,15 @@
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "mutation": "stryker run",
-    "mutation:full": "stryker run --force"
+    "mutation:full": "stryker run --force",
+    "schema:generate": "tsx scripts/generate-schema.ts"
   },
   "devDependencies": {
     "@stryker-mutator/core": "^10.0.0",
     "@stryker-mutator/vitest-runner": "^10.0.0",
     "@types/node": "^26.6.5",
     "@vitest/coverage-v8": "4.1.12",
+    "ajv": "^8.20.0",
     "fast-check": "^4.10.2",
     "nock": "^15.0.2",
     "tsx": "^4.23.15",

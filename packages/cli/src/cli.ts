@@ -1,8 +1,11 @@
 import { parseCliArgs } from './args.js';
 import { ask } from './ask.js';
+import { classify, EXIT_API, EXIT_OK } from './classify.js';
+import { createCollector } from './collector.js';
 import { type Config, loadConfig } from './config.js';
-import { ApiError, ConfigError, LimitError, UsageError } from './errors.js';
+import { UsageError } from './errors.js';
 import { readQuestion, type Stdin } from './input.js';
+import { serialize } from './output.js';
 import { createPresenter } from './present.js';
 import { redactAll } from './text.js';
 import { openTracer, type TracingOptions } from './tracing/create.js';
@@ -16,27 +19,25 @@ export interface Io {
   stderr: Sink;
   /** Where the API lives. Tests point it at a local server; the real entry point leaves it unset. */
   serverURL?: string;
+  /** Test seam: how long the API may stay silent, in milliseconds. The real entry point leaves it unset. */
+  idleTimeoutMs?: number;
   /** Aborted with `SIGINT` or `SIGTERM` when the process is told to stop. */
   signal?: AbortSignal;
   /** Test seams for tracing. The real entry point leaves it unset. */
   tracing?: TracingOptions;
 }
 
-const USAGE = `Usage: openrouter-langfuse-agent-ts [-q <question>] [--model <model>] [--thinking | --no-thinking] [--verbose]
+const USAGE = `Usage: openrouter-langfuse-agent-ts [-q <question>] [--model <model>] [--thinking | --no-thinking] [--verbose] [--json]
 
   -q <question>   The question. Without it, the question is read from stdin.
   --model <model> The model that answers. Overrides OPENROUTER_MODEL.
   --thinking      Show the model's thinking on stderr, even when stderr is not a terminal.
   --no-thinking   Do not show the thinking, even on a terminal.
   --verbose       Show each tool call the model makes on stderr.
+  --json          Write one JSON object when the run ends: to stdout on success, to stderr on failure.
 
 Environment: OPENROUTER_API_KEY (required), OPENROUTER_MODEL.
 Tracing: LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY and LANGFUSE_BASE_URL, all or none.`;
-
-const EXIT_OK = 0;
-const EXIT_USAGE_OR_CONFIG = 1;
-const EXIT_API = 2;
-const EXIT_LIMIT = 3;
 
 /** The one line an untraced run writes to stderr. */
 export const NOT_TRACED = `Langfuse tracing is off: LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY and LANGFUSE_BASE_URL are not set.\n`;
@@ -55,6 +56,8 @@ const secretsOf = (config: Config | undefined) => [
 /** What `execute` leaves behind for `run` to settle. */
 interface Session {
   tracer: Tracer;
+  /** Set once `--json` is known: the run writes one object, and `run` writes the loss of a trace as one. */
+  collector?: ReturnType<typeof createCollector> | undefined;
 }
 
 /** What a shell reports for a process a signal killed: 128 plus the signal number. */
@@ -91,7 +94,17 @@ export const run = async (
     await session.tracer.flush();
     return code;
   } catch (error) {
-    io.stderr.write(`${(error as Error).message}\n`);
+    const message = (error as Error).message;
+    // A failed run has written its object; a second would break the rule of one per stream.
+    if (!session.collector) {
+      io.stderr.write(`${message}\n`);
+    } else if (code === EXIT_OK) {
+      io.stderr.write(
+        serialize(
+          session.collector.failure({ code: 'TRACE_FLUSH_FAILED', message }),
+        ),
+      );
+    }
     return afterFlush(code, true);
   }
 };
@@ -104,8 +117,16 @@ const execute = async (
 ): Promise<number> => {
   let config: Config | undefined;
   let presenter: ReturnType<typeof createPresenter> | undefined;
+  // Arguments that do not parse still get the format they asked for. Once
+  // parsed, they have the last word: `-q --json` is a question, not a flag.
+  if (argv.includes('--json')) {
+    session.collector = createCollector();
+  }
   try {
     const args = parseCliArgs(argv);
+    if (!args.json) {
+      session.collector = undefined;
+    }
     config = await loadConfig(args, env, io.cwd);
     if (config.langfuse) {
       session.tracer = await openTracer(
@@ -113,22 +134,30 @@ const execute = async (
         config.langfuse,
         io.tracing,
       );
-    } else {
+    } else if (!session.collector) {
       io.stderr.write(NOT_TRACED);
     }
     const question = await readQuestion(args.question, io.stdin);
-    presenter = createPresenter({
-      stdout: io.stdout,
-      stderr: io.stderr,
-      thinking: args.thinking,
-      verbose: args.verbose,
-      noColor: env.NO_COLOR,
-    });
+    session.collector?.setQuestion(question);
+    presenter = session.collector
+      ? undefined
+      : createPresenter({
+          stdout: io.stdout,
+          stderr: io.stderr,
+          thinking: args.thinking,
+          verbose: args.verbose,
+          noColor: env.NO_COLOR,
+        });
     for await (const event of ask(config, question, {
       serverURL: io.serverURL,
+      idleTimeoutMs: io.idleTimeoutMs,
       tracer: session.tracer,
     })) {
-      presenter.handle(event);
+      // Stryker disable next-line OptionalChaining: equivalent because the presenter is set whenever there is no collector; the optional chain only satisfies the type.
+      (session.collector ?? presenter)?.handle(event);
+    }
+    if (session.collector) {
+      io.stdout.write(serialize(session.collector.success()));
     }
     return EXIT_OK;
   } catch (error) {
@@ -138,23 +167,16 @@ const execute = async (
     } catch {
       // The output is gone; the error line below still goes to stderr.
     }
-    const fail = (message: string, code: number): number => {
-      io.stderr.write(`${redactAll(message, secretsOf(config))}\n`);
-      return code;
-    };
-    if (error instanceof UsageError) {
-      return fail(`${error.message}\n\n${USAGE}`, EXIT_USAGE_OR_CONFIG);
+    const failure = classify(error);
+    const message = redactAll(failure.message, secretsOf(config));
+    if (session.collector) {
+      io.stderr.write(
+        serialize(session.collector.failure({ code: failure.code, message })),
+      );
+    } else {
+      const usage = error instanceof UsageError ? `\n\n${USAGE}` : '';
+      io.stderr.write(`${message}${usage}\n`);
     }
-    if (error instanceof ConfigError) {
-      return fail(error.message, EXIT_USAGE_OR_CONFIG);
-    }
-    if (error instanceof LimitError) {
-      return fail(error.message, EXIT_LIMIT);
-    }
-    if (error instanceof ApiError) {
-      return fail(error.message, EXIT_API);
-    }
-    const reason = error instanceof Error ? error.message : String(error);
-    return fail(`Unexpected error: ${reason}`, EXIT_API);
+    return failure.exit;
   }
 };

@@ -3,7 +3,7 @@ import {
   OpenRouterError,
   SDKValidationError,
 } from '@openrouter/sdk/models/errors';
-import { ApiError } from './errors.js';
+import { ApiError, TimeoutError } from './errors.js';
 import { oneLine } from './text.js';
 
 /** No chunk arrived in time. */
@@ -38,7 +38,7 @@ export const toApiError = (
   idleTimeoutMs: number,
 ): ApiError | undefined => {
   if (error instanceof IdleTimeout) {
-    return new ApiError(
+    return new TimeoutError(
       `Request timed out: no data for ${idleTimeoutMs / 1000} s.`,
     );
   }

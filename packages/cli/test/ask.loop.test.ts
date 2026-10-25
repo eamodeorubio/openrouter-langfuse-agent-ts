@@ -146,6 +146,48 @@ describe('rounds until the model answers', () => {
     expect(done).toMatchObject({ usage: { reasoningTokens: undefined } });
   });
 
+  it('sums the cost of every round, and keeps the first round cost', async () => {
+    api.reply(
+      200,
+      toolRound([call('c1', 'a/b')], {
+        usage: {
+          prompt_tokens: 10,
+          completion_tokens: 5,
+          total_tokens: 15,
+          cost: 0.001,
+        },
+      }),
+    );
+    api.replyGet('/model/a/b', 200, model('a/b'));
+    api.reply(
+      200,
+      answer('x', {
+        prompt_tokens: 30,
+        completion_tokens: 8,
+        total_tokens: 38,
+        cost: 0.002,
+      } as never),
+    );
+    const done = (await events()).find((e) => e.kind === 'done');
+    expect(done).toMatchObject({ usage: { cost: 0.003 } });
+  });
+
+  it('has no cost when a round reported none', async () => {
+    api.reply(200, toolRound([call('c1', 'a/b')]));
+    api.replyGet('/model/a/b', 200, model('a/b'));
+    api.reply(
+      200,
+      answer('x', {
+        prompt_tokens: 30,
+        completion_tokens: 8,
+        total_tokens: 38,
+        cost: 0.002,
+      } as never),
+    );
+    const done = (await events()).find((e) => e.kind === 'done');
+    expect(done).toMatchObject({ usage: { cost: undefined } });
+  });
+
   it('accepts a round of tool calls without any text', async () => {
     api.reply(200, toolRound([call('c1', 'a/b')]));
     api.replyGet('/model/a/b', 200, model('a/b'));

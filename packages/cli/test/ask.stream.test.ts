@@ -135,6 +135,8 @@ describe('ask: the events', () => {
         completionTokens: RECORDED_STREAM_USAGE.completionTokens,
         totalTokens: RECORDED_STREAM_USAGE.totalTokens,
         reasoningTokens: RECORDED_STREAM_USAGE.reasoningTokens,
+        cachedTokens: RECORDED_STREAM_USAGE.cachedTokens,
+        cost: RECORDED_STREAM_USAGE.cost,
       },
     });
     const kinds = events.map((e) => e.kind);
