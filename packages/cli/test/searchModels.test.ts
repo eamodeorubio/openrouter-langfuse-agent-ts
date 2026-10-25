@@ -341,7 +341,8 @@ describe('search_models result', () => {
     });
     expect(result).toEqual({
       ok: false,
-      message: 'The API response did not have the expected shape.',
+      message:
+        'OpenRouter sent a reply this tool could not read. Try again, or choose another model.',
     });
   });
 

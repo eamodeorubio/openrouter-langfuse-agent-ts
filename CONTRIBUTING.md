@@ -22,7 +22,19 @@ pnpm docs:dev      # the documentation site, live
 
 The other scripts (`test:watch`, `test:coverage`, `mutation:full`, `build`, `docs:build`, `docs:preview`) are in `package.json`.
 
-Tests never touch the network. Mock HTTP with `nock`. When a test has to cancel or cut a response stream, use the loopback server in `packages/cli/test/fakeApi.ts`, because `nock`'s mock sockets cannot survive a cancel. The tests of the Langfuse calls (the credential check and the OTLP upload) use it too, because `nock` failed with them intermittently. To run the tool against real services, copy `.env.example` to `.env` and fill in your keys. Never commit `.env`. To report a security problem, follow [SECURITY.md](SECURITY.md) instead of opening an issue.
+Run the tool from your clone with `pnpm dev`, for example `pnpm dev -q "What is a token?"`. It runs from `packages/cli/`, so that is where its `.env` belongs.
+
+Tests never touch the network. Mock HTTP with `nock`. When a test has to cancel or cut a response stream, use the loopback server in `packages/cli/test/fakeApi.ts`, because `nock`'s mock sockets cannot survive a cancel. The tests of the Langfuse calls (the credential check and the OTLP upload) use it too, because `nock` failed with them intermittently. To run the tool against real services, copy `.env.example` to `packages/cli/.env` and fill in your keys. Never commit `.env`. To report a security problem, follow [SECURITY.md](SECURITY.md) instead of opening an issue.
+
+### Project layout
+
+| Path                | What lives there                             |
+| ------------------- | -------------------------------------------- |
+| `packages/cli/`     | The CLI: source in `src/`, tests in `test/`  |
+| `docs/`             | The documentation site                       |
+| `openspec/`         | Specs and change proposals                   |
+| `QUALITY_RUBRIC.md` | The yardstick for writing and reviewing code |
+| `AGENTS.md`         | Working rules for AI coding agents           |
 
 ## From idea to merged pull request
 
@@ -143,6 +155,12 @@ Commits follow [Conventional Commits](https://www.conventionalcommits.org/). A c
 Pull requests are squash-merged. The pull request title becomes the one commit on `main`, and the title alone sets the version bump. It should carry the largest bump among the product slices inside. The squash description lists one line per squashed commit. Your branch commits still have to follow the format, because the hook and CI check them, and because the reviewer reads the history. A pull request whose changes all sit outside `packages/cli` bumps nothing, whatever its title says.
 
 Never edit the version by hand, and never tag or release. [release-please](https://github.com/googleapis/release-please) reads the history, opens a release pull request, and bumps the version and the changelog. The maintainer merges that pull request, and the merge cuts the release. Product slices exist for review. A release is a human decision, and a title that bumps nothing ships nothing.
+
+### Releases
+
+On every push to `main`, once the checks pass, release-please opens or updates a release pull request with the next version and the changelog. Merging that pull request tags the release (`v1.0.0` and so on), creates the GitHub release, and publishes the `ask-openrouter` package to npm with provenance, from a job of its own that is read-only and alone holds the npm token.
+
+If that publish job fails after the tag exists, re-run the failed job from the Actions tab. Do not push another commit to try again: a later push to `main` creates no release, so nothing would publish the tag. An npm version, once published, cannot be reused, so a fix that must ship is a new patch release.
 
 ## Pull requests
 

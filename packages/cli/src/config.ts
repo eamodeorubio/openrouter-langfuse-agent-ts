@@ -90,16 +90,24 @@ export const resolveConfig = (
   const apiKey = env.OPENROUTER_API_KEY?.trim();
   if (!apiKey) {
     throw new ConfigError(
-      'OPENROUTER_API_KEY is not set. Get a key at https://openrouter.ai/keys.',
+      'OPENROUTER_API_KEY is not set. Set it in the environment or in a .env file in the current directory. Get a key at https://openrouter.ai/keys.',
     );
   }
   const model = args.model?.trim() || env.OPENROUTER_MODEL?.trim();
   if (!model) {
     throw new ConfigError(
-      'No model given. Pass --model or set OPENROUTER_MODEL.',
+      'No model given. Set OPENROUTER_MODEL in the environment or in a .env file in the current directory, or pass --model <model>. A model is a slug such as openai/gpt-4o-mini; models are listed at https://openrouter.ai/models.',
     );
   }
   return { apiKey, model, langfuse: resolveLangfuse(env) };
+};
+
+/** Why a file cannot be read, in the words of a person. */
+export const unreadable = (code: string | undefined): string => {
+  if (code === 'EACCES' || code === 'EPERM') {
+    return 'permission denied';
+  }
+  return code === 'EISDIR' ? 'it is a directory' : 'it could not be opened';
 };
 
 const readDotenv = async (cwd: string): Promise<Env> => {
@@ -110,7 +118,7 @@ const readDotenv = async (cwd: string): Promise<Env> => {
       return {};
     }
     throw new ConfigError(
-      `Cannot read .env in the current directory (${(error as NodeJS.ErrnoException).code}).`,
+      `Cannot read .env in the current directory: ${unreadable((error as NodeJS.ErrnoException).code)}. Fix its permissions, or remove it and set the variables in the environment.`,
     );
   }
 };

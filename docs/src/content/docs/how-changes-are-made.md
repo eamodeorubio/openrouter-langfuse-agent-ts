@@ -21,4 +21,4 @@ A product slice is the smallest change that adds something a user can notice, an
 
 ## Versions
 
-Versions follow [SemVer](https://semver.org/). A fix raises the patch number, a new feature raises the minor number, and a breaking change raises the major number. While the project is below 1.0, a breaking change raises the minor number. A bot reads the pull request titles and opens a release pull request with the next version and the notes. Merging that pull request publishes the version. Every pull request title uses the [Conventional Commits](https://www.conventionalcommits.org/) form.
+Versions follow [SemVer](https://semver.org/). A fix raises the patch number, a new feature raises the minor number, and a breaking change raises the major number. A bot reads the pull request titles and opens a release pull request with the next version and the notes. Merging that pull request tags the release and publishes the package to npm. Every pull request title uses the [Conventional Commits](https://www.conventionalcommits.org/) form.

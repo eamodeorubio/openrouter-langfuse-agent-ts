@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { parseCliArgs } from '../src/args.js';
+import { parseCliArgs, requestedInfo, usageErrorOf } from '../src/args.js';
 import { UsageError } from '../src/errors.js';
 
 describe('parseCliArgs', () => {
@@ -105,7 +105,7 @@ describe('parseCliArgs', () => {
   });
 
   it('reports a trailing -q as a missing value', () => {
-    expect(() => parseCliArgs(['-q'])).toThrow(/argument missing/);
+    expect(() => parseCliArgs(['-q'])).toThrow(/^-q needs a value/);
   });
 
   it('does not let a consumed value hide the option after it', () => {
@@ -201,5 +201,185 @@ describe('parseCliArgs', () => {
         }
       }),
     );
+  });
+});
+
+describe('requestedInfo', () => {
+  it.each([
+    [['--help'], 'help'],
+    [['-h'], 'help'],
+    [['--version'], 'version'],
+    [['-v'], 'version'],
+    [['-q', 'hi', '--version'], 'version'],
+    [['--version', '--help'], 'help'],
+    [['-v', '-h'], 'help'],
+    [['--bogus', '--help'], 'help'],
+  ])('finds %j', (argv, expected) => {
+    expect(requestedInfo(argv)).toBe(expected);
+  });
+
+  it.each([
+    ['no arguments', []],
+    ['ordinary arguments', ['-q', 'hi', '--json']],
+    ['the word as the question', ['-q', '--help']],
+    ['the word as the model', ['--model', '-h']],
+    ['the flag attached to -q', ['-q--help']],
+    ['a longer flag', ['--helpful']],
+  ])('finds nothing in %s', (_name, argv) => {
+    expect(requestedInfo(argv)).toBeUndefined();
+  });
+
+  it('finds a flag wherever it stands among words that are not flags', () => {
+    const word = fc
+      .string()
+      .filter(
+        (text) =>
+          !['-q', '--model', '-h', '--help', '-v', '--version'].includes(text),
+      );
+    fc.assert(
+      fc.property(fc.array(word), fc.nat(), (words, at) => {
+        const index = at % (words.length + 1);
+        const put = (flag: string) => [
+          ...words.slice(0, index),
+          flag,
+          ...words.slice(index),
+        ];
+        expect(requestedInfo(words)).toBeUndefined();
+        expect(requestedInfo(put('--help'))).toBe('help');
+        expect(requestedInfo(put('-v'))).toBe('version');
+        expect(requestedInfo(put('-v').concat('--help'))).toBe('help');
+      }),
+    );
+  });
+});
+
+describe('the messages of a usage error', () => {
+  const message = (argv: string[]): string => {
+    try {
+      parseCliArgs(argv);
+    } catch (error) {
+      return (error as Error).message;
+    }
+    throw new Error('did not throw');
+  };
+
+  it.each([
+    [
+      ['-q'],
+      '-q needs a value, the question. Example: -q "What is a token?". Or leave -q out and pipe the question in.',
+    ],
+    [
+      ['--q'],
+      '-q needs a value, the question. Example: -q "What is a token?". Or leave -q out and pipe the question in.',
+    ],
+    [
+      ['--model'],
+      '--model needs a value, a model slug. Example: --model openai/gpt-4o-mini',
+    ],
+    [
+      ['--model', '--verbose'],
+      '--model needs a value, a model slug. Example: --model openai/gpt-4o-mini',
+    ],
+    [
+      ['--nope'],
+      "Unknown option '--nope'. The options this tool accepts are listed below.",
+    ],
+    [
+      ['-z'],
+      "Unknown option '-z'. The options this tool accepts are listed below.",
+    ],
+    [
+      [''],
+      "Unexpected argument ''. Quote the question and pass it with -q, or pipe it in.",
+    ],
+    [
+      ["--a'b"],
+      "Unknown option '--a'b'. The options this tool accepts are listed below.",
+    ],
+    [
+      ['word'],
+      "Unexpected argument 'word'. Quote the question and pass it with -q, or pipe it in.",
+    ],
+    [['--json=1'], '--json takes no value. Write --json alone.'],
+    [['--thinking=yes'], '--thinking takes no value. Write --thinking alone.'],
+    [
+      ['--thinking', '--no-thinking'],
+      'Use either --thinking or --no-thinking, not both. Remove one.',
+    ],
+  ])('is as the spec says for %j', (argv, expected) => {
+    expect(message(argv)).toBe(expected);
+  });
+
+  it("never shows the parser's own words, for any list that fails", () => {
+    const word = fc.stringMatching(/^-{0,2}[a-z]{0,6}(=[a-z]{0,3})?$/);
+    fc.assert(
+      fc.property(fc.array(word, { maxLength: 6 }), (argv) => {
+        let text: string | undefined;
+        try {
+          parseCliArgs(argv);
+        } catch (error) {
+          text = (error as Error).message;
+        }
+        if (text !== undefined) {
+          expect(text).not.toBe('');
+          expect(text).not.toMatch(
+            /Option '|To specify|argument missing|is ambiguous|does not take an argument|positional arguments/,
+          );
+        }
+      }),
+    );
+  });
+});
+
+describe('usageErrorOf', () => {
+  const failure = (code: string, message: string) =>
+    Object.assign(new Error(message), { code });
+
+  it.each([
+    [
+      'a code it does not know',
+      failure('ERR_SOMETHING_NEW', "Option '--x' is odd"),
+    ],
+    [
+      'a code it does not know, in words that name -q',
+      failure('ERR_SOMETHING_NEW', "Option '-q, --q <value>' argument missing"),
+    ],
+    [
+      'a code it does not know, in words that name --model',
+      failure('ERR_SOMETHING_NEW', "Option '--model <value>' argument missing"),
+    ],
+    [
+      'an unknown option with nothing quoted',
+      failure('ERR_PARSE_ARGS_UNKNOWN_OPTION', 'Unknown option'),
+    ],
+    [
+      'a positional with nothing quoted',
+      failure('ERR_PARSE_ARGS_UNEXPECTED_POSITIONAL', 'Unexpected argument'),
+    ],
+    [
+      'a value error about another option',
+      failure(
+        'ERR_PARSE_ARGS_INVALID_OPTION_VALUE',
+        "Option '--other <value>' argument missing",
+      ),
+    ],
+    [
+      'a value error naming no option',
+      failure('ERR_PARSE_ARGS_INVALID_OPTION_VALUE', 'Something about a value'),
+    ],
+  ])(
+    "keeps the parser's message for %s, so that a newer Node cannot hide a failure",
+    (_name, error) => {
+      expect(usageErrorOf(error)).toBeInstanceOf(UsageError);
+      expect(usageErrorOf(error).message).toBe(error.message);
+    },
+  );
+
+  it.each([
+    ['null', null, 'null'],
+    ['a string', 'plain', 'plain'],
+    ['an error without a code', new Error('boom'), 'boom'],
+  ])('survives %s', (_name, thrown, message) => {
+    expect(usageErrorOf(thrown).message).toBe(message);
   });
 });

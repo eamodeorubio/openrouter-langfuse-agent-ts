@@ -293,7 +293,9 @@ describe('get_model', () => {
       .replyWithError('socket hang up');
     const result = await run({ slug: 'a/b' });
     expect(result.ok).toBe(false);
-    expect((result as { message: string }).message).toMatch(/^Request failed/);
+    expect((result as { message: string }).message).toMatch(
+      /^Cannot reach OpenRouter/,
+    );
   });
 
   it('does not retry a refused key', async () => {

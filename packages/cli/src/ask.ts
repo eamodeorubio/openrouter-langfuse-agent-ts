@@ -152,10 +152,14 @@ async function* converse(
     }
 
     if (!isAnswer(response) && response.toolCalls.length === 0) {
-      throw new ApiError('The API response held no answer.');
+      throw new ApiError(
+        'The model returned no answer. Try again, or choose another model.',
+      );
     }
     if (!response.usage) {
-      throw new ApiError('The API response held no token usage.');
+      throw new ApiError(
+        "OpenRouter's reply did not report how many tokens it used. Try again, or choose another model.",
+      );
     }
     total = addUsage(total, response.usage);
     if (isAnswer(response)) {
@@ -164,7 +168,9 @@ async function* converse(
       return;
     }
     if (response.toolCalls.some((call) => !call.id)) {
-      throw new ApiError('The API response held a tool call without an id.');
+      throw new ApiError(
+        'The model asked to use a tool in a way this tool cannot follow. Try again, or choose another model.',
+      );
     }
     if (forbidTools) {
       throw new LimitError(

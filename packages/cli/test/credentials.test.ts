@@ -73,7 +73,7 @@ describe('checkCredentials', () => {
   it('says only the status for any other failure, not that the keys were rejected', async () => {
     await against(answering(503, 'unavailable'), async (baseUrl) => {
       expect(await messageOf(checkCredentials({ ...keys, baseUrl }))).toBe(
-        `Langfuse at ${baseUrl} answered HTTP 503.`,
+        `Langfuse at ${baseUrl} answered HTTP 503. Check LANGFUSE_BASE_URL and the network, or unset the three LANGFUSE_ variables to run without tracing.`,
       );
     });
   });
@@ -103,7 +103,9 @@ describe('checkCredentials', () => {
       await messageOf(
         checkCredentials({ ...keys, baseUrl: 'http://127.0.0.1:1' }),
       ),
-    ).toBe('Cannot reach Langfuse at http://127.0.0.1:1.');
+    ).toBe(
+      'Cannot reach Langfuse at http://127.0.0.1:1. Check LANGFUSE_BASE_URL and the network, or unset the three LANGFUSE_ variables to run without tracing.',
+    );
   });
 
   it('names the base URL when Langfuse does not answer in time', async () => {
@@ -114,7 +116,7 @@ describe('checkCredentials', () => {
           checkCredentials({ ...keys, baseUrl }, 50),
         );
         expect(message).toBe(
-          `Langfuse at ${baseUrl} did not answer within 0.05 s.`,
+          `Langfuse at ${baseUrl} did not answer within 0.05 s. Check LANGFUSE_BASE_URL and the network, or unset the three LANGFUSE_ variables to run without tracing.`,
         );
       },
     );

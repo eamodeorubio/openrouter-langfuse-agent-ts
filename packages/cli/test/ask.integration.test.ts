@@ -473,7 +473,9 @@ describe('a server that answers without streaming', () => {
     const result = await cli({ argv: ['-q', 'hi'] });
     expect(result.code).toBe(2);
     expect(result.stdout).toBe('');
-    expect(result.stderr).toBe('The API response held no answer.\n');
+    expect(result.stderr).toBe(
+      'The model returned no answer. Try again, or choose another model.\n',
+    );
   });
 });
 
@@ -533,7 +535,9 @@ describe('retries', () => {
     const result = await cli({ argv: ['-q', 'hi'] });
     expect(result.code).toBe(2);
     expect(result.stdout).toBe('');
-    expect(result.stderr).toBe('API error 503: overloaded\n');
+    expect(result.stderr).toBe(
+      'API error 503: overloaded. OpenRouter is having trouble. Try again later.\n',
+    );
     expect(api.sent).toHaveLength(5);
   });
 
@@ -564,7 +568,9 @@ describe('API failure', () => {
     const result = await cli({ argv: ['-q', 'hi'] });
     expect(result.code).toBe(2);
     expect(result.stdout).toBe('');
-    expect(result.stderr).toBe(`API error 401: ${RECORDED_401_MESSAGE}\n`);
+    expect(result.stderr).toBe(
+      `API error 401: ${RECORDED_401_MESSAGE} Check OPENROUTER_API_KEY.\n`,
+    );
   });
 
   it('reports a server error that has a plain-text body, exit 2', async () => {
@@ -612,7 +618,7 @@ describe('failure after output has started', () => {
     expect(result.code).toBe(2);
     expect(result.stdout).toBe('');
     expect(result.stderr).toBe(
-      `${DIM}hm${RESET}\nAPI error 500: provider failed\n`,
+      `${DIM}hm${RESET}\nAPI error 500: provider failed. OpenRouter is having trouble. Try again later.\n`,
     );
   });
 
@@ -659,7 +665,7 @@ describe('unusable response', () => {
     expect(result.code).toBe(2);
     expect(result.stdout).toBe('42\n');
     expect(lines(result.stderr)).toHaveLength(1);
-    expect(result.stderr).toMatch(/token usage/i);
+    expect(result.stderr).toMatch(/how many tokens/i);
   });
 });
 
@@ -823,8 +829,9 @@ describe('key redaction', () => {
         },
       },
     };
-    expect(await run(['-q', 'hi'], goodEnv, broken)).toBe(2);
-    expect(stderr).toBe('Unexpected error: closed while holding [redacted]\n');
+    expect(await run(['-q', 'hi', '--verbose'], goodEnv, broken)).toBe(2);
+    expect(stderr).toContain('detail: closed while holding [redacted]\n');
+    expect(stderr).not.toContain(KEY);
   });
 });
 
@@ -856,7 +863,9 @@ describe('a stdout that stops working mid-run', () => {
       },
     };
     expect(await run(['-q', 'hi'], goodEnv, flaky)).toBe(2);
-    expect(stderr).toBe('API error 500: provider failed\n');
+    expect(stderr).toBe(
+      'API error 500: provider failed. OpenRouter is having trouble. Try again later.\n',
+    );
   });
 });
 
@@ -885,6 +894,9 @@ describe('unexpected failure', () => {
       },
     };
     expect(await run(['-q', 'hi'], goodEnv, broken)).toBe(2);
-    expect(stderr).toBe(`Unexpected error: ${expected}\n`);
+    expect(stderr).toBe(
+      'Something went wrong inside ask-openrouter. Try again. If it keeps happening, report it at https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues, with the output of --verbose.\n',
+    );
+    expect(stderr).not.toContain(expected);
   });
 });

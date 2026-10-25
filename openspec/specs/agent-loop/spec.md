@@ -70,7 +70,7 @@ A tool call that arrives without an id SHALL fail the run as an API failure: one
 
 #### Scenario: Call without an id
 - **WHEN** a response ends with a tool call whose id is empty
-- **THEN** stderr holds one line saying the response held a tool call without an id, no tool ran, and the exit code is 2
+- **THEN** stderr holds one line saying the model asked to use a tool in a way this tool cannot follow, no tool ran, and the exit code is 2
 
 ### Requirement: Tool activity on stderr
 With `--verbose`, and only then, the CLI SHALL write for each tool call one line to stderr, before the call runs: `tool: <name> <arguments>`, the arguments as received, on one line (a run of whitespace becomes one space), cut at 200 characters with `…`. Stdout SHALL NOT carry it. The lines do not depend on `--thinking`.

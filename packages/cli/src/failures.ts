@@ -1,8 +1,11 @@
+import { STATUS_CODES } from 'node:http';
 import {
   HTTPClientError,
   OpenRouterError,
+  RequestTimeoutError,
   SDKValidationError,
 } from '@openrouter/sdk/models/errors';
+import { z } from 'zod';
 import { ApiError, TimeoutError } from './errors.js';
 import { oneLine } from './text.js';
 
@@ -29,6 +32,71 @@ export const isShapeError = (error: unknown): boolean =>
   // is not one of its classes and whose message is a long validation dump.
   (error instanceof Error && error.name === 'ZodError');
 
+const TRY_AGAIN = ' Try again, or choose another model.';
+
+/** What the user can do about a failed request, by the status the service gave. Empty when nothing helps. */
+const remedyFor = (status: number): string => {
+  if (status === 401 || status === 403) {
+    return ' Check OPENROUTER_API_KEY.';
+  }
+  if (status === 402) {
+    return ' Add credits at https://openrouter.ai/settings/credits.';
+  }
+  if (status === 404) {
+    return ' If the model is unknown, check the slug passed with --model or set in OPENROUTER_MODEL.';
+  }
+  if (status === 429) {
+    return ' Wait a moment and try again.';
+  }
+  return status >= 500 && status <= 599
+    ? ' OpenRouter is having trouble. Try again later.'
+    : '';
+};
+
+/** What the client library writes when it cannot unpack the body: it quotes the status, the content type and the body. */
+const LIBRARY_WRAPPER = /^API error occurred/;
+
+const bodyWithMessage = z.object({
+  error: z.object({ message: z.string().trim().min(1) }),
+});
+
+/** The `error.message` of a JSON body, if that is what the body holds. */
+const messageInBody = (body: string): string | undefined => {
+  try {
+    const result = bodyWithMessage.safeParse(JSON.parse(body));
+    return result.success ? result.data.error.message : undefined;
+    // Stryker disable next-line BlockStatement: equivalent because an empty catch leaves the function to return undefined, as the catch does.
+  } catch {
+    return undefined;
+  }
+};
+
+/** The standard reason of a status, for the service that sent no words of its own. */
+const reasonOf = (status: number): string =>
+  STATUS_CODES[status] ?? 'Unknown error';
+
+/**
+ * What the service said, without the library's wrapper around it. A body that
+ * is no message, such as a web page, gives the standard reason of the status.
+ */
+const saidBy = (error: OpenRouterError): string =>
+  LIBRARY_WRAPPER.test(error.message)
+    ? (messageInBody(error.body) ?? reasonOf(error.statusCode))
+    : error.message;
+
+/** The text as a sentence: it gets a full stop unless it ends in one already. */
+const asSentence = (text: string): string =>
+  /[.!?…]$/.test(text) ? text : `${text}.`;
+
+/** The service's words for a failed request, with the remedy for its status after them. */
+const serviceError = (status: number, message: string): ApiError => {
+  const remedy = remedyFor(status);
+  const said = oneLine(message) || reasonOf(status);
+  return new ApiError(
+    `API error ${status}: ${remedy === '' ? said : asSentence(said)}${remedy}`,
+  );
+};
+
 /**
  * The `ApiError` that tells the user what went wrong, or `undefined` for an
  * error this module does not know (a bug), which the caller then rethrows.
@@ -39,26 +107,33 @@ export const toApiError = (
 ): ApiError | undefined => {
   if (error instanceof IdleTimeout) {
     return new TimeoutError(
-      `Request timed out: no data for ${idleTimeoutMs / 1000} s.`,
+      `Request timed out: no data for ${idleTimeoutMs / 1000} s.${TRY_AGAIN}`,
     );
   }
   if (error instanceof ChunkError) {
-    return new ApiError(`API error ${error.code}: ${oneLine(error.message)}`);
+    return serviceError(error.code, error.message);
   }
   if (isShapeError(error)) {
-    return new ApiError('The API response did not have the expected shape.');
-  }
-  if (error instanceof OpenRouterError) {
     return new ApiError(
-      `API error ${error.statusCode}: ${oneLine(error.message)}`,
+      `OpenRouter sent a reply this tool could not read.${TRY_AGAIN}`,
     );
   }
+  if (error instanceof OpenRouterError) {
+    return serviceError(error.statusCode, saidBy(error));
+  }
   if (error instanceof StreamError) {
-    return new ApiError(`Stream failed: ${oneLine(error.message)}`);
+    return new ApiError(
+      'The connection to OpenRouter dropped before the answer was complete.',
+    );
+  }
+  if (error instanceof RequestTimeoutError) {
+    return new TimeoutError(`The request to OpenRouter timed out.${TRY_AGAIN}`);
   }
   // Stryker disable next-line ConditionalExpression: equivalent because every error the SDK call throws is an HTTPClientError or an OpenRouterError; the fall-through guards SDK bugs and no test can reach it.
   if (error instanceof HTTPClientError) {
-    return new ApiError(`Request failed: ${oneLine(error.message)}`);
+    return new ApiError(
+      'Cannot reach OpenRouter. Check your network connection and try again.',
+    );
   }
   return undefined;
 };

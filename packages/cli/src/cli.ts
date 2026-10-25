@@ -1,16 +1,18 @@
-import { parseCliArgs } from './args.js';
+import { parseCliArgs, requestedInfo } from './args.js';
 import { ask } from './ask.js';
 import { classify, EXIT_API, EXIT_OK } from './classify.js';
 import { createCollector } from './collector.js';
 import { type Config, loadConfig } from './config.js';
 import { UsageError } from './errors.js';
+import { helpText } from './help.js';
 import { readQuestion, type Stdin } from './input.js';
 import { serialize } from './output.js';
 import { createPresenter } from './present.js';
-import { redactAll } from './text.js';
+import { oneLine, redactAll } from './text.js';
 import { openTracer, type TracingOptions } from './tracing/create.js';
 import { INTERRUPTED, NO_TRACER, type Tracer } from './tracing/tracer.js';
 import type { Sink } from './types.js';
+import { readVersion } from './version.js';
 
 export interface Io {
   cwd: string;
@@ -21,23 +23,13 @@ export interface Io {
   serverURL?: string;
   /** Test seam: how long the API may stay silent, in milliseconds. The real entry point leaves it unset. */
   idleTimeoutMs?: number;
+  /** Test seam: the package.json that holds the version. The real entry point leaves it unset. */
+  manifest?: URL | undefined; // `| undefined` because exactOptionalPropertyTypes is on.
   /** Aborted with `SIGINT` or `SIGTERM` when the process is told to stop. */
   signal?: AbortSignal;
   /** Test seams for tracing. The real entry point leaves it unset. */
   tracing?: TracingOptions;
 }
-
-const USAGE = `Usage: openrouter-langfuse-agent-ts [-q <question>] [--model <model>] [--thinking | --no-thinking] [--verbose] [--json]
-
-  -q <question>   The question. Without it, the question is read from stdin.
-  --model <model> The model that answers. Overrides OPENROUTER_MODEL.
-  --thinking      Show the model's thinking on stderr, even when stderr is not a terminal.
-  --no-thinking   Do not show the thinking, even on a terminal.
-  --verbose       Show each tool call the model makes on stderr.
-  --json          Write one JSON object when the run ends: to stdout on success, to stderr on failure.
-
-Environment: OPENROUTER_API_KEY (required), OPENROUTER_MODEL.
-Tracing: LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY and LANGFUSE_BASE_URL, all or none.`;
 
 /** The one line an untraced run writes to stderr. */
 export const NOT_TRACED = `Langfuse tracing is off: LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY and LANGFUSE_BASE_URL are not set.\n`;
@@ -80,11 +72,36 @@ const whenInterrupted = (
     });
   });
 
+/** The version of this tool, or `undefined` when its package.json cannot be read. */
+const versionOf = (io: Io): Promise<string | undefined> =>
+  readVersion(io.manifest).catch(() => undefined);
+
+/** Prints what `--help` or `--version` asked for, and ends the run. */
+const printInfo = async (info: 'help' | 'version', io: Io): Promise<number> => {
+  if (info === 'help') {
+    io.stdout.write(helpText(await versionOf(io)));
+    return EXIT_OK;
+  }
+  let version: string;
+  try {
+    version = await readVersion(io.manifest);
+  } catch (error) {
+    io.stderr.write(`${(error as Error).message}\n`);
+    return EXIT_API;
+  }
+  io.stdout.write(`${version}\n`);
+  return EXIT_OK;
+};
+
 export const run = async (
   argv: string[],
   env: Record<string, string | undefined>,
   io: Io,
 ): Promise<number> => {
+  const info = requestedInfo(argv);
+  if (info) {
+    return printInfo(info, io);
+  }
   const session: Session = { tracer: NO_TRACER };
   const code = await Promise.race([
     execute(argv, env, io, session),
@@ -117,6 +134,8 @@ const execute = async (
 ): Promise<number> => {
   let config: Config | undefined;
   let presenter: ReturnType<typeof createPresenter> | undefined;
+  // Stryker disable next-line BooleanLiteral: equivalent because only an unexpected failure has a detail to show, and none can happen before the arguments are parsed.
+  let verbose = false;
   // Arguments that do not parse still get the format they asked for. Once
   // parsed, they have the last word: `-q --json` is a question, not a flag.
   if (argv.includes('--json')) {
@@ -127,6 +146,7 @@ const execute = async (
     if (!args.json) {
       session.collector = undefined;
     }
+    verbose = args.verbose;
     config = await loadConfig(args, env, io.cwd);
     if (config.langfuse) {
       session.tracer = await openTracer(
@@ -174,8 +194,16 @@ const execute = async (
         serialize(session.collector.failure({ code: failure.code, message })),
       );
     } else {
-      const usage = error instanceof UsageError ? `\n\n${USAGE}` : '';
-      io.stderr.write(`${message}${usage}\n`);
+      io.stderr.write(
+        error instanceof UsageError
+          ? `${message}\n\n${helpText(await versionOf(io))}`
+          : `${message}\n`,
+      );
+      if (verbose && failure.detail !== undefined) {
+        io.stderr.write(
+          `detail: ${redactAll(oneLine(failure.detail), secretsOf(config))}\n`,
+        );
+      }
     }
     return failure.exit;
   }

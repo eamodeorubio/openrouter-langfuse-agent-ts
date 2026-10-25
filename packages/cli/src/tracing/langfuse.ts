@@ -318,7 +318,7 @@ export const createLangfuseTracer = ({
         await withTimeout(processor.forceFlush(), flushTimeoutMs);
       } catch {
         throw new ApiError(
-          'The trace could not be delivered to Langfuse and may be incomplete.',
+          'The trace could not be delivered to Langfuse and may be incomplete. Check the Langfuse settings and try again.',
         );
       }
     },

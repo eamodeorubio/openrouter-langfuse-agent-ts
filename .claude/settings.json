@@ -28,7 +28,9 @@
       "Bash(gh pr checks:*)",
       "Bash(gh run list:*)",
       "Bash(gh run view:*)",
-      "Bash(gh --version)"
+      "Bash(gh --version)",
+      "Bash(pnpm exec tsc --noEmit)",
+      "mcp__langfuse-docs__searchLangfuseDocs"
     ],
     "ask": [
       "Bash(git commit:*)",
