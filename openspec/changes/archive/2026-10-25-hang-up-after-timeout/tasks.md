@@ -11,10 +11,10 @@ Pull request title: `fix: hang up the connection after a timeout, even after gar
 - [x] 1.5 Implement the fetcher and `withSignal` in `src/client.ts`; run `client.chat.send` inside `withSignal` in `src/chat.ts`. Verify 1.2 to 1.4 pass, and that the full suite does too.
 - [x] 1.6 Run `pnpm check`, `pnpm typecheck`, `pnpm test`, and `pnpm mutation` (a forced run on `client.ts` and `chat.ts`). Handle every survivor. Run `pnpm exec stryker run --dryRunOnly` 8 times under CPU load: it must not fail.
 - [x] 1.7 Run `reviewer-code-high`, `reviewer-code-low`, `reviewer-docs`. Fix every must-fix finding. `reviewer-docs` has no page to read: the change alters no documented behavior, and it reads the spec and design.
-- [ ] 1.8 Write the full report. Wait for approval, which also approves the commit. Commit `fix: hang up the connection after a timeout, even after garbage collection`.
+- [x] 1.8 Write the full report. Wait for approval, which also approves the commit. Commit `fix: hang up the connection after a timeout, even after garbage collection`.
 
 ## 2. Close
 
-- [ ] 2.1 Run `/opsx:verify` and fix what it finds.
-- [ ] 2.2 With the user's approval, commit `chore: archive hang-up-after-timeout`.
+- [x] 2.1 Run `/opsx:verify` and fix what it finds.
+- [x] 2.2 With the user's approval, commit `chore: archive hang-up-after-timeout`.
 - [ ] 2.3 Ask the user before every push and before the pull request.
