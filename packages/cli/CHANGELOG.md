@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.0](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v0.5.0...v1.0.0) (2026-10-25)
+
+
+### Features
+
+* publish ask-openrouter to npm, with --help, --version and clearer errors ([#28](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues/28)) ([6db425b](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/commit/6db425be1c0c0d04fb658c4c6a1eaabfc286a4c5))
+
 ## [0.5.0](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v0.4.0...v0.5.0) (2026-10-25)
 
 
