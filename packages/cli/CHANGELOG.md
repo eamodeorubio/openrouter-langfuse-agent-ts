@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v1.0.0...v1.0.1) (2026-10-25)
+
+
+### Bug Fixes
+
+* hang up the connection after a timeout, even after garbage collection ([#31](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues/31)) ([3047d72](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/commit/3047d72d6dc842a7333f8ba504620be013e66fa2))
+
 ## [1.0.0](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v0.5.0...v1.0.0) (2026-10-25)
 
 
