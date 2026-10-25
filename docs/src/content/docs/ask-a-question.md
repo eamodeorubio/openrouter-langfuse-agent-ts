@@ -206,6 +206,16 @@ When a run fails, the error marks the root and the request that failed. The trac
 
 Every observation carries the version of the tool that made it, and every trace carries its environment and release. The traces name their service `openrouter-langfuse-agent-ts` and carry nothing taken from your machine: no path, no home directory, no host name.
 
+### Which generation is the answer
+
+A run that uses tools has several generations, and only one of them wrote the text you got. That one carries `final_answer` set to `true` in its metadata. The flag marks a response that finished with answer text and no tool call.
+
+Every other generation carries `false`. These are a round that ended in tool calls, even when the model said something first; a request that failed, so the partial answer of a stream that broke halfway is `false` too; a round that Ctrl-C cut short; and a response with neither text nor tool call, which fails the run. A run that ends before the model answers has no `true`.
+
+To list only the answers, filter the observations on the metadata key `final_answer` with the value `true`, in the tracing table or with the `filter` parameter of the Langfuse API. Langfuse shows the value as text, so type `true` or `false` into the filter as they are. The flag sits on the generation and nowhere else. On a run that succeeds, the root holds the same text as its output.
+
+When the model answers in full but its response has no token counts, the tool writes the answer and exits with code 2. That generation is still flagged `true`, because its text reached your screen. The root has no output in that run, so the flagged generation is the only place the answer is in the trace.
+
 ### Tokens and cost
 
 Langfuse keeps every kind of token in a bucket of its own, so that a token is counted once. A generation reports `input` and `output`, and when the provider says so, `input_cached_tokens` for the part of the prompt served from its cache and `output_reasoning_tokens` for the part of the completion the model spent thinking. Those two are taken out of `input` and `output`. `total` is the sum of the buckets. The cost is the one OpenRouter reports for the request, in US dollars, so it does not depend on Langfuse knowing the price of the model.

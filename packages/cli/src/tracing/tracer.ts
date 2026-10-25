@@ -21,6 +21,8 @@ export interface GenerationResult {
   thinking?: string | undefined;
   finishReason?: string | undefined;
   usage?: Usage | undefined;
+  /** The response held answer text and no tool calls: the text the user gets. */
+  final?: boolean | undefined;
   /** One line. Present when the request failed. */
   error?: string | undefined;
 }

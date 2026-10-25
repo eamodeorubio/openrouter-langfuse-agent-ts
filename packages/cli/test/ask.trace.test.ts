@@ -1,3 +1,4 @@
+import fc from 'fast-check';
 import {
   afterAll,
   beforeAll,
@@ -212,5 +213,142 @@ describe('ask with a tracer', () => {
       events.push(event);
     }
     expect(events.some((event) => event.kind === 'trace')).toBe(false);
+  });
+});
+
+describe('which generation ask marks as the answer', () => {
+  /** What the loop told the tracer about each generation: whether it was the answer, in order. */
+  const finals = (log: unknown[]): boolean[] =>
+    log.flatMap((entry) => {
+      const end = (entry as { generationEnd?: GenerationResult }).generationEnd;
+      return end ? [end.final ?? false] : [];
+    });
+
+  const CALL = { id: 'c1', name: 'get_model', arguments: '{"slug":"a/b"}' };
+  const modelReply = () =>
+    api.replyGet('/model/a/b', 200, {
+      data: { ...recordedModel.data, id: 'a/b' },
+    });
+
+  it('marks a response with answer text and no tool call', async () => {
+    api.reply(200, sseBody(contentChunk('The answer.'), usageChunk(USAGE)));
+    const { tracer, log } = recorder();
+    await drain(tracer);
+    expect(finals(log)).toEqual([true]);
+  });
+
+  it('does not mark a response that has text and a tool call, but marks the answer after it', async () => {
+    api.reply(200, toolRound([CALL], { text: 'Checking.' }));
+    modelReply();
+    api.reply(200, sseBody(contentChunk('Done.'), usageChunk(USAGE)));
+    const { tracer, log } = recorder();
+    await drain(tracer);
+    expect(finals(log)).toEqual([false, true]);
+  });
+
+  it('does not mark a response that has tool calls only', async () => {
+    api.reply(200, toolRound([CALL]));
+    modelReply();
+    api.reply(200, sseBody(contentChunk('Done.'), usageChunk(USAGE)));
+    const { tracer, log } = recorder();
+    await drain(tracer);
+    expect(finals(log)).toEqual([false, true]);
+  });
+
+  it('does not mark a response that has neither text nor a tool call, which fails the run', async () => {
+    api.reply(200, sseBody(usageChunk(USAGE)));
+    const { tracer, log } = recorder();
+    const { error } = await drain(tracer);
+    expect(error).toBeInstanceOf(Error);
+    expect(finals(log)).toEqual([false]);
+  });
+
+  it('does not mark a request that failed', async () => {
+    api.reply(401, { error: { code: 401, message: 'No auth.' } });
+    const { tracer, log } = recorder();
+    await drain(tracer);
+    expect(finals(log)).toEqual([false]);
+  });
+
+  it('does not mark a generation that the reader left open', async () => {
+    api.reply(
+      200,
+      sseBody(contentChunk('A'), contentChunk('B'), usageChunk(USAGE)),
+    );
+    const { tracer, log } = recorder();
+    const events = ask(config, 'q', { serverURL: api.url, tracer });
+    await events.next();
+    await events.next();
+    await events.return(undefined);
+    expect(finals(log)).toEqual([false]);
+  });
+
+  it('marks an answer that was written although the response held no usage, and the run fails', async () => {
+    api.reply(200, sseBody(contentChunk('Written.')));
+    const { tracer, log } = recorder();
+    const { error } = await drain(tracer);
+    expect(error).toBeInstanceOf(Error);
+    expect(finals(log)).toEqual([true]);
+    expect(log.at(-1)).toEqual({ rootEnd: { error: expect.any(String) } });
+  });
+
+  it('marks at most one generation of any run, the last, and exactly when the run was answered', async () => {
+    const ending = fc.constantFrom('answer', 'refusal', 'interrupt');
+    await fc.assert(
+      fc.asyncProperty(
+        fc.integer({ min: 0, max: 8 }),
+        ending,
+        fc.boolean(),
+        async (rounds, how, withText) => {
+          api.reset();
+          for (let i = 0; i < rounds; i++) {
+            api.reply(
+              200,
+              toolRound([CALL], withText ? { text: 'Checking.' } : {}),
+            );
+            modelReply();
+          }
+          if (how === 'refusal') {
+            api.reply(401, { error: { code: 401, message: 'No auth.' } });
+          } else {
+            api.reply(
+              200,
+              sseBody(contentChunk('A'), contentChunk('B'), usageChunk(USAGE)),
+            );
+          }
+          const { tracer, log } = recorder();
+          const events = ask(config, 'q', { serverURL: api.url, tracer });
+          let tools = 0;
+          try {
+            for await (const event of events) {
+              if (event.kind === 'tool') {
+                tools += 1;
+              }
+              // The first piece of the last round's reply: the reader stops here.
+              if (
+                how === 'interrupt' &&
+                tools === rounds &&
+                event.kind === 'content'
+              ) {
+                await events.return(undefined);
+                break;
+              }
+            }
+          } catch (error) {
+            // Only a refusal ends a run with an error.
+            if (how !== 'refusal') {
+              throw error;
+            }
+          }
+          const flags = finals(log);
+          expect(flags).toHaveLength(rounds + 1);
+          expect(flags.filter(Boolean)).toHaveLength(how === 'answer' ? 1 : 0);
+          if (how === 'answer') {
+            expect(flags.at(-1)).toBe(true);
+          }
+        },
+      ),
+      { numRuns: 20 },
+    );
   });
 });

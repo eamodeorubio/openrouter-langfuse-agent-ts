@@ -461,6 +461,105 @@ describe('a generation', () => {
     expect(g.attributes['langfuse.observation.level']).toBe('ERROR');
   });
 
+  describe('the final answer flag', () => {
+    const flag = async () =>
+      json(
+        await span('generate-response'),
+        'langfuse.observation.metadata.final_answer',
+      );
+
+    it('is true when the result says the generation gave the answer', async () => {
+      tracer
+        .root('q')
+        .generation({ requestedModel: 'm', messages })
+        .end({ model: 'm', text: 'The answer.', final: true });
+      expect(await flag()).toBe(true);
+    });
+
+    it('is false when the result says it did not', async () => {
+      tracer
+        .root('q')
+        .generation({ requestedModel: 'm', messages })
+        .end({ model: 'm', text: 'Checking.', final: false });
+      expect(await flag()).toBe(false);
+    });
+
+    it('is false when the result does not say', async () => {
+      tracer
+        .root('q')
+        .generation({ requestedModel: 'm', messages })
+        .end({ model: 'm', text: 'a' });
+      expect(await flag()).toBe(false);
+    });
+
+    it('is false for a request that failed, and for one that was cut short', async () => {
+      const root = tracer.root('q');
+      root
+        .generation({ requestedModel: 'm', messages })
+        .end({ error: 'The API answered 503.' });
+      root.generation({ requestedModel: 'm', messages });
+      tracer.abort(INTERRUPTED);
+      await tracer.flush();
+      const generations = exporter
+        .getFinishedSpans()
+        .filter((s) => s.name === 'generate-response');
+      expect(generations).toHaveLength(2);
+      for (const g of generations) {
+        expect(json(g, 'langfuse.observation.metadata.final_answer')).toBe(
+          false,
+        );
+      }
+    });
+
+    it('sits beside the finish reason, the retries and the counts that did not fit', async () => {
+      const generation = tracer
+        .root('q')
+        .generation({ requestedModel: 'm', messages });
+      generation.retried();
+      generation.end({
+        model: 'm',
+        text: 'a',
+        final: true,
+        finishReason: 'stop',
+        usage: {
+          promptTokens: 25,
+          completionTokens: 122,
+          totalTokens: 147,
+          reasoningTokens: 128,
+        },
+      });
+      const g = await span('generate-response');
+      const metadata = (key: string) =>
+        json(g, `langfuse.observation.metadata.${key}`);
+      expect([
+        metadata('final_answer'),
+        metadata('finish_reason'),
+        metadata('retries'),
+        metadata('reasoning_tokens'),
+      ]).toEqual([true, 'stop', 1, 128]);
+    });
+
+    it('is on no observation but the generations', async () => {
+      const root = tracer.root('q');
+      root
+        .generation({ requestedModel: 'm', messages })
+        .end({ model: 'm', text: 'a', final: true });
+      root.tool({ name: 'calculate', arguments: '{}' }).end({
+        output: '1',
+        failed: false,
+      });
+      root.end({ answer: 'a' });
+      await tracer.flush();
+      for (const s of exporter.getFinishedSpans()) {
+        if (s.name !== 'generate-response') {
+          expect(
+            s.attributes['langfuse.observation.metadata.final_answer'],
+          ).toBeUndefined();
+        }
+      }
+    });
+  });
+
   it('records no retries when there were none', async () => {
     tracer
       .root('q')
