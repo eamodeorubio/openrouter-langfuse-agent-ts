@@ -119,7 +119,7 @@ jobs:
       pull-requests: write
     steps:
       # A token other than GITHUB_TOKEN lets the release PR trigger CI.
-      - uses: googleapis/release-please-action@v4
+      - uses: googleapis/release-please-action@v5
         with:
           token: ${{ secrets.RELEASE_PLEASE_TOKEN || secrets.GITHUB_TOKEN }}
           config-file: release-please-config.json
