@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import fc from 'fast-check';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { loadConfig, resolveConfig } from '../src/config.js';
+import { loadConfig, resolveConfig, unreadable } from '../src/config.js';
 import { ConfigError } from '../src/errors.js';
 
 const flags = (model?: string) => ({ question: undefined, model });
@@ -38,7 +38,7 @@ describe('resolveConfig', () => {
 
   it('names both model sources when there is no model', () => {
     expect(() => resolveConfig(flags(), { OPENROUTER_API_KEY: 'k' })).toThrow(
-      /--model.*OPENROUTER_MODEL/s,
+      /OPENROUTER_MODEL.*--model/s,
     );
   });
 
@@ -333,5 +333,17 @@ describe('resolveConfig, Langfuse tracing', () => {
     expect(() => resolveConfig(flags(), { LANGFUSE_PUBLIC_KEY: 'pk' })).toThrow(
       /OPENROUTER_API_KEY/,
     );
+  });
+});
+
+describe('unreadable', () => {
+  it.each([
+    ['EACCES', 'permission denied'],
+    ['EPERM', 'permission denied'],
+    ['EISDIR', 'it is a directory'],
+    ['ELOOP', 'it could not be opened'],
+    [undefined, 'it could not be opened'],
+  ])('puts %s in the words of a person', (code, words) => {
+    expect(unreadable(code)).toBe(words);
   });
 });

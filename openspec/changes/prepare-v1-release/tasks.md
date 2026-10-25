@@ -16,15 +16,15 @@ Pull request title: `feat: publish the CLI to npm, with --help, --version and cl
 
 ## 2. Slice 2: errors that say how to fix them (`feat:`)
 
-- [ ] 2.1 Write the failing integration test: run the CLI under each condition in the `error-guidance` tables (usage, configuration) and assert stderr, stdout, the exit code and that no request was sent. Include the missing model, with and without `--json`. Add the unexpected failure with a thrown `TypeError`, with and without `--verbose` and `--json`, and the 502 with an HTML body. Covers Cause and remedy, Usage error messages, Configuration error messages, No implementation details. Verify it fails on the old wording.
-- [ ] 2.2 Write the failing unit tests for `args.ts`: each parser failure maps to its message, the flag name is taken from the error, and an unknown parser code falls back to the parser's message. Add a property test: for any argument list, a failure is a `UsageError` with a non-empty message that never holds `--q`. Covers Usage error messages.
-- [ ] 2.3 Write the failing unit tests for `config.ts` and `input.ts`: the exact messages of the tables. Covers Configuration error messages.
-- [ ] 2.4 Write the failing unit tests for the remedies: for each row of Remedies for service errors, a fake server or `nock` reply gives the status, and stderr ends with the remedy on the same line. Add a property test: for any status and message, the line holds no newline and no key. Covers Remedies for service errors.
-- [ ] 2.4b Write the failing unit tests for `classify.ts` and `failures.ts`: for any thrown value the unexpected message is fixed and holds none of its text (property test, with hostile values kept as examples); each row of Messages replaced maps from its failure; the `detail:` line appears only with `--verbose` and without `--json`. Covers No implementation details.
-- [ ] 2.5 Rewrite the messages in `args.ts`, `input.ts`, `config.ts`, `failures.ts`, `classify.ts`, `ask.ts`, `version.ts`, `cli.ts`, `tracing/credentials.ts` and `tracing/langfuse.ts`. Verify 2.1 to 2.4b pass, and update the old tests that pin the old wording.
-- [ ] 2.6 Document the messages and their fixes in a troubleshooting section of the usage guide. Verify `pnpm docs:build` passes.
-- [ ] 2.7 Run `pnpm check`, `pnpm typecheck`, `pnpm test`, and `pnpm mutation`. Handle every survivor.
-- [ ] 2.8 Run `reviewer-code-high`, `reviewer-code-low`, `reviewer-docs`. Fix every must-fix finding.
+- [x] 2.1 Write the failing integration test: run the CLI under each condition in the `error-guidance` tables (usage, configuration) and assert stderr, stdout, the exit code and that no request was sent. Include the missing model, with and without `--json`. Add the unexpected failure with a thrown `TypeError`, with and without `--verbose` and `--json`, and the 502 with an HTML body. Covers Cause and remedy, Usage error messages, Configuration error messages, No implementation details. Verify it fails on the old wording.
+- [x] 2.2 Write the failing unit tests for `args.ts`: each parser failure maps to its message, the flag name is taken from the error, and an unknown parser code falls back to the parser's message. Add a property test: for any argument list, a failure is a `UsageError` with a non-empty message that never holds `--q`. Covers Usage error messages.
+- [x] 2.3 Write the failing unit tests for `config.ts` and `input.ts`: the exact messages of the tables. Covers Configuration error messages.
+- [x] 2.4 Write the failing unit tests for the remedies: for each row of Remedies for service errors, a fake server or `nock` reply gives the status, and stderr ends with the remedy on the same line. Add a property test: for any status and message, the line holds no newline and no key. Covers Remedies for service errors.
+- [x] 2.4b Write the failing unit tests for `classify.ts` and `failures.ts`: for any thrown value the unexpected message is fixed and holds none of its text (property test, with hostile values kept as examples); each row of Messages replaced maps from its failure; the `detail:` line appears only with `--verbose` and without `--json`. Covers No implementation details.
+- [x] 2.5 Rewrite the messages in `args.ts`, `input.ts`, `config.ts`, `failures.ts`, `classify.ts`, `ask.ts`, `version.ts`, `cli.ts`, `tracing/credentials.ts` and `tracing/langfuse.ts`. Verify 2.1 to 2.4b pass, and update the old tests that pin the old wording.
+- [x] 2.6 Document the messages and their fixes in a troubleshooting section of the usage guide. Verify `pnpm docs:build` passes.
+- [x] 2.7 Run `pnpm check`, `pnpm typecheck`, `pnpm test`, and `pnpm mutation`. Handle every survivor.
+- [x] 2.8 Run `reviewer-code-high`, `reviewer-code-low`, `reviewer-docs`. Fix every must-fix finding.
 - [ ] 2.9 Write the full report. Wait for approval, which also approves the commit. Commit `feat: tell the user how to fix a failed run`.
 
 ## 3. Slice 3: publish to npm (`feat:`)
@@ -53,5 +53,5 @@ Pull request title: `feat: publish the CLI to npm, with --help, --version and cl
 
 ## Workflow follow-up
 
-- Before the release pull request is merged, the maintainer creates the `NPM_TOKEN` secret.
-- After 1.0.0 is published, open a `chore:` pull request that removes `release-as`, `bump-minor-pre-major` and `bump-patch-for-minor-pre-major`.
+- The `NPM_TOKEN` secret exists and expires seven days after creation. Merge the release pull request, and then the trusted-publisher chore, before it lapses. If it lapses first, the maintainer issues a new token.
+- After 1.0.0 is published, open a `chore:` pull request that removes `release-as`, `bump-minor-pre-major` and `bump-patch-for-minor-pre-major`, and switches the publish step to npm trusted publishing: configure the trusted publisher for `ask-openrouter` on npmjs.com (this repository, the workflow file, the environment if any), drop the `NPM_TOKEN` secret and `NODE_AUTH_TOKEN` from `ci.yml`, keep `id-token: write`, and delete the secret once a release has published without it.

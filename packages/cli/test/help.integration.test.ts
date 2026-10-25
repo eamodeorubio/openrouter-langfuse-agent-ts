@@ -131,19 +131,22 @@ describe('--version', () => {
     expect(result.code).toBe(2);
     expect(result.stdout).toBe('');
     expect(result.stderr.trimEnd()).not.toContain('\n');
-    expect(result.stderr).toContain('package.json');
+    expect(result.stderr).toBe(
+      'Cannot tell which version of ask-openrouter this is. Reinstall it.\n',
+    );
   });
 });
 
 describe('--version with a manifest that holds no version', () => {
-  it('says so, in the words of the reader', async () => {
+  it('says it cannot tell the version', async () => {
     const file = join(dir, 'empty.json');
     await writeFile(file, '{"name":"x"}');
     const result = await cli(['--version'], { manifest: pathToFileURL(file) });
     expect(result).toEqual({
       code: 2,
       stdout: '',
-      stderr: 'package.json holds no version.\n',
+      stderr:
+        'Cannot tell which version of ask-openrouter this is. Reinstall it.\n',
     });
   });
 });

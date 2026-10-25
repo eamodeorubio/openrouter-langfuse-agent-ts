@@ -8,7 +8,7 @@ import { helpText } from './help.js';
 import { readQuestion, type Stdin } from './input.js';
 import { serialize } from './output.js';
 import { createPresenter } from './present.js';
-import { redactAll } from './text.js';
+import { oneLine, redactAll } from './text.js';
 import { openTracer, type TracingOptions } from './tracing/create.js';
 import { INTERRUPTED, NO_TRACER, type Tracer } from './tracing/tracer.js';
 import type { Sink } from './types.js';
@@ -134,6 +134,8 @@ const execute = async (
 ): Promise<number> => {
   let config: Config | undefined;
   let presenter: ReturnType<typeof createPresenter> | undefined;
+  // Stryker disable next-line BooleanLiteral: equivalent because only an unexpected failure has a detail to show, and none can happen before the arguments are parsed.
+  let verbose = false;
   // Arguments that do not parse still get the format they asked for. Once
   // parsed, they have the last word: `-q --json` is a question, not a flag.
   if (argv.includes('--json')) {
@@ -144,6 +146,7 @@ const execute = async (
     if (!args.json) {
       session.collector = undefined;
     }
+    verbose = args.verbose;
     config = await loadConfig(args, env, io.cwd);
     if (config.langfuse) {
       session.tracer = await openTracer(
@@ -196,6 +199,11 @@ const execute = async (
           ? `${message}\n\n${helpText(await versionOf(io))}`
           : `${message}\n`,
       );
+      if (verbose && failure.detail !== undefined) {
+        io.stderr.write(
+          `detail: ${redactAll(oneLine(failure.detail), secretsOf(config))}\n`,
+        );
+      }
     }
     return failure.exit;
   }

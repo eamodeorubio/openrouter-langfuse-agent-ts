@@ -36,23 +36,23 @@ describe('readVersion', () => {
       ['has no version', '{"name":"x"}'],
       ['has a version that is not text', '{"version":5}'],
       ['has a blank version', '{"version":"  "}'],
-    ])('says it holds no version when it %s', async (_n, body) => {
+    ])('says it cannot tell the version when the file %s', async (_n, body) => {
       await writeFile(join(dir, 'p.json'), body);
       await expect(readVersion(at('p.json'))).rejects.toThrow(
-        'package.json holds no version.',
+        'Cannot tell which version of ask-openrouter this is. Reinstall it.',
       );
     });
 
-    it('says it cannot read the file when it is not JSON', async () => {
+    it('says it cannot tell the version when the file is not JSON', async () => {
       await writeFile(join(dir, 'p.json'), 'nope');
       await expect(readVersion(at('p.json'))).rejects.toThrow(
-        'Cannot read package.json.',
+        'Cannot tell which version of ask-openrouter this is. Reinstall it.',
       );
     });
 
-    it('says it cannot read the file when it is missing', async () => {
+    it('says it cannot tell the version when the file is missing', async () => {
       await expect(readVersion(at('missing.json'))).rejects.toThrow(
-        'Cannot read package.json.',
+        'Cannot tell which version of ask-openrouter this is. Reinstall it.',
       );
     });
   });

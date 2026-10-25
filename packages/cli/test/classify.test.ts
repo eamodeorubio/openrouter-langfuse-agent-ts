@@ -33,24 +33,42 @@ describe('classify', () => {
     expect(new TimeoutError('x')).toBeInstanceOf(ApiError);
   });
 
-  it.each([
-    ['an Error', new Error('boom'), 'Unexpected error: boom'],
-    ['a string', 'boom', 'Unexpected error: boom'],
-  ])('maps %s to UNEXPECTED_ERROR with exit 2', (_name, error, message) => {
-    expect(classify(error)).toEqual({
-      code: 'UNEXPECTED_ERROR',
-      exit: 2,
-      message,
-    });
-  });
+  const UNEXPECTED =
+    'Something went wrong inside ask-openrouter. Try again. If it keeps happening, report it at https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues, with the output of --verbose.';
 
-  it('survives a thrown value that cannot become text', () => {
-    // Found by the property below: String() throws on it.
-    expect(classify({ toString: 0 })).toEqual({
-      code: 'UNEXPECTED_ERROR',
-      exit: 2,
-      message: 'Unexpected error: a value that cannot be shown',
-    });
+  it.each([
+    ['an Error', new Error('boom'), 'boom'],
+    ['a string', 'boom', 'boom'],
+    [
+      'a value that cannot become text',
+      { toString: 0 },
+      'a value that cannot be shown',
+    ],
+  ])(
+    'maps %s to UNEXPECTED_ERROR with exit 2, a fixed message and the reason as detail',
+    (_name, error, detail) => {
+      expect(classify(error)).toEqual({
+        code: 'UNEXPECTED_ERROR',
+        exit: 2,
+        message: UNEXPECTED,
+        detail,
+      });
+    },
+  );
+
+  it('keeps what was thrown out of the message, for any thrown value', () => {
+    fc.assert(
+      fc.property(fc.anything(), (thrown) => {
+        expect(classify(thrown).message).toBe(UNEXPECTED);
+      }),
+    );
+    fc.assert(
+      fc.property(fc.string({ minLength: 1 }), (reason) => {
+        const failure = classify(new Error(reason));
+        expect(failure.message).toBe(UNEXPECTED);
+        expect(failure.detail).toBe(reason);
+      }),
+    );
   });
 
   it('gives a code of capital letters and underscores and an exit code of 1 to 3, for any thrown value', () => {

@@ -916,7 +916,7 @@ describe('flushing', () => {
     });
     failing.root('q').end({ answer: 'a' });
     await expect(failing.flush()).rejects.toThrow(
-      'The trace could not be delivered to Langfuse and may be incomplete.',
+      'The trace could not be delivered to Langfuse and may be incomplete. Check the Langfuse settings and try again.',
     );
   });
 

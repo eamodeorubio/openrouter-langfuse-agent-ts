@@ -5,6 +5,7 @@ import {
   TimeoutError,
   UsageError,
 } from './errors.js';
+import { COMMAND } from './help.js';
 
 export const EXIT_OK = 0;
 export const EXIT_USAGE_OR_CONFIG = 1;
@@ -17,7 +18,15 @@ export interface Failure {
   code: string;
   exit: number;
   message: string;
+  /** The reason behind an unexpected failure, for the user who asks for it with `--verbose`. Never in the JSON object. */
+  detail?: string;
 }
+
+const ISSUES =
+  'https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues';
+
+/** What an unexpected failure says: nothing about the program's insides. */
+export const UNEXPECTED_MESSAGE = `Something went wrong inside ${COMMAND}. Try again. If it keeps happening, report it at ${ISSUES}, with the output of --verbose.`;
 
 /** The words for anything that was thrown, even a value that cannot become text. */
 const reasonOf = (error: unknown): string => {
@@ -62,6 +71,7 @@ export const classify = (error: unknown): Failure => {
   return {
     code: 'UNEXPECTED_ERROR',
     exit: EXIT_API,
-    message: `Unexpected error: ${reasonOf(error)}`,
+    message: UNEXPECTED_MESSAGE,
+    detail: reasonOf(error),
   };
 };

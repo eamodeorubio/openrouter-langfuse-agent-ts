@@ -198,7 +198,9 @@ describe('rounds until the model answers', () => {
   it('fails a round of tool calls that has no token usage', async () => {
     api.reply(200, toolRound([call('c1', 'a/b')], { usage: null }));
     await expect(events()).rejects.toThrow(
-      new ApiError('The API response held no token usage.'),
+      new ApiError(
+        "OpenRouter's reply did not report how many tokens it used. Try again, or choose another model.",
+      ),
     );
   });
 
@@ -208,7 +210,9 @@ describe('rounds until the model answers', () => {
       toolRound([{ id: '', name: 'get_model', arguments: '{"slug":"a/b"}' }]),
     );
     await expect(events()).rejects.toThrow(
-      new ApiError('The API response held a tool call without an id.'),
+      new ApiError(
+        'The model asked to use a tool in a way this tool cannot follow. Try again, or choose another model.',
+      ),
     );
     expect(chats()).toHaveLength(1);
     expect(gets()).toHaveLength(0);
@@ -223,7 +227,9 @@ describe('rounds until the model answers', () => {
       ]),
     );
     await expect(events()).rejects.toThrow(
-      new ApiError('The API response held a tool call without an id.'),
+      new ApiError(
+        'The model asked to use a tool in a way this tool cannot follow. Try again, or choose another model.',
+      ),
     );
     expect(gets()).toHaveLength(0);
   });
@@ -233,7 +239,9 @@ describe('rounds until the model answers', () => {
     api.replyGet('/model/a/b', 200, model('a/b'));
     api.reply(200, sseBody(usageChunk()));
     await expect(events()).rejects.toThrow(
-      new ApiError('The API response held no answer.'),
+      new ApiError(
+        'The model returned no answer. Try again, or choose another model.',
+      ),
     );
   });
 });

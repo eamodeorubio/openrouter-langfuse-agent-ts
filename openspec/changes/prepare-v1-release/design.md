@@ -14,7 +14,7 @@ The CLI compiles with `tsc` to `dist/`, and `src/index.ts` is the entry point. `
 **Non-Goals:**
 - A shorter bin alias, a scoped package name, or a bundler.
 - Changing any flag, output or exit code.
-- Trusted publishing through OIDC. It needs the package to exist first.
+- Trusted publishing through OIDC in this change. It needs the package to exist first, so it is the first follow-up after 1.0.0.
 
 ## Decisions
 
@@ -34,7 +34,7 @@ The CLI compiles with `tsc` to `dist/`, and `src/index.ts` is the entry point. `
 **The shebang goes in the source.** `tsc` keeps a leading `#!` line, and `tsx` runs it. The executable bit is set by the package manager at install from `bin`.
 
 **Publish in the existing release job.** Release Please exposes `releases_created` and `packages/cli--release_created`. A second step, gated on that output, installs, builds, checks the pack list and runs `pnpm publish --provenance --access public --no-git-checks` with `NODE_AUTH_TOKEN` from the `NPM_TOKEN` secret. The job gains `id-token: write` for provenance. The step runs in the same job as the release so that it needs no second trigger. A tag-triggered workflow would not fire when the tag comes from the default token.
-*Alternative:* OIDC trusted publishing, with no token. It is better, and it needs a package that already exists on npm. Moving to it after 1.0.0 is a one-step change.
+*Alternative:* OIDC trusted publishing, with no token. It is better, and it needs a package that already exists on npm. The follow-up chore after 1.0.0 moves to it: the job already has `id-token: write`, so the change is the npm-side configuration and dropping the token.
 
 **Reach 1.0.0 with `release-as`.** `bump-minor-pre-major` turns even a breaking change into 0.6.0 while the version is below 1. A `Release-As: 1.0.0` footer would have to survive the squash merge. The config key is visible and reviewable. It stays until 1.0.0 is out, then a `chore:` pull request removes it; left in place, it would hold every later release at 1.0.0. The same pull request drops `bump-minor-pre-major` and `bump-patch-for-minor-pre-major`, which no longer apply.
 
@@ -51,7 +51,7 @@ The CLI compiles with `tsc` to `dist/`, and `src/index.ts` is the entry point. `
 ## Risks / Trade-offs
 
 - [First publish fails, or the name is taken between now and then] → The name was free at proposal time. A failed publish fails the job and the release PR is already merged; the fix is a rerun of the publish step with the token corrected.
-- [`NPM_TOKEN` missing] → The step fails loudly. The maintainer creates the secret before merging the release pull request. The task list says so.
+- [`NPM_TOKEN` missing or expired] → The step fails loudly. The secret exists and expires seven days after creation, so the release and the switch to trusted publishing must both happen inside that window. If the token lapses first, the maintainer issues a new one.
 - [A remedy that is wrong, such as 404 for a cause other than the slug] → The 404 remedy is conditional ("If the model is unknown"), and the API's own text stays first.
 - [A leaked or over-broad token] → Use an automation token limited to this package, and move to OIDC after 1.0.0.
 - [`release-as` left in] → A task and a note in the pull request. A spec scenario covers the removal.
@@ -61,9 +61,9 @@ The CLI compiles with `tsc` to `dist/`, and `src/index.ts` is the entry point. `
 ## Migration Plan
 
 1. Merge this pull request.
-2. Create the `NPM_TOKEN` secret.
+2. Check that the `NPM_TOKEN` secret is still valid. It expires seven days after creation.
 3. Merge the release pull request that proposes 1.0.0. The job tags, releases and publishes.
 4. Check `npx ask-openrouter --help` from a clean directory.
-5. Open a `chore:` pull request that removes `release-as`.
+5. Open a `chore:` pull request that removes `release-as` and switches the publish step to trusted publishing, then deletes the `NPM_TOKEN` secret.
 
 Rollback: `npm deprecate` the version and release a patch. Unpublishing is not planned.

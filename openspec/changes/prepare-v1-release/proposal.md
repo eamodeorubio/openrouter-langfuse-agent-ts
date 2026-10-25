@@ -36,6 +36,6 @@ No existing behavior breaks. The CLI flags, output and exit codes are unchanged.
 - `packages/cli/package.json`, `packages/cli/src/index.ts` (shebang), `packages/cli/src/args.ts`, `packages/cli/src/cli.ts`, a new help module, a pack script.
 - `.github/workflows/ci.yml` (publish step), `release-please-config.json` (`release-as`), `.gitignore`.
 - `README.md`, `docs/src/content/docs/*`, `docs/astro.config.mjs` (sidebar).
-- Needs an `NPM_TOKEN` repository secret before the first release. The maintainer creates it.
+- Uses the `NPM_TOKEN` repository secret for the first release. The maintainer has created it, and it expires seven days after creation, so the move to trusted publishing must land before then.
 - `packages/cli/src/args.ts`, `config.ts`, `input.ts`, `failures.ts`, `tracing/credentials.ts` and `tracing/langfuse.ts` (message wording only).
 - The tests that read the usage text change to read the help text.

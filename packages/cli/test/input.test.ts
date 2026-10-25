@@ -36,9 +36,7 @@ describe('readQuestion', () => {
 
   it('does not read a terminal', async () => {
     const { source, state } = stdin('typed', true);
-    await expect(readQuestion(undefined, source)).rejects.toThrow(
-      /Pass -q or pipe/,
-    );
+    await expect(readQuestion(undefined, source)).rejects.toThrow(/pipe it in/);
     expect(state.reads).toBe(0);
   });
 

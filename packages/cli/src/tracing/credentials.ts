@@ -1,6 +1,9 @@
 import type { LangfuseConfig } from '../config.js';
 import { ApiError } from '../errors.js';
 
+const CHECK_SETTINGS =
+  ' Check LANGFUSE_BASE_URL and the network, or unset the three LANGFUSE_ variables to run without tracing.';
+
 /** The longest the check may wait for Langfuse. */
 export const CHECK_TIMEOUT_MS = 10_000;
 
@@ -26,8 +29,8 @@ export const checkCredentials = async (
   } catch (error) {
     throw new ApiError(
       error instanceof Error && error.name === 'TimeoutError'
-        ? `Langfuse at ${baseUrl} did not answer within ${timeoutMs / 1000} s.`
-        : `Cannot reach Langfuse at ${baseUrl}.`,
+        ? `Langfuse at ${baseUrl} did not answer within ${timeoutMs / 1000} s.${CHECK_SETTINGS}`
+        : `Cannot reach Langfuse at ${baseUrl}.${CHECK_SETTINGS}`,
     );
   }
   await response.body?.cancel();
@@ -37,6 +40,6 @@ export const checkCredentials = async (
   throw new ApiError(
     response.status === 401 || response.status === 403
       ? `Langfuse rejected the keys (HTTP ${response.status}). Check LANGFUSE_PUBLIC_KEY, LANGFUSE_SECRET_KEY and LANGFUSE_BASE_URL.`
-      : `Langfuse at ${baseUrl} answered HTTP ${response.status}.`,
+      : `Langfuse at ${baseUrl} answered HTTP ${response.status}.${CHECK_SETTINGS}`,
   );
 };

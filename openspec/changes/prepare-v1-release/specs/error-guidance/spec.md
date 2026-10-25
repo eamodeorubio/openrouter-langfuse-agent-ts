@@ -39,7 +39,7 @@ The CLI SHALL give these messages for configuration errors, and no request SHALL
 | --- | --- |
 | No `OPENROUTER_API_KEY` | `OPENROUTER_API_KEY is not set. Set it in the environment or in a .env file in the current directory. Get a key at https://openrouter.ai/keys.` |
 | No `--model` and no `OPENROUTER_MODEL` | `No model given. Set OPENROUTER_MODEL in the environment or in a .env file in the current directory, or pass --model <model>. A model is a slug such as openai/gpt-4o-mini; models are listed at https://openrouter.ai/models.` |
-| `.env` exists and cannot be read | `Cannot read .env in the current directory (<code>). Fix its permissions, or remove it and set the variables in the environment.` |
+| `.env` exists and cannot be read | `Cannot read .env in the current directory: <reason>. Fix its permissions, or remove it and set the variables in the environment.` |
 | Some of the three `LANGFUSE_` variables | `Langfuse tracing is half configured: <names> not set. Set all three, or none to run without tracing.` |
 | Bad `LANGFUSE_BASE_URL` | the message names the variable and the form it accepts |
 | Bad `LANGFUSE_TRACING_ENVIRONMENT` | the message names the variable and the form it accepts |
@@ -57,10 +57,12 @@ An error message SHALL speak of the user's arguments, settings, input, network a
 | --- | --- |
 | `Unexpected error: <text of whatever was thrown>` | `Something went wrong inside ask-openrouter. Try again. If it keeps happening, report it at https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues, with the output of --verbose.` |
 | `Request failed: <client library text>` | `Cannot reach OpenRouter. Check your network connection and try again.` |
+| `Request failed: <client library text>`, when the request timed out | `The request to OpenRouter timed out. Try again, or choose another model.` |
 | `Stream failed: <client library text>` | `The connection to OpenRouter dropped before the answer was complete.` |
 | `The API response did not have the expected shape.` | `OpenRouter sent a reply this tool could not read.` |
 | `The API response held no answer.` | `The model returned no answer.` |
-| `The API response held no token usage.` or `held a tool call without an id.` | `OpenRouter's reply was incomplete.` |
+| `The API response held no token usage.` | `OpenRouter's reply did not report how many tokens it used.` |
+| `The API response held a tool call without an id.` | `The model asked to use a tool in a way this tool cannot follow.` |
 | `Cannot read package.json.` or `package.json holds no version.` | `Cannot tell which version of ask-openrouter this is. Reinstall it.` |
 | `Cannot read .env … (EACCES)` | `Cannot read .env in the current directory: <reason>. Fix its permissions, or remove it and set the variables in the environment.` where `<reason>` is `permission denied`, `it is a directory`, or `it could not be opened` |
 
@@ -101,7 +103,7 @@ A failure that the user can act on SHALL end with a remedy on the same line, aft
 | API status 404 | ` If the model is unknown, check the slug passed with --model or set in OPENROUTER_MODEL.` |
 | API status 429, retries spent | ` Wait a moment and try again.` |
 | API status 5xx, retries spent | ` OpenRouter is having trouble. Try again later.` |
-| Stream idle timeout | ` Try again, or choose another model.` |
+| Request or stream timeout | ` Try again, or choose another model.` |
 | Response without answer, tool call id or usage, or of the wrong shape | ` Try again, or choose another model.` |
 | Langfuse unreachable, timed out, or answered with another status | ` Check LANGFUSE_BASE_URL and the network, or unset the three LANGFUSE_ variables to run without tracing.` |
 | Trace not delivered | ` Check the Langfuse settings and try again.` |

@@ -474,7 +474,8 @@ describe('--json on failure', () => {
       success: false,
       error: {
         code: 'UNEXPECTED_ERROR',
-        message: 'Unexpected error: stdin broke',
+        message:
+          'Something went wrong inside ask-openrouter. Try again. If it keeps happening, report it at https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues, with the output of --verbose.',
       },
     });
   });

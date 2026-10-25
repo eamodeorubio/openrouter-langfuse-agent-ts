@@ -346,7 +346,7 @@ describe('ask: a server that answers without streaming', () => {
     async (_name, body) => {
       reply(200, body);
       expect((await failure()).message).toBe(
-        'The API response held no answer.',
+        'The model returned no answer. Try again, or choose another model.',
       );
     },
   );
@@ -359,7 +359,7 @@ describe('ask: a server that answers without streaming', () => {
     async (_name, overrides) => {
       reply(200, { ...recordedCompletion, ...overrides });
       expect((await failure()).message).toBe(
-        'The API response did not have the expected shape.',
+        'OpenRouter sent a reply this tool could not read. Try again, or choose another model.',
       );
     },
   );
@@ -367,7 +367,9 @@ describe('ask: a server that answers without streaming', () => {
   it('rejects a complete response without usage', async () => {
     reply(200, { ...recordedCompletion, usage: undefined });
     const { events, message: text } = await failure();
-    expect(text).toBe('The API response held no token usage.');
+    expect(text).toBe(
+      "OpenRouter's reply did not report how many tokens it used. Try again, or choose another model.",
+    );
     expect(events.map((e) => e.kind)).toEqual(['thinking', 'content']);
   });
 });
@@ -379,7 +381,9 @@ describe('ask: failures inside the stream', () => {
       sseBody(contentChunk('Hel'), errorChunk(500, 'provider failed')),
     );
     const { events, message } = await failure();
-    expect(message).toBe('API error 500: provider failed');
+    expect(message).toBe(
+      'API error 500: provider failed OpenRouter is having trouble. Try again later.',
+    );
     expect(events).toEqual([{ kind: 'content', text: 'Hel' }]);
   });
 
@@ -400,7 +404,7 @@ describe('ask: failures inside the stream', () => {
       sseBody(contentChunk(''), usageChunk(USAGE)),
       /no answer/i,
     ],
-    ['an answer and no usage', sseBody(contentChunk('42')), /token usage/i],
+    ['an answer and no usage', sseBody(contentChunk('42')), /how many tokens/i],
   ])('rejects a stream with %s', async (_name, body, message) => {
     reply(200, body);
     expect((await failure()).message).toMatch(message);
@@ -415,7 +419,7 @@ describe('ask: failures inside the stream', () => {
   it('turns a 200 body the SDK cannot parse into an API error without the validation dump', async () => {
     serveAlways(200, { error: { code: 502, message: 'provider down' } });
     expect((await failure()).message).toBe(
-      'The API response did not have the expected shape.',
+      'OpenRouter sent a reply this tool could not read. Try again, or choose another model.',
     );
     expect(api.sent.length).toBe(1);
   });
@@ -429,7 +433,9 @@ describe('ask: failures inside the stream', () => {
     async (_name, data) => {
       serveAlways(200, `data: ${data}\n\n${DONE}`);
       const { message } = await failure();
-      expect(message).toBe('The API response did not have the expected shape.');
+      expect(message).toBe(
+        'OpenRouter sent a reply this tool could not read. Try again, or choose another model.',
+      );
       expect(api.sent).toHaveLength(1);
       expect(waits).toEqual([]);
     },
@@ -521,7 +527,9 @@ describe('ask: a stream that is cut off or goes quiet', {
       },
       async (serverURL) => {
         const { events, message } = await failure(options(serverURL));
-        expect(message).toBe('Request timed out: no data for 0.3 s.');
+        expect(message).toBe(
+          'Request timed out: no data for 0.3 s. Try again, or choose another model.',
+        );
         expect(events).toEqual([]);
         expect(Date.now() - started).toBeGreaterThanOrEqual(IDLE - 20);
         await eventually(() => hungUp);
@@ -585,7 +593,9 @@ describe('ask: a stream that is cut off or goes quiet', {
       },
       async (serverURL) => {
         const { events, message } = await failure(options(serverURL));
-        expect(message).toBe('Request timed out: no data for 0.3 s.');
+        expect(message).toBe(
+          'Request timed out: no data for 0.3 s. Try again, or choose another model.',
+        );
         expect(events).toEqual([{ kind: 'content', text: 'Hel' }]);
         await eventually(() => hungUp);
       },
@@ -608,7 +618,9 @@ describe('ask: a stream that is cut off or goes quiet', {
       },
       async (serverURL) => {
         const { message } = await failure(options(serverURL));
-        expect(message).toBe('API error 500: provider failed');
+        expect(message).toBe(
+          'API error 500: provider failed OpenRouter is having trouble. Try again later.',
+        );
         await eventually(() => hungUp);
       },
     );
@@ -647,7 +659,9 @@ describe('ask: a stream that is cut off or goes quiet', {
       },
       async (serverURL) => {
         const { events, message } = await failure(options(serverURL));
-        expect(message).toMatch(/^Stream failed: \S/);
+        expect(message).toMatch(
+          /^The connection to OpenRouter dropped before the answer was complete\.$/,
+        );
         expect(message).not.toMatch(/[\r\n]/);
         expect(events).toEqual([{ kind: 'content', text: 'Hel' }]);
       },
