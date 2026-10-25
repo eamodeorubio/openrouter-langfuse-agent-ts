@@ -21,7 +21,7 @@ Commit type `feat:`. PR title `feat: add a --json flag for machine-readable outp
 ## 2. Archive
 
 - [x] 2.1 Verify the change with `/opsx:verify` and fix what it finds.
-- [ ] 2.2 Once the user approves, archive it as `chore: archive add-json-output`, as the last commit before merge.
+- [x] 2.2 Once the user approves, archive it as `chore: archive add-json-output`, as the last commit before merge.
 
 ## Workflow follow-up
 
