@@ -1,6 +1,6 @@
 # ask-openrouter
 
-[![CI](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/blob/main/LICENSE)
+[![npm](https://img.shields.io/npm/v/ask-openrouter.svg)](https://www.npmjs.com/package/ask-openrouter) [![CI](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/actions/workflows/ci.yml/badge.svg)](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/blob/main/LICENSE)
 
 Picking a model on [OpenRouter](https://openrouter.ai) means choosing among hundreds of options, each with its own price, context window and strengths. The cheapest listed price is rarely the cheapest way to do your job. `ask-openrouter` is a small command-line tool that answers your questions about OpenRouter and helps you find the model that does your job at the lowest cost.
 

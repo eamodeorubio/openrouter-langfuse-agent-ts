@@ -4,10 +4,7 @@
     "packages/cli": {
       "release-type": "node",
       "include-component-in-tag": false,
-      "bump-minor-pre-major": true,
-      "bump-patch-for-minor-pre-major": false,
       "initial-version": "0.1.0",
-      "release-as": "1.0.0",
       "extra-files": [
         {
           "type": "generic",
