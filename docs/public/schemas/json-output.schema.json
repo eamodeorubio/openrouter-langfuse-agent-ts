@@ -17,6 +17,58 @@
           "type": "boolean",
           "const": true
         },
+        "model": {
+          "type": "string",
+          "description": "The model that served the final response."
+        },
+        "usage": {
+          "type": "object",
+          "properties": {
+            "promptTokens": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Prompt tokens, summed over every request."
+            },
+            "completionTokens": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Completion tokens, summed over every request."
+            },
+            "totalTokens": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Total tokens, summed over every request."
+            },
+            "reasoningTokens": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Tokens the model spent thinking. Present when at least one request reported them."
+            },
+            "cachedTokens": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 9007199254740991,
+              "description": "Prompt tokens the provider served from its cache. Present when at least one request reported them."
+            },
+            "cost": {
+              "type": "number",
+              "minimum": 0,
+              "description": "Cost in US dollars, summed over every request. Present only when every request reported one."
+            }
+          },
+          "required": [
+            "promptTokens",
+            "completionTokens",
+            "totalTokens"
+          ],
+          "additionalProperties": false,
+          "title": "Usage",
+          "description": "What the question used, over every request it took."
+        },
         "thinking": {
           "type": "string",
           "description": "The readable thinking of the model. Absent when there is none."
@@ -29,7 +81,9 @@
       "required": [
         "question",
         "answer",
-        "success"
+        "success",
+        "model",
+        "usage"
       ],
       "additionalProperties": false,
       "title": "Success",

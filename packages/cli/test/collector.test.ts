@@ -4,11 +4,8 @@ import { createCollector } from '../src/collector.js';
 import { outputSchema } from '../src/output.js';
 import type { AskEvent } from '../src/types.js';
 
-const done: AskEvent = {
-  kind: 'done',
-  model: 'm',
-  usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
-};
+const usage = { promptTokens: 1, completionTokens: 1, totalTokens: 2 };
+const done: AskEvent = { kind: 'done', model: 'm', usage };
 
 describe('createCollector', () => {
   it('builds the success object from the events', () => {
@@ -24,6 +21,8 @@ describe('createCollector', () => {
       question: '2+2',
       answer: '4',
       success: true,
+      model: 'm',
+      usage,
       thinking: 'Add.',
       traceId: 'abc',
     });
@@ -33,11 +32,51 @@ describe('createCollector', () => {
     const collector = createCollector();
     collector.setQuestion('q');
     collector.handle({ kind: 'content', text: 'a' });
-    expect(Object.keys(collector.success())).toEqual([
-      'question',
+    collector.handle(done);
+    expect(Object.keys(collector.success()).sort()).toEqual([
       'answer',
+      'model',
+      'question',
       'success',
+      'usage',
     ]);
+  });
+
+  it('leaves out the optional usage fields that were not reported, and keeps those that were', () => {
+    const collector = createCollector();
+    collector.setQuestion('q');
+    collector.handle({ kind: 'content', text: 'a' });
+    collector.handle({
+      kind: 'done',
+      model: 'm',
+      usage: {
+        ...usage,
+        reasoningTokens: 0,
+        cachedTokens: undefined,
+        cost: 0.5,
+      },
+    });
+    expect(collector.success()).toMatchObject({
+      usage: { ...usage, reasoningTokens: 0, cost: 0.5 },
+    });
+    expect('cachedTokens' in collector.success().usage).toBe(false);
+  });
+
+  it('gives the failure object neither model nor usage, even after a done event', () => {
+    const collector = createCollector();
+    collector.handle(done);
+    const failed = collector.failure({ code: 'API_ERROR', message: 'm' });
+    expect('model' in failed).toBe(false);
+    expect('usage' in failed).toBe(false);
+  });
+
+  it('refuses to build a success object before the run has been completed', () => {
+    const collector = createCollector();
+    collector.setQuestion('q');
+    collector.handle({ kind: 'content', text: 'a' });
+    expect(() => collector.success()).toThrow(
+      'A success object needs the completion of the run.',
+    );
   });
 
   it('builds the failure object with what is known', () => {
@@ -83,6 +122,7 @@ describe('createCollector', () => {
           for (const text of answer) {
             collector.handle({ kind: 'content', text });
           }
+          collector.handle(done);
           const object = collector.success();
           expect(
             outputSchema.parse(JSON.parse(JSON.stringify(object))),

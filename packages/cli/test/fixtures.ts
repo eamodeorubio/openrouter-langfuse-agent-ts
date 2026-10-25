@@ -17,6 +17,8 @@ interface Recorded {
     prompt_tokens: number;
     completion_tokens: number;
     total_tokens: number;
+    cost: number;
+    prompt_tokens_details: { cached_tokens: number };
   };
 }
 const recorded = recordedCompletion as unknown as Recorded;
@@ -27,6 +29,8 @@ export const RECORDED_USAGE = {
   promptTokens: recorded.usage.prompt_tokens,
   completionTokens: recorded.usage.completion_tokens,
   totalTokens: recorded.usage.total_tokens,
+  cachedTokens: recorded.usage.prompt_tokens_details.cached_tokens,
+  cost: recorded.usage.cost,
 };
 /** The reasoning tokens the recorded non-streamed response reports. */
 export const RECORDED_REASONING_TOKENS =
@@ -145,6 +149,8 @@ interface RecordedChunk {
     completion_tokens: number;
     total_tokens: number;
     completion_tokens_details?: { reasoning_tokens?: number };
+    prompt_tokens_details?: { cached_tokens?: number };
+    cost?: number;
   };
 }
 
@@ -170,6 +176,8 @@ export const RECORDED_STREAM_USAGE = {
   totalTokens: streamUsage?.total_tokens ?? 0,
   reasoningTokens:
     streamUsage?.completion_tokens_details?.reasoning_tokens ?? 0,
+  cachedTokens: streamUsage?.prompt_tokens_details?.cached_tokens ?? 0,
+  cost: streamUsage?.cost ?? 0,
 };
 
 // A streamed response that ends in two parallel `get_model` calls after signed

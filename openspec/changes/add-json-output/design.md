@@ -7,10 +7,13 @@
 ## Goals / Non-Goals
 
 **Goals:**
+- `model` and `usage` in the success object, from the data the run already has.
 - One place that decides the shape of the object and the error code of each failure.
 - The existing event stream stays the single source: the same `ask` feeds both modes.
 
 **Non-Goals:**
+- Changing the `model:` and `tokens:` lines of plain mode, or adding cost to them.
+- A per-request breakdown of the usage. The object reports the question, not each round.
 - Changing `ask`, the retry rules or the tracing.
 - Model and token counts in the object; they can be added later as fields without breaking readers.
 
@@ -28,7 +31,13 @@
 
 **A seam for the idle limit.** `Io` gains `idleTimeoutMs`, forwarded to `ask` like `serverURL`, so that a test can run the `TIMEOUT` path through `run` without waiting 60 s. The real entry point leaves it unset.
 
-**Silence.** In JSON mode `execute` skips `NOT_TRACED`, and the collector ignores `tool` events and `done`. `--verbose`, `--thinking` and `--no-thinking` are parsed, and then have no reader.
+**Silence.** In JSON mode `execute` skips `NOT_TRACED`, and the collector ignores `tool` events. `--verbose`, `--thinking` and `--no-thinking` are parsed, and then have no reader.
+
+**Model and usage come from the `done` event.** The collector keeps them as it keeps the trace id, and `success()` adds them. `failure()` ignores them, so the rule of the spec holds without a branch to remember. The alternative, passing the final completion to `success()` from `cli.ts`, would make `cli.ts` assemble the object, which the collector exists to avoid. A failed run ends without a `done` event, and a sum over the requests that finished would look complete when it is not.
+
+**`addUsage` keeps cached tokens and cost, with a rule per field.** It added prompt, completion, total and reasoning tokens and dropped `cachedTokens` and `cost`, which `chat.ts` reads from each response. Plain mode needed neither, so nothing noticed. Cached tokens follow the rule of reasoning tokens: absent when neither side has them, a sum otherwise. Cost is stricter: absent when either side lacks it. The sum in `ask.ts` starts from a zero usage that carries a zero cost, so that the first request's cost survives and a missing one anywhere removes it. A separate "all requests reported" flag would duplicate what the sum can say by itself. `formatStatus` reads the same fields as before.
+
+**`usage` is a strict nested object.** Three required counts and three optional fields, so the generated schema forbids stray fields as it does for the rest of the object. Counts are non-negative integers and the cost a non-negative number. Costs are added as they come, unrounded: rounding would hide digits the API gave and pick a precision for the caller, who can format dollars. Key order is not part of the contract; the tests compare parsed objects.
 
 **Zod is the source; the schema is generated.** `zod` is already a dependency of the CLI. The object is described once as a Zod schema: a discriminated union on `success`, strict objects, a regex on `error.code`. Zod 4 turns it into JSON Schema with `z.toJSONSchema`. The same Zod schema types the collector (`z.infer`), so the code, the type and the published schema cannot disagree. The reverse, a handwritten schema with generated types, needs a generator dependency and gives types only; Zod gives the types and the schema from one place with no new runtime dependency.
 
@@ -45,4 +54,7 @@
 - [Two JSON documents for one failed-flush run, one on each stream] → Documented in the spec; each stream still carries at most one object.
 - [Release Please might not rewrite the `$id` line] → Task 1.6a checks the config with a dry run before the slice is reported; if the updater cannot do it, stop and ask rather than pin by hand.
 - [`z.toJSONSchema` might not emit what the spec needs, such as `oneOf` and `additionalProperties: false`] → The tests validate the committed file with Ajv against the spec examples, so a gap shows up as a failing test.
+- [`cost` is rarely present if some requests omit it] → That is the point: an understated total is worse than none. The docs say when `cost` appears.
+- [A provider reports cost on the final request only] → The sum has no `cost`; the trace still holds the per-request costs.
+- [Floating-point noise in the last digits of a summed cost] → Documented; callers format dollars.
 - [Field names are a public contract from now on] → Kept few and plain; adding fields later is compatible.

@@ -16,11 +16,45 @@ const fields = {
     .describe('The Langfuse trace id. Absent when the run is not traced.'),
 };
 
+const count = z.number().int().nonnegative();
+
+const usage = z
+  .strictObject({
+    promptTokens: count.describe('Prompt tokens, summed over every request.'),
+    completionTokens: count.describe(
+      'Completion tokens, summed over every request.',
+    ),
+    totalTokens: count.describe('Total tokens, summed over every request.'),
+    reasoningTokens: count
+      .describe(
+        'Tokens the model spent thinking. Present when at least one request reported them.',
+      )
+      .optional(),
+    cachedTokens: count
+      .describe(
+        'Prompt tokens the provider served from its cache. Present when at least one request reported them.',
+      )
+      .optional(),
+    cost: z
+      .number()
+      .nonnegative()
+      .describe(
+        'Cost in US dollars, summed over every request. Present only when every request reported one.',
+      )
+      .optional(),
+  })
+  .meta({
+    title: 'Usage',
+    description: 'What the question used, over every request it took.',
+  });
+
 const success = z
   .strictObject({
     question: fields.question,
     answer: fields.answer,
     success: z.literal(true),
+    model: z.string().describe('The model that served the final response.'),
+    usage,
     thinking: fields.thinking.optional(),
     traceId: fields.traceId.optional(),
   })
@@ -69,6 +103,9 @@ export const outputSchema = z
   });
 
 export type JsonOutput = z.infer<typeof outputSchema>;
+
+/** The object of a run that ended with an answer. */
+export type SuccessOutput = Extract<JsonOutput, { success: true }>;
 
 /** The object as one line of JSON ended by a newline. */
 export const serialize = (output: JsonOutput): string =>

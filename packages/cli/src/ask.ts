@@ -23,10 +23,12 @@ const MAX_TOOL_ROUNDS = 8;
 /** The most one tool call may take in all. */
 const TOOL_TIMEOUT_MS = 60_000;
 
-const NO_USAGE: Usage = {
+/** Where the sum starts. A cost of zero, so that the first request's cost survives and a request without one removes it. */
+const ZERO_USAGE: Usage = {
   promptTokens: 0,
   completionTokens: 0,
   totalTokens: 0,
+  cost: 0,
 };
 
 /** Test seams: a short idle limit and a local server. `run` forwards its `Io.idleTimeoutMs` and `Io.serverURL`; production leaves both unset. */
@@ -98,7 +100,7 @@ async function* converse(
     { role: 'system', content: INSTRUCTIONS },
     { role: 'user', content: question },
   ];
-  let total = NO_USAGE;
+  let total = ZERO_USAGE;
   // The end of the text written so far, to keep the text of two rounds apart.
   let written = '';
 

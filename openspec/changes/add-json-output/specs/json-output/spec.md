@@ -30,14 +30,16 @@ On success the CLI SHALL write the object to stdout, stderr SHALL stay empty, an
 | `question` | string | the question as the model received it (trimmed) |
 | `answer` | string | the full answer text |
 | `success` | boolean | `true` |
+| `model` | string | the model that served the final response |
+| `usage` | object | the tokens and cost of the question, see "Model and usage" |
 | `thinking` | string | the readable thinking text; omitted when there is none |
 | `traceId` | string | the Langfuse trace id; omitted when the run is not traced |
 
 The success object has no `error` field.
 
 #### Scenario: Plain answer
-- **WHEN** the model answers `4` to `-q "2+2"`, with no thinking, and tracing is off
-- **THEN** stdout is `{"question":"2+2","answer":"4","success":true}` and a newline
+- **WHEN** the model `x/y` answers `4` to `-q "2+2"`, with no thinking, usage 12 prompt, 34 completion and 46 total tokens without a cost, and tracing is off
+- **THEN** stdout is one line that parses to `{"question":"2+2","answer":"4","success":true,"model":"x/y","usage":{"promptTokens":12,"completionTokens":34,"totalTokens":46}}`
 
 #### Scenario: Thinking and trace
 - **WHEN** the model streams the thinking `Add.` and the answer `4`, and the run is traced as `abc123`
@@ -50,6 +52,47 @@ The success object has no `error` field.
 #### Scenario: Several rounds
 - **WHEN** the answer follows tool calls, with text in more than one round
 - **THEN** `answer` is the text the answer would have shown on stdout without `--json`, minus the final newline
+
+### Requirement: Model and usage
+The success object SHALL name in `model` the model that served the final response, as the `model:` line does without `--json`. `usage` SHALL add up the usage of every request of the question. `cost` SHALL be present only when every one of those requests reported a cost.
+
+#### Scenario: Usage fields
+
+| Field of `usage` | Type | Value |
+| --- | --- | --- |
+| `promptTokens` | integer | sum over the requests |
+| `completionTokens` | integer | sum over the requests |
+| `totalTokens` | integer | sum over the requests |
+| `reasoningTokens` | integer | sum, present when at least one request reported it |
+| `cachedTokens` | integer | sum of the prompt tokens the provider served from its cache, present when at least one request reported it |
+| `cost` | number | sum in US dollars, present only when every request reported one |
+
+#### Scenario: Two rounds
+- **WHEN** round 1 reports 10 prompt, 5 completion and 15 total tokens and a cost of 0.001, and round 2 reports 30 prompt, 8 completion and 38 total tokens and a cost of 0.002
+- **THEN** `usage` holds `"promptTokens":40`, `"completionTokens":13`, `"totalTokens":53` and a `cost` of 0.003
+
+#### Scenario: Cost reported for some requests
+- **WHEN** round 1 reports a cost and round 2 reports none
+- **THEN** `usage` has no `cost` field
+
+#### Scenario: Optional counts
+| Rounds report | `usage` holds |
+| --- | --- |
+| reasoning 11 in one round, none in the other | `"reasoningTokens":11` |
+| reasoning 0 | `"reasoningTokens":0` |
+| no reasoning, no cached count | neither field |
+| cached 7 and cached 3 | `"cachedTokens":10` |
+
+#### Scenario: Model differs from the one asked for
+- **WHEN** the request names `openrouter/auto` and the final response reports `x/y`
+- **THEN** `model` is `x/y`
+
+### Requirement: Failure object without model and usage
+The failure object SHALL NOT carry `model` or `usage`.
+
+#### Scenario: Run fails after a response
+- **WHEN** the first round answers with a tool call and usage, and the second request fails
+- **THEN** the failure object has no `model` and no `usage`
 
 ### Requirement: Failure object
 On failure the CLI SHALL write the object to stderr, stdout SHALL stay empty, and the exit code SHALL be the one `ask-question` assigns. `error.message` SHALL be the message the CLI would have written without `--json`, usage text left out.
@@ -143,8 +186,11 @@ The project SHALL publish a JSON Schema (draft 2020-12) of the object in the doc
 | `success` true with an `error` field | no |
 | `success` false without `error` | no |
 | `error.code` `404` or `api_error` | no |
-| an extra field `model` | no |
-| `{"question":"q","answer":"a","success":true}` | yes |
+| an extra field that is not in the tables | no |
+| a success object without `model` or without `usage` | no |
+| `usage` with a fractional or negative count, a negative `cost`, or a field not in the table | no |
+| a failure object with `model` or `usage` | no |
+| `{"question":"q","answer":"a","success":true,"model":"x/y","usage":{"promptTokens":1,"completionTokens":2,"totalTokens":3}}` | yes |
 
 #### Scenario: Id pinned to the release
 - **WHEN** the schema is read at release `X.Y.Z`

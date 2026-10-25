@@ -78,13 +78,29 @@ const cli = async (
   return { code, ...out };
 };
 
-const answer = (text: string, thinking: string[] = []) =>
+const answer = (
+  text: string,
+  thinking: string[] = [],
+  usage: Record<string, unknown> = USAGE,
+  model = 'test/model',
+) =>
   api.reply(
     200,
     sseBody(
-      ...thinking.map(thinkingChunk),
-      contentChunk(text),
-      usageChunk(USAGE),
+      ...[
+        ...thinking.map(thinkingChunk),
+        contentChunk(text),
+        usageChunk(usage),
+      ].map((chunk) => ({ ...chunk, model })),
+    ),
+  );
+
+const calculate = (usage: Record<string, unknown>) =>
+  api.reply(
+    200,
+    toolRound(
+      [{ id: 'c1', name: 'calculate', arguments: '{"expression":"1+1"}' }],
+      { usage },
     ),
   );
 
@@ -113,9 +129,13 @@ describe('--json on success', () => {
   it('writes the object to stdout, and nothing to stderr', async () => {
     answer('4');
     const result = await cli(['-q', '2+2', '--json']);
-    expect(result.stdout).toBe(
-      '{"question":"2+2","answer":"4","success":true}\n',
-    );
+    expect(parse(result.stdout)).toEqual({
+      question: '2+2',
+      answer: '4',
+      success: true,
+      model: 'test/model',
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+    });
     expect(result.stderr).toBe('');
     expect(result.code).toBe(0);
   });
@@ -131,6 +151,8 @@ describe('--json on success', () => {
       question: '2+2',
       answer: '4',
       success: true,
+      model: 'test/model',
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
       thinking: 'Add.',
       traceId,
     });
@@ -202,6 +224,82 @@ describe('--json on success', () => {
     stream.end(sseBody(contentChunk('lo'), usageChunk(USAGE)));
     expect(await done).toBe(0);
     expect(parse(out.stdout).answer).toBe('Hello');
+  });
+});
+
+describe('--json model and usage', () => {
+  it('adds up the usage of every round, cost included, and names the model of the last', async () => {
+    calculate({
+      prompt_tokens: 10,
+      completion_tokens: 5,
+      total_tokens: 15,
+      cost: 0.001,
+    });
+    answer(
+      '2',
+      [],
+      {
+        prompt_tokens: 30,
+        completion_tokens: 8,
+        total_tokens: 38,
+        cost: 0.002,
+      },
+      'x/y',
+    );
+    const result = await cli(['-q', '1+1', '--json']);
+    expect(parse(result.stdout)).toMatchObject({
+      model: 'x/y',
+      usage: {
+        promptTokens: 40,
+        completionTokens: 13,
+        totalTokens: 53,
+        cost: 0.003,
+      },
+    });
+  });
+
+  it('leaves the cost out when a round reported none', async () => {
+    calculate({
+      prompt_tokens: 10,
+      completion_tokens: 5,
+      total_tokens: 15,
+      cost: 0.001,
+    });
+    answer('2');
+    const usage = (
+      parse((await cli(['-q', '1+1', '--json'])).stdout) as {
+        usage: Record<string, unknown>;
+      }
+    ).usage;
+    expect(usage).toEqual({
+      promptTokens: 11,
+      completionTokens: 6,
+      totalTokens: 17,
+    });
+  });
+
+  it('keeps the reasoning and cached counts the API reports, zero included', async () => {
+    answer('4', [], {
+      prompt_tokens: 12,
+      completion_tokens: 34,
+      total_tokens: 46,
+      completion_tokens_details: { reasoning_tokens: 0 },
+      prompt_tokens_details: { cached_tokens: 7 },
+    });
+    const result = await cli(['-q', '2+2', '--json']);
+    expect(parse(result.stdout)).toMatchObject({
+      usage: { reasoningTokens: 0, cachedTokens: 7 },
+    });
+  });
+
+  it('gives a failed run neither model nor usage, even after a response', async () => {
+    calculate({ prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 });
+    api.reply(401, recordedUnauthorized);
+    const result = await cli(['-q', '1+1', '--json']);
+    const object = parse(result.stderr);
+    expect(object.success).toBe(false);
+    expect(object).not.toHaveProperty('model');
+    expect(object).not.toHaveProperty('usage');
   });
 });
 

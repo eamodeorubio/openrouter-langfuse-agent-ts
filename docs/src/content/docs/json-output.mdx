@@ -1,12 +1,12 @@
 ---
 title: JSON output
-description: Run the tool with --json to get one JSON object per run, with the question, the answer, the thinking, the trace id and, on failure, a stable error code. A JSON Schema describes the object.
+description: Run the tool with --json to get one JSON object per run, with the question, the answer, the model, the tokens and cost, the thinking, the trace id and, on failure, a stable error code. A JSON Schema describes the object.
 ---
 
 import { Code } from '@astrojs/starlight/components';
 import schema from '../../../public/schemas/json-output.schema.json?raw';
 
-A person reads the tool's normal output. The answer streams to stdout, the thinking and the status lines go to stderr, and a failure is a sentence. A script has a harder time. It has to scrape the sentence to learn why a run failed, and it has no steady place to find the trace id.
+A person reads the tool's normal output. The answer streams to stdout, the thinking and the status lines go to stderr, and a failure is a sentence. A script has a harder time. It has to scrape the sentence to learn why a run failed, and it has no steady place to find the trace id, the model that answered or what the answer cost.
 
 Add `--json` and the tool changes its manner. Nothing appears while the model works. When the run is over, the tool writes one JSON object and one newline, then exits with the same code it always does. The conversation with the model still streams underneath; you just don't watch it.
 
@@ -23,6 +23,13 @@ The object goes to stdout. Stderr stays empty.
   "question": "What is a token?",
   "answer": "A token is a chunk of text, often a word or part of one, that a model reads and writes.",
   "success": true,
+  "model": "openai/gpt-4o-mini",
+  "usage": {
+    "promptTokens": 25,
+    "completionTokens": 22,
+    "totalTokens": 47,
+    "cost": 0.0000208
+  },
   "thinking": "The user wants a short definition.",
   "traceId": "0123456789abcdef0123456789abcdef"
 }
@@ -33,10 +40,27 @@ The object goes to stdout. Stderr stays empty.
 | `question` | The question the model received, trimmed.                                                                                              |
 | `answer`   | The whole answer. When the model used tools along the way, the same text stdout would carry without `--json`, minus the final newline. |
 | `success`  | `true`.                                                                                                                                |
+| `model`    | The model that served the final response.                                                                                              |
+| `usage`    | What the question used, summed over every request. See below.                                                                          |
 | `thinking` | The model's readable thinking. Left out when there is none.                                                                            |
 | `traceId`  | The Langfuse trace id. Left out when the run is not traced.                                                                            |
 
-A field with nothing to say is left out, not written as `null`. The thinking is always collected, whatever `--thinking` and `--no-thinking` say, because those flags decide what a person sees on a terminal and nobody is watching one here.
+A field with nothing to say is left out, not written as `null`. The order of the keys is not fixed: read the object by name, never by position. The thinking is always collected, whatever `--thinking` and `--no-thinking` say, because those flags decide what a person sees on a terminal and nobody is watching one here.
+
+### Model and usage
+
+A question can take several requests: every lookup the model makes is a round trip. The object adds them up, so `usage` is the usage of the whole question, the way the `tokens:` line is without `--json`, with the cached tokens and the cost on top. `model` names the model that served the last response, which can differ from the one you asked for when you route through `openrouter/auto`.
+
+| Field of `usage`   | Meaning                                                                                            |
+| ------------------ | -------------------------------------------------------------------------------------------------- |
+| `promptTokens`     | Prompt tokens, summed.                                                                             |
+| `completionTokens` | Completion tokens, summed.                                                                         |
+| `totalTokens`      | Total tokens, summed.                                                                              |
+| `reasoningTokens`  | Tokens the model spent thinking. Present when at least one request reported them.                  |
+| `cachedTokens`     | Prompt tokens the provider served from its cache. Present when at least one request reported them. |
+| `cost`             | The cost in US dollars, summed. Present only when every request reported one.                      |
+
+A count of zero that the API reported stays in the object. A count nobody reported is left out. `cost` follows the strictest rule: if even one request came back without a cost, there is no `cost` at all, because a sum over part of the question would understate the spend, and a wrong number does more harm than a missing one. The costs are added as the API gave them, without rounding, so the last digits of a sum can carry floating-point noise. Format the dollars where you print them.
 
 ## A run that fails
 
@@ -53,7 +77,7 @@ The same object, with `success` set to `false`, goes to stderr instead. Stdout s
 }
 ```
 
-The object carries whatever the tool knew when the run broke. A failure before the question was read has no `question`. A stream that dies halfway has the `answer` that arrived, since the tool keeps partial text as it always has. The `message` is the sentence the tool would have written to stderr, without the usage text. The tool never puts your API key or your Langfuse keys in the `message`. The answer and the thinking pass through as the model wrote them.
+The object carries whatever the tool knew when the run broke, with one exception: it never has a `model` or a `usage`. A failed run has no final response, and a sum over the requests that did finish would look complete when it is not. A failure before the question was read has no `question`. A stream that dies halfway has the `answer` that arrived, since the tool keeps partial text as it always has. The `message` is the sentence the tool would have written to stderr, without the usage text. The tool never puts your API key or your Langfuse keys in the `message`. The answer and the thinking pass through as the model wrote them.
 
 The `code` is a short word in capitals and underscores. It is never a number. Branch on it, and leave the message to people.
 
@@ -73,7 +97,7 @@ An argument mistake is reported as JSON too, as long as `--json` is among the ar
 
 ## What is silenced
 
-With `--json` the tool writes nothing else. No thinking stream, no `model:` and `tokens:` lines, no `tool:` or `trace:` lines, and no note that tracing is off. `--verbose`, `--thinking` and `--no-thinking` are accepted and change nothing. Model and token counts are not in the object yet. Look in the trace for them.
+With `--json` the tool writes nothing else. No thinking stream, no `model:` and `tokens:` lines (a success object carries their numbers), no `tool:` or `trace:` lines, and no note that tracing is off. `--verbose`, `--thinking` and `--no-thinking` are accepted and change nothing.
 
 A run that you stop with Ctrl-C writes no object. The exit code is 130 or 143, as it was.
 

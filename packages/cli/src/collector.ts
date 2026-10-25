@@ -1,6 +1,23 @@
 import type { Failure } from './classify.js';
-import type { JsonOutput } from './output.js';
-import type { AskEvent } from './types.js';
+import type { JsonOutput, SuccessOutput } from './output.js';
+import type { AskEvent, Completion, Usage } from './types.js';
+
+/** The usage with the optional figures that nobody reported left out. */
+const reported = ({
+  promptTokens,
+  completionTokens,
+  totalTokens,
+  reasoningTokens,
+  cachedTokens,
+  cost,
+}: Usage) => ({
+  promptTokens,
+  completionTokens,
+  totalTokens,
+  ...(reasoningTokens === undefined ? {} : { reasoningTokens }),
+  ...(cachedTokens === undefined ? {} : { cachedTokens }),
+  ...(cost === undefined ? {} : { cost }),
+});
 
 /**
  * Stands in for the presenter under `--json`: it writes nothing, it keeps what
@@ -11,6 +28,7 @@ export const createCollector = () => {
   let traceId: string | undefined;
   let thinking = '';
   let answer = '';
+  let completion: Completion | undefined;
 
   /** The fields both objects share, those with no value left out. */
   const known = () => ({
@@ -36,12 +54,24 @@ export const createCollector = () => {
         case 'trace':
           traceId = event.id;
           return;
+        case 'done':
+          completion = event;
+          return;
       }
     },
 
-    /** Only called after an answer: `ask` fails a run that ends without answer text. */
-    success(): JsonOutput {
-      return { ...known(), success: true } as JsonOutput;
+    /** Only called after a `done` event, which comes with the answer: `ask` fails a run that ends without answer text or without usage. */
+    success(): SuccessOutput {
+      if (!completion) {
+        throw new Error('A success object needs the completion of the run.');
+      }
+      const { model, usage } = completion;
+      return {
+        ...known(),
+        success: true,
+        model,
+        usage: reported(usage),
+      } as SuccessOutput;
     },
 
     failure({ code, message }: Pick<Failure, 'code' | 'message'>): JsonOutput {
