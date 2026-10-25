@@ -22,7 +22,7 @@ pnpm docs:dev      # the documentation site, live
 
 The other scripts (`test:watch`, `test:coverage`, `mutation:full`, `build`, `docs:build`, `docs:preview`) are in `package.json`.
 
-Tests never touch the network. Mock HTTP with `nock`. When a test has to cancel or cut a response stream, use the loopback server in `packages/cli/test/fakeApi.ts`, because `nock`'s mock sockets cannot survive a cancel. To run the tool against real services, copy `.env.example` to `.env` and fill in your keys. Never commit `.env`. To report a security problem, follow [SECURITY.md](SECURITY.md) instead of opening an issue.
+Tests never touch the network. Mock HTTP with `nock`. When a test has to cancel or cut a response stream, use the loopback server in `packages/cli/test/fakeApi.ts`, because `nock`'s mock sockets cannot survive a cancel. The tests of the Langfuse calls (the credential check and the OTLP upload) use it too, because `nock` failed with them intermittently. To run the tool against real services, copy `.env.example` to `.env` and fill in your keys. Never commit `.env`. To report a security problem, follow [SECURITY.md](SECURITY.md) instead of opening an issue.
 
 ## From idea to merged pull request
 
@@ -35,7 +35,7 @@ The whole path is one pull request, with the spec inside it.
 5. **Write a failing test.** Start wide, with an integration test that covers the requirements, and watch it fail for the right reason.
 6. **Make it pass, one piece at a time.** For each piece, write a failing unit test, then the code. Refactor only when the code falls short of the [quality rubric](QUALITY_RUBRIC.md).
 7. **Update the docs** if users will use the product differently.
-8. **Run the checks.** `pnpm check`, `pnpm typecheck` and `pnpm test` must pass. If you changed logic in `src/`, run `pnpm mutation` too and deal with every survivor (see "Tests that test something"). CI runs it as well, but its verdict arrives after you open the pull request, so run it first.
+8. **Run the checks.** `pnpm check`, `pnpm typecheck` and `pnpm test` must pass. If you changed logic in `src/`, run `pnpm mutation` too and deal with every survivor (see "Tests that test something"). CI runs it as well, but its verdict arrives after you open the pull request, so run it first. If you have [gitleaks](https://github.com/gitleaks/gitleaks#installing) installed, `pnpm secrets` runs a secret scan like the one in CI. It is optional, because gitleaks is not an npm package.
 9. **Review your own diff** against the rubric. Anyone can run the three read-only reviewers in `.agents/reviewers/` with an AI agent: `reviewer-code-high` for design, `reviewer-code-low` for detail, `reviewer-docs` for prose. Fix every must-fix finding.
 10. **Commit.** Use the Conventional Commits form (see "Commits and versions"). One product slice is one commit.
 11. **Push and open the pull request.** Give it a Conventional Commits title and describe what changed for the user. List anything you did not verify.
@@ -131,7 +131,7 @@ The pinned `vitest` version stays until [stryker-js#6210](https://github.com/str
 
 ## Commits and versions
 
-Commits follow [Conventional Commits](https://www.conventionalcommits.org/). A commit-msg hook and CI both enforce it, and a pre-commit hook formats what you staged.
+Commits follow [Conventional Commits](https://www.conventionalcommits.org/). A commit-msg hook and CI both enforce it, and a pre-commit hook formats what you staged and, when gitleaks is installed, scans it for secrets.
 
 | Type                                              | Effect on the version         |
 | ------------------------------------------------- | ----------------------------- |

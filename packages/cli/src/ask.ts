@@ -1,11 +1,18 @@
 import type { ChatMessages } from '@openrouter/sdk/models';
-import { chat, IDLE_TIMEOUT_MS } from './chat.js';
+import { chat, IDLE_TIMEOUT_MS, type Round } from './chat.js';
 import { createClient } from './client.js';
 import type { Config } from './config.js';
 import { ApiError, LimitError } from './errors.js';
 import { INSTRUCTIONS } from './instructions.js';
-import { redactKey } from './text.js';
+import { oneLine, redactKey } from './text.js';
 import { functionTools, TOOLS } from './tools/registry.js';
+import {
+  type GenerationResult,
+  INTERRUPTED,
+  NO_TRACER,
+  type RootSpan,
+  type Tracer,
+} from './tracing/tracer.js';
 import { assistantTurn, runCalls } from './turn.js';
 import type { AskEvent, Usage } from './types.js';
 import { addUsage } from './usage.js';
@@ -27,7 +34,12 @@ export interface AskOptions {
   idleTimeoutMs?: number;
   toolTimeoutMs?: number;
   serverURL?: string;
+  /** Where the run is recorded. Without one it is not. */
+  tracer?: Tracer;
 }
+
+const describe = (error: unknown): string =>
+  oneLine(error instanceof Error ? error.message : String(error));
 
 /**
  * Asks the model one question and yields the answer as it arrives. The model
@@ -37,13 +49,44 @@ export interface AskOptions {
  * under the rule in `chat`.
  */
 export async function* ask(
+  config: Config,
+  question: string,
+  options: AskOptions = {},
+): AsyncGenerator<AskEvent, void> {
+  const root = (options.tracer ?? NO_TRACER).root(question);
+  let ended = false;
+  const finish = (result: { answer?: string; error?: string }) => {
+    if (!ended) {
+      ended = true;
+      root.end(result);
+    }
+  };
+  try {
+    if (root.traceId) {
+      yield { kind: 'trace', id: root.traceId };
+    }
+    yield* converse(config, question, options, root, (answer) =>
+      finish({ answer }),
+    );
+  } catch (error) {
+    finish({ error: describe(error) });
+    throw error;
+  } finally {
+    // Reached unfinished only when the reader stopped before the end.
+    finish({ error: INTERRUPTED });
+  }
+}
+
+async function* converse(
   { apiKey, model }: Config,
   question: string,
   {
     idleTimeoutMs = IDLE_TIMEOUT_MS,
     toolTimeoutMs = TOOL_TIMEOUT_MS,
     serverURL,
-  }: AskOptions = {},
+  }: AskOptions,
+  root: RootSpan,
+  answered: (answer: string) => void,
 ): AsyncGenerator<AskEvent, void> {
   const client = createClient(apiKey, serverURL);
   const tools = functionTools(TOOLS);
@@ -57,6 +100,7 @@ export async function* ask(
 
   for (let toolRounds = 0; ; toolRounds++) {
     const forbidTools = toolRounds >= MAX_TOOL_ROUNDS;
+    const generation = root.generation({ requestedModel: model, messages });
     const round = chat(
       client,
       {
@@ -66,21 +110,39 @@ export async function* ask(
         toolChoice: forbidTools ? 'none' : undefined,
       },
       idleTimeoutMs,
+      generation,
     );
     let separate = written !== '' && !written.endsWith('\n');
-    let step = await round.next();
-    while (!step.done) {
-      if (step.value.kind === 'content') {
-        if (separate) {
-          yield { kind: 'content', text: '\n' };
-          separate = false;
+    let response: Round;
+    let outcome: GenerationResult = { error: INTERRUPTED };
+    try {
+      let step = await round.next();
+      while (!step.done) {
+        if (step.value.kind === 'content') {
+          if (separate) {
+            yield { kind: 'content', text: '\n' };
+            separate = false;
+          }
+          written = step.value.text;
         }
-        written = step.value.text;
+        yield step.value;
+        step = await round.next();
       }
-      yield step.value;
-      step = await round.next();
+      response = step.value;
+      outcome = {
+        model: response.model,
+        text: response.text,
+        toolCalls: response.toolCalls,
+        thinking: response.thinking,
+        finishReason: response.finishReason,
+        usage: response.usage,
+      };
+    } catch (error) {
+      outcome = { error: describe(error) };
+      throw error;
+    } finally {
+      generation.end(outcome);
     }
-    const response = step.value;
 
     if (response.toolCalls.length === 0 && !response.text) {
       throw new ApiError('The API response held no answer.');
@@ -90,6 +152,7 @@ export async function* ask(
     }
     total = addUsage(total, response.usage);
     if (response.toolCalls.length === 0) {
+      answered(response.text);
       yield { kind: 'done', model: response.model, usage: total };
       return;
     }
@@ -116,6 +179,7 @@ export async function* ask(
         response.toolCalls,
         { client, timeoutMs: toolTimeoutMs },
         apiKey,
+        root,
       )),
     );
   }

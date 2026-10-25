@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { callCatalog } from './catalog.js';
 import { perMillionTokens } from './prices.js';
 import { isoDate } from './shape.js';
-import type { Tool } from './types.js';
+import { requestOptions, type Tool } from './types.js';
 
 type ListQuery = NonNullable<Parameters<OpenRouter['models']['list']>[0]>;
 
@@ -227,9 +227,10 @@ export const searchModels: Tool<typeof parameters> = {
   description:
     'Search the OpenRouter catalog with filters and a sort order. Returns one page of compact entries: id, context length, prices in USD per million tokens, modalities, reasoning support and benchmark indices. Use get_model for the details of one entry.',
   parameters,
-  run(args, { client, timeoutMs }) {
+  run(args, context) {
+    const { client } = context;
     return callCatalog(
-      () => client.models.list(toListQuery(args), { timeoutMs }),
+      () => client.models.list(toListQuery(args), requestOptions(context)),
       ({ result }) => shapePage(args.offset, result),
     );
   },

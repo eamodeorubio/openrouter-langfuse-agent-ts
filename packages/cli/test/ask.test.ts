@@ -1,7 +1,6 @@
 import fc from 'fast-check';
 import nock from 'nock';
 import {
-  afterAll,
   afterEach,
   beforeAll,
   beforeEach,
@@ -98,7 +97,6 @@ const textOf = (events: AskEvent[], kind: 'thinking' | 'content') =>
   events.flatMap((e) => (e.kind === kind ? [e.text] : [])).join('');
 
 beforeAll(() => nock.disableNetConnect());
-afterAll(() => nock.enableNetConnect());
 beforeEach(() => {
   waits.length = 0;
   attempts.count = 0;

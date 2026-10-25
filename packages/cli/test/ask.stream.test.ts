@@ -96,9 +96,14 @@ const textOf = (events: AskEvent[], kind: 'thinking' | 'content') =>
 const streamHead = (response: ServerResponse) =>
   response.writeHead(200, { 'content-type': 'text/event-stream' });
 
-/** Waits (briefly) for something the server should see, such as the client hanging up. */
+/**
+ * Waits for something the server should see, such as the client hanging up.
+ * The limit is a ceiling for a slow machine, not a delay: the wait ends as
+ * soon as the condition holds, and a miss means it never happened.
+ */
+const EVENTUALLY_LIMIT_MS = 10_000;
 const eventually = async (condition: () => boolean) => {
-  for (let i = 0; i < 300 && !condition(); i++) {
+  for (let i = 0; i < EVENTUALLY_LIMIT_MS / 10 && !condition(); i++) {
     await new Promise((resolve) => setTimeout(resolve, 10));
   }
   expect(condition()).toBe(true);
@@ -153,7 +158,9 @@ describe('ask: the events', () => {
     const { events } = await collect();
     expect(
       events.map((e) =>
-        e.kind === 'done' || e.kind === 'tool' ? e.kind : e.text,
+        e.kind === 'done' || e.kind === 'tool' || e.kind === 'trace'
+          ? e.kind
+          : e.text,
       ),
     ).toEqual(['a', 'b', '4', '2', 'done']);
   });
@@ -472,7 +479,10 @@ describe('ask: retries inside the stream', () => {
   });
 });
 
-describe('ask: a stream that is cut off or goes quiet', () => {
+// Twice the limit of `eventually`: room for that wait plus the test's own work.
+describe('ask: a stream that is cut off or goes quiet', {
+  timeout: EVENTUALLY_LIMIT_MS * 2,
+}, () => {
   const IDLE = 300;
 
   // The SDK's first request in a process pays a start-up cost of tens of

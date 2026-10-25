@@ -1,0 +1,4 @@
+# Two fixtures of the masking tests that looked like keys to the generic rule: made-up key shapes, not secrets.
+# They sit in the history of this branch; the files no longer hold them.
+73761d1ddbea1685631b076d9d46f2272a5610ee:packages/cli/test/mask.test.ts:generic-api-key:156
+73761d1ddbea1685631b076d9d46f2272a5610ee:packages/cli/test/trace.integration.test.ts:generic-api-key:319
