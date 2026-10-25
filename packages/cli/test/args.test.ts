@@ -1,6 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
-import { parseCliArgs } from '../src/args.js';
+import { parseCliArgs, requestedInfo } from '../src/args.js';
 import { UsageError } from '../src/errors.js';
 
 describe('parseCliArgs', () => {
@@ -199,6 +199,55 @@ describe('parseCliArgs', () => {
         } catch (error) {
           expect(error).toBeInstanceOf(UsageError);
         }
+      }),
+    );
+  });
+});
+
+describe('requestedInfo', () => {
+  it.each([
+    [['--help'], 'help'],
+    [['-h'], 'help'],
+    [['--version'], 'version'],
+    [['-v'], 'version'],
+    [['-q', 'hi', '--version'], 'version'],
+    [['--version', '--help'], 'help'],
+    [['-v', '-h'], 'help'],
+    [['--bogus', '--help'], 'help'],
+  ])('finds %j', (argv, expected) => {
+    expect(requestedInfo(argv)).toBe(expected);
+  });
+
+  it.each([
+    ['no arguments', []],
+    ['ordinary arguments', ['-q', 'hi', '--json']],
+    ['the word as the question', ['-q', '--help']],
+    ['the word as the model', ['--model', '-h']],
+    ['the flag attached to -q', ['-q--help']],
+    ['a longer flag', ['--helpful']],
+  ])('finds nothing in %s', (_name, argv) => {
+    expect(requestedInfo(argv)).toBeUndefined();
+  });
+
+  it('finds a flag wherever it stands among words that are not flags', () => {
+    const word = fc
+      .string()
+      .filter(
+        (text) =>
+          !['-q', '--model', '-h', '--help', '-v', '--version'].includes(text),
+      );
+    fc.assert(
+      fc.property(fc.array(word), fc.nat(), (words, at) => {
+        const index = at % (words.length + 1);
+        const put = (flag: string) => [
+          ...words.slice(0, index),
+          flag,
+          ...words.slice(index),
+        ];
+        expect(requestedInfo(words)).toBeUndefined();
+        expect(requestedInfo(put('--help'))).toBe('help');
+        expect(requestedInfo(put('-v'))).toBe('version');
+        expect(requestedInfo(put('-v').concat('--help'))).toBe('help');
       }),
     );
   });

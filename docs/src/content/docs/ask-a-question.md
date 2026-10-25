@@ -45,6 +45,14 @@ When both are present, `-q` wins and the pipe is left unread. Surrounding whites
 
 `-q` takes the next argument as the question, whatever it starts with, so `-q "-5 degrees in Fahrenheit"` works. The price is that `-q --model` reads `--model` as the question.
 
+### Help and version
+
+`--help` (or `-h`) prints the usage, each flag, every setting the tool reads (a `.env` file in the current directory included), the exit codes and a few examples. The first line carries the version. The text goes to stdout, so `ask-openrouter --help | less` works, and it needs no key and no model.
+
+`--version` (or `-v`) prints the version alone, on one line, which suits a script: `$(ask-openrouter --version)`. Each flag wins over every other argument, even over `--json` and over arguments that would otherwise be an error. Give both and you get the help. If the tool cannot read its own `package.json`, `--version` says so on stderr and exits with code 2, while `--help` still prints, with the name alone as its title.
+
+Either flag can stand anywhere except where `-q` or `--model` expects a value: `-q --help` asks the model the question "--help".
+
 ## The model's tools
 
 A model's memory goes stale. OpenRouter's catalog changes often, and a price remembered from training is often wrong by the time you read it. So the tool gives the model a way to check. It offers three tools. `get_model` fetches the details of a single model by its slug: `author/name`, with an optional variant such as `:free`. The result carries the description, the context window, the input and output modalities, the supported parameters, the prices, the reasoning support and the benchmark scores. `search_models` finds models when the model does not know a slug yet. `calculate` does the arithmetic. The last two are described below, under Searching the catalog and Doing the arithmetic.
@@ -320,7 +328,7 @@ Exit code 2 covers these cases:
 - The stream broke halfway.
 - Something unexpected failed inside the tool itself.
 
-A failure prints a message to stderr. The message says what went wrong and, when the API gave one, quotes the status and its reason. A mistake in the arguments, or a missing question, adds the usage text after the message. The tool never prints your key in a message it writes, even when an API error echoes it. The text the model generates, its answer and its thinking, passes through as received, since the tool cannot vouch for what a model says.
+A failure prints a message to stderr. The message says what went wrong and, when the API gave one, quotes the status and its reason. A mistake in the arguments, or a missing question, adds the full help text after the message. It is the same text `--help` prints. The tool never prints your key in a message it writes, even when an API error echoes it. The text the model generates, its answer and its thinking, passes through as received, since the tool cannot vouch for what a model says.
 
 Before any text has appeared, a failure leaves stdout empty. After text has started, streaming changes that. If the stream breaks halfway, you keep what already arrived: the partial answer stays on stdout and the tool ends its line, then writes the error to stderr and exits with code 2. A script that needs an answer to be complete or absent should check the exit code, which is 0 only for a complete answer.
 
