@@ -1,6 +1,6 @@
 {
   "name": "ask-openrouter",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "A small CLI that answers questions about OpenRouter, helping users discover the most cost-effective model for their use case.",
   "license": "MIT",
   "author": "Enrique Javier Amodeo Rubio <eamodeorubio@gmail.com>",
