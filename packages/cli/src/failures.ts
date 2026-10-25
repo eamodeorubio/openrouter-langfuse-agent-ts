@@ -71,20 +71,31 @@ const messageInBody = (body: string): string | undefined => {
   }
 };
 
+/** The standard reason of a status, for the service that sent no words of its own. */
+const reasonOf = (status: number): string =>
+  STATUS_CODES[status] ?? 'Unknown error';
+
 /**
  * What the service said, without the library's wrapper around it. A body that
  * is no message, such as a web page, gives the standard reason of the status.
  */
 const saidBy = (error: OpenRouterError): string =>
   LIBRARY_WRAPPER.test(error.message)
-    ? (messageInBody(error.body) ??
-      STATUS_CODES[error.statusCode] ??
-      'Unknown error')
+    ? (messageInBody(error.body) ?? reasonOf(error.statusCode))
     : error.message;
 
-/** The service's words for a failed request, with the remedy for its status. */
-const serviceError = (status: number, message: string): ApiError =>
-  new ApiError(`API error ${status}: ${oneLine(message)}${remedyFor(status)}`);
+/** The text as a sentence: it gets a full stop unless it ends in one already. */
+const asSentence = (text: string): string =>
+  /[.!?…]$/.test(text) ? text : `${text}.`;
+
+/** The service's words for a failed request, with the remedy for its status after them. */
+const serviceError = (status: number, message: string): ApiError => {
+  const remedy = remedyFor(status);
+  const said = oneLine(message) || reasonOf(status);
+  return new ApiError(
+    `API error ${status}: ${remedy === '' ? said : asSentence(said)}${remedy}`,
+  );
+};
 
 /**
  * The `ApiError` that tells the user what went wrong, or `undefined` for an

@@ -234,8 +234,7 @@ describe('service errors', () => {
     expect(result.stdout).toBe('');
     const [line, ...rest] = lines(result.stderr);
     expect(rest).toEqual([]);
-    expect(line).toContain(String(status));
-    expect(line).toContain(text);
+    expect(line).toBe(`API error ${status}: ${text}. ${remedy}`);
     expect(line?.endsWith(` ${remedy}`)).toBe(true);
     expect(result.stderr).not.toContain(KEY);
   });

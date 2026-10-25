@@ -536,7 +536,7 @@ describe('retries', () => {
     expect(result.code).toBe(2);
     expect(result.stdout).toBe('');
     expect(result.stderr).toBe(
-      'API error 503: overloaded OpenRouter is having trouble. Try again later.\n',
+      'API error 503: overloaded. OpenRouter is having trouble. Try again later.\n',
     );
     expect(api.sent).toHaveLength(5);
   });
@@ -618,7 +618,7 @@ describe('failure after output has started', () => {
     expect(result.code).toBe(2);
     expect(result.stdout).toBe('');
     expect(result.stderr).toBe(
-      `${DIM}hm${RESET}\nAPI error 500: provider failed OpenRouter is having trouble. Try again later.\n`,
+      `${DIM}hm${RESET}\nAPI error 500: provider failed. OpenRouter is having trouble. Try again later.\n`,
     );
   });
 
@@ -864,7 +864,7 @@ describe('a stdout that stops working mid-run', () => {
     };
     expect(await run(['-q', 'hi'], goodEnv, flaky)).toBe(2);
     expect(stderr).toBe(
-      'API error 500: provider failed OpenRouter is having trouble. Try again later.\n',
+      'API error 500: provider failed. OpenRouter is having trouble. Try again later.\n',
     );
   });
 });

@@ -11,6 +11,7 @@ import {
   StreamError,
   toApiError,
 } from '../src/failures.js';
+import { oneLine } from '../src/text.js';
 
 const failed = (status: number, message: string, body = message) =>
   new OpenRouterError(message, {
@@ -40,7 +41,7 @@ describe('toApiError', () => {
     'ends the message for status %i with its remedy',
     (status, remedy) => {
       expect(messageOf(failed(status, 'the API says so'))).toBe(
-        `API error ${status}: the API says so${remedy}`,
+        `API error ${status}: the API says so.${remedy}`,
       );
     },
   );
@@ -49,14 +50,64 @@ describe('toApiError', () => {
     'does the same for an error inside a stream, status %i',
     (status, remedy) => {
       expect(messageOf(new ChunkError(status, 'the provider says so'))).toBe(
-        `API error ${status}: the provider says so${remedy}`,
+        `API error ${status}: the provider says so.${remedy}`,
       );
     },
   );
 
-  it('adds no remedy to a status it has none for', () => {
+  it.each([
+    ['a full stop', 'User not found.'],
+    ['an exclamation mark', 'Slow down!'],
+    ['a question mark', 'Who are you?'],
+    ['an ellipsis', 'Cut short…'],
+  ])('adds no second full stop when the text ends in %s', (_name, text) => {
+    expect(messageOf(failed(401, text))).toBe(
+      `API error 401: ${text} Check OPENROUTER_API_KEY.`,
+    );
+  });
+
+  it('keeps the text of the service whole and adds one full stop only where it ends without one, for any text, long or short', () => {
+    const text = fc.oneof(
+      fc.string({ minLength: 1 }),
+      fc.string({ minLength: 190, maxLength: 260 }),
+    );
+    fc.assert(
+      fc.property(
+        text.filter((value) => /\S/.test(value)),
+        (value) => {
+          const said = oneLine(value);
+          const stop = /[.!?…]$/.test(said) ? '' : '.';
+          expect(messageOf(failed(401, value))).toBe(
+            `API error 401: ${said}${stop} Check OPENROUTER_API_KEY.`,
+          );
+        },
+      ),
+    );
+  });
+
+  it.each([
+    [401, '', 'API error 401: Unauthorized. Check OPENROUTER_API_KEY.'],
+    [401, '   ', 'API error 401: Unauthorized. Check OPENROUTER_API_KEY.'],
+    [400, '', 'API error 400: Bad Request'],
+    [
+      599,
+      '',
+      'API error 599: Unknown error. OpenRouter is having trouble. Try again later.',
+    ],
+  ])(
+    'gives the standard reason when the API sent no message (%i, %j)',
+    (status, text, expected) => {
+      expect(messageOf(failed(status, text))).toBe(expected);
+      expect(messageOf(new ChunkError(status, text))).toBe(expected);
+    },
+  );
+
+  it('leaves the text alone when there is no remedy to add', () => {
     expect(messageOf(failed(400, 'bad request'))).toBe(
       'API error 400: bad request',
+    );
+    expect(messageOf(failed(400, 'bad request.'))).toBe(
+      'API error 400: bad request.',
     );
   });
 
@@ -85,7 +136,7 @@ describe('toApiError', () => {
     const html = '<html><body><h1>502 Bad Gateway</h1></body></html>';
     const wrapper = `API error occurred: Status 502 Content-Type text/html. Body: ${html}`;
     expect(messageOf(failed(502, wrapper, html))).toBe(
-      'API error 502: Bad Gateway OpenRouter is having trouble. Try again later.',
+      'API error 502: Bad Gateway. OpenRouter is having trouble. Try again later.',
     );
   });
 
@@ -93,7 +144,7 @@ describe('toApiError', () => {
     const body = '{"error":{"message":"Provider returned error","code":502}}';
     const wrapper = `API error occurred: Status 502 Content-Type application/json. Body: ${body}`;
     expect(messageOf(failed(502, wrapper, body))).toBe(
-      'API error 502: Provider returned error OpenRouter is having trouble. Try again later.',
+      'API error 502: Provider returned error. OpenRouter is having trouble. Try again later.',
     );
   });
 
@@ -101,7 +152,7 @@ describe('toApiError', () => {
     const wrapper =
       'API error occurred: Status 500 Content-Type text/plain. Body: boom';
     expect(messageOf(failed(500, wrapper, 'boom'))).toBe(
-      'API error 500: Internal Server Error OpenRouter is having trouble. Try again later.',
+      'API error 500: Internal Server Error. OpenRouter is having trouble. Try again later.',
     );
   });
 
@@ -114,7 +165,7 @@ describe('toApiError', () => {
   ])('shows the standard reason when a body %s', (_name, body) => {
     const wrapper = `API error occurred: Status 502 Content-Type text/plain. Body: ${body}`;
     expect(messageOf(failed(502, wrapper, body))).toBe(
-      'API error 502: Bad Gateway OpenRouter is having trouble. Try again later.',
+      'API error 502: Bad Gateway. OpenRouter is having trouble. Try again later.',
     );
   });
 
@@ -126,7 +177,7 @@ describe('toApiError', () => {
     const wrapper =
       'API error occurred: Status 599 Content-Type text/plain. Body: x';
     expect(messageOf(failed(599, wrapper, 'x'))).toBe(
-      'API error 599: Unknown error OpenRouter is having trouble. Try again later.',
+      'API error 599: Unknown error. OpenRouter is having trouble. Try again later.',
     );
   });
 

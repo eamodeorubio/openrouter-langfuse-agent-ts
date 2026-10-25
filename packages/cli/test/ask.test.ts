@@ -157,12 +157,12 @@ describe('ask: HTTP and network failures', () => {
       error: { code: 500, message: '  one\n\n  two   three\t ' },
     });
     expect((await failure()).message).toBe(
-      'API error 500: one two three OpenRouter is having trouble. Try again later.',
+      'API error 500: one two three. OpenRouter is having trouble. Try again later.',
     );
   });
 
   it.each([
-    ['exactly 200 characters is kept whole', 200, 'x'.repeat(200)],
+    ['exactly 200 characters is kept whole', 200, `${'x'.repeat(200)}.`],
     ['201 characters is cut to 200 and marked', 201, `${'x'.repeat(200)}…`],
   ])('a message of %s', async (_name, length, expected) => {
     serveAlways(500, { error: { code: 500, message: 'x'.repeat(length) } });
@@ -224,17 +224,20 @@ describe('ask: retries', () => {
   );
 
   it.each([
-    [400, ''],
-    [401, ' Check OPENROUTER_API_KEY.'],
-    [402, ' Add credits at https://openrouter.ai/settings/credits.'],
-    [403, ' Check OPENROUTER_API_KEY.'],
+    [400, 'API error 400: no'],
+    [401, 'API error 401: no. Check OPENROUTER_API_KEY.'],
+    [
+      402,
+      'API error 402: no. Add credits at https://openrouter.ai/settings/credits.',
+    ],
+    [403, 'API error 403: no. Check OPENROUTER_API_KEY.'],
     [
       404,
-      ' If the model is unknown, check the slug passed with --model or set in OPENROUTER_MODEL.',
+      'API error 404: no. If the model is unknown, check the slug passed with --model or set in OPENROUTER_MODEL.',
     ],
-  ])('does not retry HTTP %i', async (status, remedy) => {
+  ])('does not retry HTTP %i', async (status, expected) => {
     serveAlways(status, { error: { code: status, message: 'no' } });
-    expect((await failure()).message).toBe(`API error ${status}: no${remedy}`);
+    expect((await failure()).message).toBe(expected);
     expect(attempts.count).toBe(1);
     expect(waits).toEqual([]);
   });
@@ -242,7 +245,7 @@ describe('ask: retries', () => {
   it('gives up after four retries and reports the last error', async () => {
     serveAlways(503, { error: { code: 503, message: 'overloaded' } });
     expect((await failure()).message).toBe(
-      'API error 503: overloaded OpenRouter is having trouble. Try again later.',
+      'API error 503: overloaded. OpenRouter is having trouble. Try again later.',
     );
     expect(attempts.count).toBe(5);
     expect(waits).toEqual([300, 600, 1200, 2400]);
@@ -254,7 +257,7 @@ describe('ask: retries', () => {
       { error: { code: 500, message: 'last' } },
     ]);
     expect((await failure()).message).toBe(
-      'API error 500: last OpenRouter is having trouble. Try again later.',
+      'API error 500: last. OpenRouter is having trouble. Try again later.',
     );
   });
 

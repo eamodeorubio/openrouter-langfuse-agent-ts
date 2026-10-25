@@ -87,12 +87,16 @@ When the API rejects a request, the message SHALL quote the status and the messa
 - **WHEN** the API answers 401 with the message `No auth credentials found`
 - **THEN** the error line holds `401` and `No auth credentials found`
 
+#### Scenario: No message
+- **WHEN** the API answers 401 with an empty message
+- **THEN** the line is `API error 401: Unauthorized. Check OPENROUTER_API_KEY.`, with the standard reason of the status in place of the missing words
+
 #### Scenario: Reply that is not JSON
 - **WHEN** the API answers 502 with an HTML page
 - **THEN** the message holds the status and its standard reason and no markup
 
 ### Requirement: Remedies for service errors
-A failure that the user can act on SHALL end with a remedy on the same line, after the existing text. Other service failures keep their text. The remedy SHALL NOT echo a key or a header.
+A failure that the user can act on SHALL end with a remedy on the same line, after the existing text. When the text of the service does not end in `.`, `!`, `?` or `…`, a full stop SHALL come before the remedy. Other service failures keep their text. The remedy SHALL NOT echo a key or a header.
 
 #### Scenario: Remedies
 
@@ -109,8 +113,24 @@ A failure that the user can act on SHALL end with a remedy on the same line, aft
 | Trace not delivered | ` Check the Langfuse settings and try again.` |
 
 #### Scenario: Bad key
-- **WHEN** the API answers 401 to a request
-- **THEN** stderr holds one line with the status, the API's message and `Check OPENROUTER_API_KEY.`, and the exit code is 2
+- **WHEN** the API answers 401 with the message `No auth credentials found`
+- **THEN** stderr holds the one line `API error 401: No auth credentials found. Check OPENROUTER_API_KEY.`, and the exit code is 2
+
+#### Scenario: Message that ends in a full stop
+- **WHEN** the API answers 401 with the message `User not found.`
+- **THEN** the line reads `API error 401: User not found. Check OPENROUTER_API_KEY.`, with no second full stop
+
+#### Scenario: Text cut at 200 characters
+- **WHEN** the API answers 401 with a message of 201 characters or more, and the text is cut to 200 characters and `…`
+- **THEN** the cut text keeps its `…`, no full stop is added, and the remedy follows
+
+#### Scenario: Text of exactly 200 characters without final punctuation
+- **WHEN** the API answers 401 with a message of exactly 200 characters that does not end in `.`, `!`, `?` or `…`
+- **THEN** the text is kept whole, a full stop follows it, and then the remedy
+
+#### Scenario: Status with no remedy
+- **WHEN** the API answers 400 with the message `bad request`
+- **THEN** the line is `API error 400: bad request`, and nothing is added
 
 #### Scenario: Remedy stays on one line
 - **WHEN** any failure in the table occurs

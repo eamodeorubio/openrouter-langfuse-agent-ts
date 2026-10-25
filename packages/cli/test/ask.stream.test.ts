@@ -382,7 +382,7 @@ describe('ask: failures inside the stream', () => {
     );
     const { events, message } = await failure();
     expect(message).toBe(
-      'API error 500: provider failed OpenRouter is having trouble. Try again later.',
+      'API error 500: provider failed. OpenRouter is having trouble. Try again later.',
     );
     expect(events).toEqual([{ kind: 'content', text: 'Hel' }]);
   });
@@ -619,7 +619,7 @@ describe('ask: a stream that is cut off or goes quiet', {
       async (serverURL) => {
         const { message } = await failure(options(serverURL));
         expect(message).toBe(
-          'API error 500: provider failed OpenRouter is having trouble. Try again later.',
+          'API error 500: provider failed. OpenRouter is having trouble. Try again later.',
         );
         await eventually(() => hungUp);
       },
