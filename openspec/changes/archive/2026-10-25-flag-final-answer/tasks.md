@@ -16,8 +16,8 @@ Spec: *Final answer flag*.
 - [x] 1.6 Run `pnpm check`, `pnpm typecheck`, `pnpm test` and `pnpm mutation`; read every survivor and kill it or justify it. Apply a mutation by hand before calling a survivor a tool artifact.
 - [x] 1.7 Audit one real trace with the credentials already in the environment: run a question that makes the model use tools, fetch the observations through the API, and check that exactly one generation is `true`, that it is the last, that its text equals the root's output, and that no secret or machine detail is in the trace. Fix every gap.
 - [x] 1.8 Run `reviewer-code-high`, `reviewer-code-low`, `reviewer-docs`; fix every must-fix finding.
-- [ ] 1.9 Write the full report. Wait for the user's approval, which also approves the commit. Commit `feat: flag the answer the user gets in the trace`.
+- [x] 1.9 Write the full report. Wait for the user's approval, which also approves the commit. Commit `feat: flag the answer the user gets in the trace`.
 
 ## 2. Close
 
-- [ ] 2.1 After the slice: `/opsx:verify flag-final-answer`, fix what it finds, then archive as the last commit: `chore: archive flag-final-answer`, once the user approves.
+- [x] 2.1 After the slice: `/opsx:verify flag-final-answer`, fix what it finds, then archive as the last commit: `chore: archive flag-final-answer`, once the user approves.
