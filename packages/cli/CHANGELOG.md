@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.0](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v0.4.0...v0.5.0) (2026-10-25)
+
+
+### Features
+
+* add a --json flag for machine-readable output ([#26](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues/26)) ([cc419c7](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/commit/cc419c7e0568a9943547f3a64843104a9a625e10))
+
 ## [0.4.0](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v0.3.0...v0.4.0) (2026-10-25)
 
 
