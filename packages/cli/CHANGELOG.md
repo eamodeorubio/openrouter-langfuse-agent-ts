@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.4.0](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v0.3.0...v0.4.0) (2026-10-25)
+
+
+### Features
+
+* flag the answer the user gets in the trace ([#25](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues/25)) ([a5458ad](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/commit/a5458adcba0e8b7cca7ee6eb2c504da4cdf5314b))
+* trace the agent with Langfuse ([#23](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues/23)) ([5087433](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/commit/5087433f90a4a7f416cfe4119a9339ae3d1d259c))
+
 ## [0.3.0](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v0.2.0...v0.3.0) (2026-10-21)
 
 
