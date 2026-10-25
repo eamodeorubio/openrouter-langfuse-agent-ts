@@ -157,9 +157,11 @@ jobs:
   # Sends the package to npm, in a run that has just created a release and in
   # no other. It is a job of its own so that the repository stays read-only
   # while it runs the code of the package, and so that only this job can ask
-  # for an identity token (npm signs the provenance with it). If it fails,
-  # re-run the failed job: a later push to main would not create the release
-  # again.
+  # for an identity token. npm trusted publishing signs in with that token: the
+  # trusted-publisher setting of the package on npmjs.com names this repository
+  # and this workflow, so no secret is stored, and npm attaches the provenance
+  # by itself. If the job fails, re-run the failed job: a later push to main would
+  # not create the release again.
   publish:
     needs: release
     if: ${{ needs.release.outputs.released == 'true' }}
@@ -183,9 +185,7 @@ jobs:
       # Builds the package and fails on anything the archive should not hold.
       - name: Check the archive
         run: pnpm --filter ask-openrouter run pack:check
-      # The manifest asks for public access and for provenance.
+      # The manifest asks for public access. Provenance needs no flag here, but
+      # the manifest keeps it.
       - name: Publish to npm
-        env:
-          # Temporary: npm trusted publishing replaces the token after 1.0.0.
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
         run: pnpm --filter ask-openrouter publish --no-git-checks
