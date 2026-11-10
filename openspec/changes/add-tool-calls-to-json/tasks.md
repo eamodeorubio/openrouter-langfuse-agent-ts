@@ -15,11 +15,11 @@ Commit type `feat:`. PR title `feat: add the tool calls and the arguments to the
 - [x] 1.9 Refactor only where `QUALITY_RUBRIC.md` calls for it, at most 3 passes. Name the criterion for each.
 - [x] 1.10 Run `pnpm check`, `pnpm typecheck`, `pnpm test` and `pnpm mutation`. The score stays at or above the `break` threshold. Read every survivor.
 - [x] 1.11 Run `reviewer-code-high`, `reviewer-code-low` and `reviewer-docs`. Fix every must-fix finding.
-- [ ] 1.12 Write the full report. Wait for user approval, which also approves the commit. Commit.
+- [x] 1.12 Write the full report. Wait for user approval, which also approves the commit. Commit.
 
 ## 2. Archive
 
-- [ ] 2.1 Verify the change with `/opsx:verify` and fix what it finds.
+- [x] 2.1 Verify the change with `/opsx:verify` and fix what it finds.
 - [ ] 2.2 Once the user approves, archive it as `chore: archive add-tool-calls-to-json`, as the last commit before merge.
 
 ## Workflow follow-up

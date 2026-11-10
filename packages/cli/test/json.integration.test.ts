@@ -498,6 +498,31 @@ describe('--json tool results end to end', () => {
     ]);
   });
 
+  it('lists a bad status of the models API as failed, once the retries are spent', async () => {
+    api.reply(200, toolRound([call('a', 'get_model', '{"slug":"a/b"}')]));
+    for (let i = 0; i < 5; i++) {
+      api.replyGet('/model/a/b', 503, {
+        error: { message: 'busy', code: 503 },
+      });
+    }
+    answer('sorry');
+    const object = parse((await cli(['-q', 'q', '--json'])).stdout);
+    const [entry] = object.toolCalls as { output: string; failed: boolean }[];
+    expect(entry?.failed).toBe(true);
+    expect(JSON.parse(entry?.output ?? '').error).toMatch(
+      /^API error 503: .*busy/,
+    );
+  });
+
+  it('lists an expression that is not arithmetic as failed', async () => {
+    api.reply(200, toolRound([call('a', 'calculate', '{"expression":"1 +"}')]));
+    answer('sorry');
+    const object = parse((await cli(['-q', 'q', '--json'])).stdout);
+    const [entry] = object.toolCalls as { output: string; failed: boolean }[];
+    expect(entry?.failed).toBe(true);
+    expect(JSON.parse(entry?.output ?? '').error).toEqual(expect.any(String));
+  });
+
   it('keeps a very large result whole', async () => {
     const description = 'x'.repeat(200_000);
     api.reply(200, toolRound([call('a', 'get_model', '{"slug":"a/big"}')]));
@@ -581,6 +606,8 @@ describe('--json on failure', () => {
     expect(object).toMatchObject({
       question: 'hi',
       success: false,
+      toolCalls: [],
+      args: { verbose: false },
       error: { code: 'API_ERROR' },
     });
     expect(object).not.toHaveProperty('answer');

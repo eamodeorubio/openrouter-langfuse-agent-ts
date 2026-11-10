@@ -44,7 +44,7 @@ The presenter ignores the new event.
 
 When `runCalls` throws, `converse` catches, yields one event for every call of the batch, and rethrows the original error. A call with an outcome gets it. The thrown call's outcome is the redacted message with `failed: true`, which is what its span already records. A sibling still running has none and gets `failed: true` with the output `[TOOL_CALL_NOT_COMPLETED] Tool call did not complete`. The run does not wait for it, so the failure is not delayed by up to a tool timeout, and whatever the sibling returns later is dropped. A sibling that finished before the catch ran keeps its real result. Because the batch is known from the response, the list never loses a call, and `converse` needs no rule for skipping one.
 
-The generator yields from `catch`, not from `finally`: a `yield` in `finally` would swallow a `return()` from a reader that stopped early.
+The generator catches the error, yields the events after the `try` and rethrows. It does not yield from a `finally`: a `yield` there would swallow a `return()` from a reader that stopped early.
 
 ### The limit round is reported where it is detected
 
@@ -60,7 +60,7 @@ The `round` of an event is `toolRounds + 1` in `converse`: the count of the resp
 
 ### The schema gets two fields and a strict entry
 
-In `output.ts`, `toolCalls` is a required array of strict entries on the success object and an optional one on the failure object. `args` is a required strict object on success and optional on failure, with `verbose` required inside it. `round` is an integer of at least 1. `schema:generate` rewrites the published JSON Schema, and the existing test that compares the file to the Zod definition keeps them in step.
+In `output.ts`, `toolCalls` is a required array of strict entries on the success object and an optional one on the failure object. `args` is a required strict object on success and optional on failure, with `verbose` required inside it. `round` is an integer of at least 1. `ToolCall`, `ToolCalls` and `Args` carry an `id`, so the generator emits each once under `$defs` and both objects refer to it, and a test pins that. The note on when each field is absent sits in the failure object's description. `schema:generate` rewrites the published JSON Schema, and the existing test that compares the file to the Zod definition keeps them in step.
 
 ## Risks / Trade-offs
 

@@ -17,7 +17,7 @@ Under `--json` a script sees the answer, the model and the tokens. It does not s
 - The list is always present on success, empty when no tool was called. A failure before the run started has none.
 - Both objects gain `args`, the arguments the CLI received, parsed: `verbose` always, `thinking` when a thinking flag was given, `model` when `--model` was given. A field not set is left out. A failure caused by the arguments has no `args`.
 - `--verbose`, `--thinking` and `--no-thinking` stay accepted and change nothing in the output. The object now says which were given.
-- The JSON Schema, the docs page and the `--json` entries of the help text follow.
+- The JSON Schema and the docs page follow. The help text already describes `--json` correctly and does not change.
 
 No existing field changes and no input that worked stops working. The bump is minor (`feat:`).
 
