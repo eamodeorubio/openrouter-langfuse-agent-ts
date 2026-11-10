@@ -1,8 +1,15 @@
 import type { ChatMessages } from '@openrouter/sdk/models';
+import type { ToolCall } from './assemble.js';
 import { chat, IDLE_TIMEOUT_MS, type Round } from './chat.js';
 import { createClient } from './client.js';
 import type { Config } from './config.js';
-import { ApiError, LimitError } from './errors.js';
+import {
+  ApiError,
+  LIMIT_EXCEEDED,
+  LimitError,
+  TOOL_CALL_NOT_COMPLETED,
+  tagged,
+} from './errors.js';
 import { INSTRUCTIONS } from './instructions.js';
 import { oneLine, redactKey } from './text.js';
 import { functionTools, TOOLS } from './tools/registry.js';
@@ -13,7 +20,7 @@ import {
   type RootSpan,
   type Tracer,
 } from './tracing/tracer.js';
-import { assistantTurn, runCalls } from './turn.js';
+import { assistantTurn, type CallOutcome, runCalls } from './turn.js';
 import type { AskEvent, Usage } from './types.js';
 import { addUsage } from './usage.js';
 
@@ -39,6 +46,37 @@ export interface AskOptions {
   /** Where the run is recorded. Without one it is not. */
   tracer?: Tracer;
 }
+
+/** What a call has to show when it never returned a result. */
+const NOT_COMPLETED: CallOutcome = {
+  output: tagged(TOOL_CALL_NOT_COMPLETED, 'Tool call did not complete'),
+  failed: true,
+};
+
+/** The call the model asked for in the round that hit the limit, which was never run. */
+const REFUSED: CallOutcome = {
+  output: tagged(LIMIT_EXCEEDED, 'Tool calls limit exceeded'),
+  failed: true,
+};
+
+/**
+ * One event per call of a response, in the order of the response. A call with
+ * no outcome gets `fallback`.
+ */
+const callEvents = (
+  round: number,
+  calls: ToolCall[],
+  outcomes: readonly (CallOutcome | undefined)[],
+  apiKey: string,
+  fallback: CallOutcome,
+): AskEvent[] =>
+  calls.map((call, index) => ({
+    kind: 'tool-call',
+    round,
+    name: call.name,
+    arguments: redactKey(call.arguments, apiKey),
+    ...(outcomes[index] ?? fallback),
+  }));
 
 /** The response is the answer the user gets: it has text, and no tool call to follow. */
 const isAnswer = (round: Round): boolean =>
@@ -172,7 +210,15 @@ async function* converse(
         'The model asked to use a tool in a way this tool cannot follow. Try again, or choose another model.',
       );
     }
+    const responseNumber = toolRounds + 1;
     if (forbidTools) {
+      yield* callEvents(
+        responseNumber,
+        response.toolCalls,
+        [],
+        apiKey,
+        REFUSED,
+      );
       throw new LimitError(
         `The model kept calling tools after ${MAX_TOOL_ROUNDS} rounds of them. Ask a narrower question.`,
       );
@@ -186,14 +232,32 @@ async function* converse(
         arguments: redactKey(call.arguments, apiKey),
       };
     }
-    messages.push(
-      ...(await runCalls(
-        TOOLS,
-        response.toolCalls,
-        { client, timeoutMs: toolTimeoutMs },
-        apiKey,
-        root,
-      )),
+    const outcomes: (CallOutcome | undefined)[] = [];
+    let thrown: { error: unknown } | undefined;
+    try {
+      messages.push(
+        ...(await runCalls(
+          TOOLS,
+          response.toolCalls,
+          { client, timeoutMs: toolTimeoutMs },
+          apiKey,
+          root,
+          outcomes,
+        )),
+      );
+    } catch (error) {
+      // Rethrown below, after the calls are reported. Not a `finally`: a reader that stops early must not be kept waiting.
+      thrown = { error };
+    }
+    yield* callEvents(
+      responseNumber,
+      response.toolCalls,
+      outcomes,
+      apiKey,
+      NOT_COMPLETED,
     );
+    if (thrown) {
+      throw thrown.error;
+    }
   }
 }

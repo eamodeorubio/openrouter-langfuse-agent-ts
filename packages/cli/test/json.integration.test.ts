@@ -21,6 +21,7 @@ import {
   contentChunk,
   errorChunk,
   RECORDED_401_MESSAGE,
+  recordedModel,
   recordedUnauthorized,
   sseBody,
   thinkingChunk,
@@ -135,6 +136,8 @@ describe('--json on success', () => {
       success: true,
       model: 'test/model',
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      toolCalls: [],
+      args: { verbose: false },
     });
     expect(result.stderr).toBe('');
     expect(result.code).toBe(0);
@@ -153,6 +156,8 @@ describe('--json on success', () => {
       success: true,
       model: 'test/model',
       usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2 },
+      toolCalls: [],
+      args: { verbose: false },
       thinking: 'Add.',
       traceId,
     });
@@ -300,6 +305,258 @@ describe('--json model and usage', () => {
     expect(object.success).toBe(false);
     expect(object).not.toHaveProperty('model');
     expect(object).not.toHaveProperty('usage');
+  });
+});
+
+const call = (id: string, name: string, args: string) => ({
+  id,
+  name,
+  arguments: args,
+});
+
+describe('--json tool calls', () => {
+  it('lists the calls with their round, in the order of the response', async () => {
+    api.reply(
+      200,
+      toolRound([
+        call('a', 'calculate', '{"expression":"1+1"}'),
+        call('b', 'calculate', '{"expression":"2*3"}'),
+      ]),
+    );
+    api.reply(200, toolRound([call('c', 'calculate', '{"expression":"9-4"}')]));
+    answer('done');
+    const object = parse((await cli(['-q', 'q', '--json'])).stdout);
+    expect(object.toolCalls).toEqual([
+      {
+        round: 1,
+        name: 'calculate',
+        arguments: '{"expression":"1+1"}',
+        output: '{"formula":"1 + 1 = 2","result":2}',
+        failed: false,
+      },
+      {
+        round: 1,
+        name: 'calculate',
+        arguments: '{"expression":"2*3"}',
+        output: '{"formula":"2 * 3 = 6","result":6}',
+        failed: false,
+      },
+      {
+        round: 2,
+        name: 'calculate',
+        arguments: '{"expression":"9-4"}',
+        output: '{"formula":"9 - 4 = 5","result":5}',
+        failed: false,
+      },
+    ]);
+  });
+
+  it.each([
+    ['an unknown tool', call('a', 'nope', '{}'), /Unknown tool "nope"/],
+    [
+      'arguments that are not JSON',
+      call('a', 'calculate', '{"expr'),
+      /not valid JSON/,
+    ],
+    [
+      'arguments that fail validation',
+      call('a', 'calculate', '{"expression":5}'),
+      /Invalid arguments\. expression/,
+    ],
+  ])(
+    'lists a call with %s as failed, with the text the model received',
+    async (_name, bad, message) => {
+      api.reply(200, toolRound([bad]));
+      answer('sorry');
+      const object = parse((await cli(['-q', 'q', '--json'])).stdout);
+      const [entry] = object.toolCalls as {
+        output: string;
+        failed: boolean;
+        arguments: string;
+      }[];
+      expect(entry?.failed).toBe(true);
+      expect(entry?.arguments).toBe(bad.arguments);
+      expect(JSON.parse(entry?.output ?? '').error).toMatch(message);
+      const sentBack = api.sent[1]?.body.messages?.at(-1);
+      expect(sentBack?.content).toBe(entry?.output);
+    },
+  );
+
+  it('keeps the calls made before a failure', async () => {
+    calculate({ prompt_tokens: 10, completion_tokens: 5, total_tokens: 15 });
+    api.reply(401, recordedUnauthorized);
+    const object = parse((await cli(['-q', '1+1', '--json'])).stderr);
+    expect(object.toolCalls).toEqual([
+      {
+        round: 1,
+        name: 'calculate',
+        arguments: '{"expression":"1+1"}',
+        output: '{"formula":"1 + 1 = 2","result":2}',
+        failed: false,
+      },
+    ]);
+  });
+
+  it('lists the calls of the round that hits the limit as failed, and exits 3', async () => {
+    for (let i = 0; i < 9; i++) {
+      api.reply(
+        200,
+        toolRound([call(`c${i}`, 'calculate', '{"expression":"1+1"}')]),
+      );
+    }
+    const result = await cli(['-q', 'hi', '--json']);
+    expect(result.code).toBe(3);
+    const object = parse(result.stderr);
+    const calls = object.toolCalls as {
+      round: number;
+      output: string;
+      failed: boolean;
+    }[];
+    expect(calls).toHaveLength(9);
+    expect(calls.at(-1)).toEqual({
+      round: 9,
+      name: 'calculate',
+      arguments: '{"expression":"1+1"}',
+      output: '[LIMIT_EXCEEDED] Tool calls limit exceeded',
+      failed: true,
+    });
+    expect(calls.slice(0, 8).every((entry) => !entry.failed)).toBe(true);
+  });
+
+  it('records --verbose in args and writes nothing to stderr', async () => {
+    api.reply(200, toolRound([call('a', 'calculate', '{"expression":"1+1"}')]));
+    answer('2');
+    const result = await cli(['-q', '1+1', '--json', '--verbose']);
+    expect(result.stderr).toBe('');
+    const object = parse(result.stdout);
+    expect(object.args).toEqual({ verbose: true });
+    expect(object.toolCalls).toHaveLength(1);
+  });
+});
+
+describe('--json args', () => {
+  it('records the flags and the model that were given', async () => {
+    answer('4');
+    const object = parse(
+      (await cli(['-q', 'q', '--json', '--no-thinking', '--model', 'x/y']))
+        .stdout,
+    );
+    expect(object.args).toEqual({
+      verbose: false,
+      thinking: false,
+      model: 'x/y',
+    });
+  });
+
+  it('records --thinking as true', async () => {
+    answer('4');
+    const object = parse(
+      (await cli(['-q', 'q', '--json', '--thinking'])).stdout,
+    );
+    expect(object.args).toEqual({ verbose: false, thinking: true });
+  });
+
+  it('is on a configuration failure, which has no calls', async () => {
+    const result = await cli(['-q', 'q', '--json'], { OPENROUTER_API_KEY: '' });
+    const object = parse(result.stderr);
+    expect(object).toMatchObject({
+      success: false,
+      args: { verbose: false },
+      error: { code: 'CONFIG_ERROR' },
+    });
+    expect(object).not.toHaveProperty('toolCalls');
+  });
+
+  it('is left out of a failure caused by the arguments, with no calls either', async () => {
+    const result = await cli([
+      '-q',
+      'q',
+      '--json',
+      '--thinking',
+      '--no-thinking',
+    ]);
+    const object = parse(result.stderr);
+    expect(object).not.toHaveProperty('args');
+    expect(object).not.toHaveProperty('toolCalls');
+  });
+});
+
+describe('--json tool results end to end', () => {
+  it('lists a model that does not exist as failed, with the text the model received', async () => {
+    api.reply(200, toolRound([call('a', 'get_model', '{"slug":"acme/nope"}')]));
+    api.replyGet('/model/acme/nope', 404, { error: { message: 'gone' } });
+    answer('sorry');
+    const object = parse((await cli(['-q', 'q', '--json'])).stdout);
+    expect(object.toolCalls).toEqual([
+      {
+        round: 1,
+        name: 'get_model',
+        arguments: '{"slug":"acme/nope"}',
+        output: '{"error":"Model not found: acme/nope"}',
+        failed: true,
+      },
+    ]);
+  });
+
+  it('keeps a very large result whole', async () => {
+    const description = 'x'.repeat(200_000);
+    api.reply(200, toolRound([call('a', 'get_model', '{"slug":"a/big"}')]));
+    api.replyGet('/model/a/big', 200, {
+      data: { ...recordedModel.data, id: 'a/big', description },
+    });
+    answer('ok');
+    const object = parse((await cli(['-q', 'q', '--json'])).stdout);
+    const [entry] = object.toolCalls as { output: string; failed: boolean }[];
+    expect(entry?.failed).toBe(false);
+    expect(JSON.parse(entry?.output ?? '').description).toBe(description);
+  });
+
+  it('replaces the key a tool result echoes', async () => {
+    api.reply(
+      200,
+      toolRound([call('a', 'get_model', `{"slug":"acme/${KEY}"}`)]),
+    );
+    api.replyGet(`/model/acme/${KEY}`, 404, { error: { message: 'gone' } });
+    answer('sorry');
+    const result = await cli(['-q', 'q', '--json']);
+    expect(result.stdout).not.toContain(KEY);
+    const [entry] = parse(result.stdout).toolCalls as {
+      output: string;
+      failed: boolean;
+    }[];
+    expect(entry).toMatchObject({
+      output: '{"error":"Model not found: acme/[redacted]"}',
+      failed: true,
+    });
+  });
+});
+
+describe('--json keeps the key out of the new fields', () => {
+  it('replaces the key in --model, in the arguments of a call and in its output', async () => {
+    api.reply(
+      200,
+      toolRound([call('a', 'calculate', `{"expression":"${KEY}"}`)]),
+    );
+    answer('sorry');
+    const result = await cli(['-q', 'q', '--json', '--model', KEY]);
+    const object = parse(result.stdout);
+    expect(result.stdout).not.toContain(KEY);
+    expect(object.args).toEqual({ verbose: false, model: '[redacted]' });
+    const [entry] = object.toolCalls as { arguments: string; output: string }[];
+    expect(entry?.arguments).toBe('{"expression":"[redacted]"}');
+    expect(entry?.output).not.toContain(KEY);
+  });
+
+  it('replaces the key in --model on a failure before the configuration is known', async () => {
+    const result = await cli(['-q', 'q', '--json', '--model', KEY], {
+      LANGFUSE_PUBLIC_KEY: PK,
+    });
+    expect(result.stdout).toBe('');
+    expect(result.stderr).not.toContain(KEY);
+    expect(parse(result.stderr)).toMatchObject({
+      args: { verbose: false, model: '[redacted]' },
+      error: { code: 'CONFIG_ERROR' },
+    });
   });
 });
 

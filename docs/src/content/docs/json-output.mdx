@@ -1,12 +1,12 @@
 ---
 title: JSON output
-description: Run the tool with --json to get one JSON object per run, with the question, the answer, the model, the tokens and cost, the thinking, the trace id and, on failure, a stable error code. A JSON Schema describes the object.
+description: Run the tool with --json to get one JSON object per run, with the question, the answer, the model, the tokens and cost, every tool call the model made, the arguments you gave, the thinking, the trace id and, on failure, a stable error code. A JSON Schema describes the object.
 ---
 
 import { Code } from '@astrojs/starlight/components';
 import schema from '../../../public/schemas/json-output.schema.json?raw';
 
-A person reads the tool's normal output. The answer streams to stdout, the thinking and the status lines go to stderr, and a failure is a sentence. A script has a harder time. It has to scrape the sentence to learn why a run failed, and it has no steady place to find the trace id, the model that answered or what the answer cost.
+A person reads the tool's normal output. The answer streams to stdout, the thinking and the status lines go to stderr, and a failure is a sentence. A script has a harder time. It has to scrape the sentence to learn why a run failed, and it has no steady place to find the trace id, the model that answered, what the answer cost or how the model got there.
 
 Add `--json` and the tool changes its manner. Nothing appears while the model works. When the run is over, the tool writes one JSON object and one newline, then exits with the same code it always does. The conversation with the model still streams underneath; you just don't watch it.
 
@@ -30,20 +30,26 @@ The object goes to stdout. Stderr stays empty.
     "totalTokens": 47,
     "cost": 0.0000208
   },
+  "toolCalls": [],
+  "args": {
+    "verbose": false
+  },
   "thinking": "The user wants a short definition.",
   "traceId": "0123456789abcdef0123456789abcdef"
 }
 ```
 
-| Field      | Meaning                                                                                                                                |
-| ---------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `question` | The question the model received, trimmed.                                                                                              |
-| `answer`   | The whole answer. When the model used tools along the way, the same text stdout would carry without `--json`, minus the final newline. |
-| `success`  | `true`.                                                                                                                                |
-| `model`    | The model that served the final response.                                                                                              |
-| `usage`    | What the question used, summed over every request. See below.                                                                          |
-| `thinking` | The model's readable thinking. Left out when there is none.                                                                            |
-| `traceId`  | The Langfuse trace id. Left out when the run is not traced.                                                                            |
+| Field       | Meaning                                                                                                                                |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `question`  | The question the model received, trimmed.                                                                                              |
+| `answer`    | The whole answer. When the model used tools along the way, the same text stdout would carry without `--json`, minus the final newline. |
+| `success`   | `true`.                                                                                                                                |
+| `model`     | The model that served the final response.                                                                                              |
+| `usage`     | What the question used, summed over every request. See below.                                                                          |
+| `toolCalls` | Every tool call the model made, with its arguments and its result. An empty list when it made none. See below.                         |
+| `args`      | The arguments the tool received, parsed. See below.                                                                                    |
+| `thinking`  | The model's readable thinking. Left out when there is none.                                                                            |
+| `traceId`   | The Langfuse trace id. Left out when the run is not traced.                                                                            |
 
 A field with nothing to say is left out, not written as `null`. The order of the keys is not fixed: read the object by name, never by position. The thinking is always collected, whatever `--thinking` and `--no-thinking` say, because those flags decide what a person sees on a terminal and nobody is watching one here.
 
@@ -62,6 +68,68 @@ A question can take several requests: every lookup the model makes is a round tr
 
 A count of zero that the API reported stays in the object. A count nobody reported is left out. `cost` follows the strictest rule: if even one request came back without a cost, there is no `cost` at all, because a sum over part of the question would understate the spend, and a wrong number does more harm than a missing one. The costs are added as the API gave them, without rounding, so the last digits of a sum can carry floating-point noise. Format the dollars where you print them.
 
+## The tool calls
+
+An answer about prices is rarely one model response. The model looks things up first: it searches the catalog, fetches a model, does the arithmetic. `toolCalls` is that trajectory, one entry per call, in the order the model made them.
+
+```json
+"toolCalls": [
+  {
+    "round": 1,
+    "name": "search_models",
+    "arguments": "{\"sort\":\"pricing-low-to-high\",\"limit\":5}",
+    "output": "{\"total\":312,\"offset\":0,\"next_offset\":5,\"models\":[...]}",
+    "failed": false
+  },
+  {
+    "round": 2,
+    "name": "get_model",
+    "arguments": "{\"slug\":\"acme/nope\"}",
+    "output": "{\"error\":\"Model not found: acme/nope\"}",
+    "failed": true
+  }
+]
+```
+
+| Field       | Meaning                                                                                                                                                                          |
+| ----------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `round`     | The number of the model response that asked for the call, counted from 1. Calls the model made together share a round, so a script can tell parallel calls from sequential ones. |
+| `name`      | The tool name the model sent.                                                                                                                                                    |
+| `arguments` | The arguments exactly as the model sent them. If the model sent broken JSON, you see the broken JSON.                                                                            |
+| `output`    | The text the tool returned to the model.                                                                                                                                         |
+| `failed`    | `true` when the result was an error.                                                                                                                                             |
+
+The list is always there on success, empty when the model answered without a lookup. `--verbose` is not needed to get it. A failure that happened after the first request carries the calls made so far, again empty if there were none. A failure before that, such as a missing key, has no `toolCalls`.
+
+Nothing is cut. `arguments` and `output` are the whole text, however long: a large page from `search_models` runs to many kilobytes, and it is all there. A script that wants less can cut it, and it knows better than the tool how much it needs. The one change the tool makes is to replace your OpenRouter key with `[redacted]` if it turns up in either.
+
+### Calls that go wrong
+
+A call the model gets wrong is not a failure of the run. The tool answers the model with the error, the model reads it and tries again, and the object records the attempt with `failed` set to `true` and the error as `output`, the very text the model saw. That covers an unknown tool name, arguments that are not JSON, arguments that fail validation, an expression that is not arithmetic, a model slug that does not exist, and a request that timed out, dropped or came back with a bad status. For an evaluation, these entries are often the interesting ones.
+
+Two kinds of call never get a result from a tool. The `output` then says why, in square brackets, and `failed` is `true`:
+
+| `output`                                               | When                                                                                                    |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| `[LIMIT_EXCEEDED] Tool calls limit exceeded`           | The model asked for tools in the round that hit the limit. The calls were never run.                    |
+| `[TOOL_CALL_NOT_COMPLETED] Tool call did not complete` | The run failed while the call was still running, for example when another call of the same round threw. |
+
+A tool that throws has a bug of its own, whatever the model sent. The run fails with `UNEXPECTED_ERROR`, and the call that threw is in the list with the message as its `output`.
+
+The model never saw these two outputs. They are reasons, and they are not error codes: the `error.code` of the run is still one of the codes in the table below.
+
+## The arguments you gave
+
+`args` echoes the arguments the tool received, parsed.
+
+| Field      | Meaning                                                                               |
+| ---------- | ------------------------------------------------------------------------------------- |
+| `verbose`  | `true` when you gave `--verbose`, `false` when you did not. Always there.             |
+| `thinking` | `true` for `--thinking`, `false` for `--no-thinking`. Left out when you gave neither. |
+| `model`    | The value of `--model`. Left out when you did not give it.                            |
+
+A field you did not set is left out, never written as `null`. The question is not repeated here, since `question` holds it. A run whose arguments were rejected has no `args`, as it has no `question`: there was nothing to record. Any of your API keys (OpenRouter or Langfuse) that you typed into `--model` is replaced by `[redacted]`.
+
 ## A run that fails
 
 The same object, with `success` set to `false`, goes to stderr instead. Stdout stays empty. The exit code is the one the tool would have used anyway, so a script that checks it needs no change.
@@ -70,6 +138,10 @@ The same object, with `success` set to `false`, goes to stderr instead. Stdout s
 {
   "question": "What is a token?",
   "success": false,
+  "toolCalls": [],
+  "args": {
+    "verbose": false
+  },
   "error": {
     "code": "API_ERROR",
     "message": "API error 401: No auth credentials found. Check OPENROUTER_API_KEY."
@@ -77,7 +149,7 @@ The same object, with `success` set to `false`, goes to stderr instead. Stdout s
 }
 ```
 
-The object carries whatever the tool knew when the run broke, with one exception: it never has a `model` or a `usage`. A failed run has no final response, and a sum over the requests that did finish would look complete when it is not. A failure before the question was read has no `question`. A stream that dies halfway has the `answer` that arrived, since the tool keeps partial text as it always has. The `message` is the sentence the tool would have written to stderr, without the help text and without the `detail:` line that `--verbose` adds to an unexpected failure. The tool never puts your API key or your Langfuse keys in the `message`. The answer and the thinking pass through as the model wrote them.
+The object carries whatever the tool knew when the run broke, with one exception: it never has a `model` or a `usage`. The `toolCalls` and the `args` are there when they are known, as described above. A failed run has no final response, and a sum over the requests that did finish would look complete when it is not. A failure before the question was read has no `question`. A stream that dies halfway has the `answer` that arrived, since the tool keeps partial text as it always has. The `message` is the sentence the tool would have written to stderr, without the help text and without the `detail:` line that `--verbose` adds to an unexpected failure. The tool never puts your API key or your Langfuse keys in the `message`. The answer and the thinking pass through as the model wrote them.
 
 The `code` is a short word in capitals and underscores. It is never a number. Branch on it, and leave the message to people.
 
@@ -97,7 +169,7 @@ An argument mistake is reported as JSON too, as long as `--json` is among the ar
 
 ## What is silenced
 
-With `--json` the tool writes nothing else. No thinking stream, no `model:` and `tokens:` lines (a success object carries their numbers), no `tool:` or `trace:` lines, and no note that tracing is off. `--verbose`, `--thinking` and `--no-thinking` are accepted and change nothing.
+With `--json` the tool writes nothing else. No thinking stream, no `model:` and `tokens:` lines (a success object carries their numbers), no `tool:` lines (`toolCalls` carries the calls, and more), no `trace:` line, and no note that tracing is off. `--verbose`, `--thinking` and `--no-thinking` are accepted and change nothing in the output, apart from being recorded in `args`. They decide what a person sees on a terminal, and nobody is watching one. The thinking and the tool calls are always collected.
 
 A run that you stop with Ctrl-C writes no object. The exit code is 130 or 143, as it was.
 

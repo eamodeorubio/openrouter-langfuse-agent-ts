@@ -1,0 +1,27 @@
+# Tasks
+
+## 1. Tool calls and arguments in the JSON output (product slice 1)
+
+Commit type `feat:`. PR title `feat: add the tool calls and the arguments to the --json object`. Bump: minor. Branch `feat/json-tool-calls`.
+
+- [x] 1.1 Write the failing integration test in `packages/cli/test/json.integration.test.ts`. Success with no call holds `"toolCalls":[]` and `args`. A run with parallel and sequential calls lists the rounds 1, 1, 2 in the model's order. A call with invalid JSON, one with a failing validation and one with an unknown tool are `failed` with the text the model received. A run that hits the round limit lists the round-9 calls with `[LIMIT_EXCEEDED] Tool calls limit exceeded` and exits 3. `--json --verbose` with a call stays silent on stderr. Covers Tool calls, Error results in the list, Arguments received, Nothing else is written. Verify it fails for the missing fields.
+- [x] 1.2 Write the failing unit tests for `runCalls` in `turn.test.ts`: each outcome is written at its call's index as the call ends, a result that returns first does not move its entry, a throwing call leaves its redacted message with `failed` `true`, and a call still running has no outcome. Covers Error results in the list. Then add the outcome list to `runCalls`. Verify they pass and the existing tests stay green.
+- [x] 1.3 Write the failing tests in `ask.loop.test.ts`: `ask` yields one `tool-call` event per call after the batch, in the order of the response, with `round` `toolRounds + 1`; when `runCalls` throws it yields every call of the batch, the finished ones with their result and a stalled one with `[TOOL_CALL_NOT_COMPLETED] Tool call did not complete`, and then rethrows; it yields the round-9 calls with the limit output, and no `tool` event, before the `LimitError`. Add a property test: for any batch whose calls finish in any order, the events follow the response order. Covers Tool calls, Limit round. Then add the event to `types.ts`, the code constant to `classify.ts` and the yields to `ask.ts`. Verify they pass.
+- [x] 1.4 Write the failing tests in `present.test.ts` that the presenter ignores `tool-call`, so the plain output and the `tool:` lines do not change. Then handle the event in `present.ts`. Verify they pass.
+- [x] 1.5 Write the failing tests in `collector.test.ts`: `success()` holds `toolCalls` in event order, empty without events; `failure()` holds them once a request was made and omits them before; `setArgs` records `verbose` always and `thinking` and `model` only when set; the arguments of a rejected parse leave no `args`. Add a property test: `arguments` and `output` come out byte for byte whatever the text holds, 200 000 characters included, and the object still parses as JSON. Covers Tool calls, Output is never cut, Arguments received. Then extend the collector. Verify they pass.
+- [x] 1.6 Write the failing tests in `args.test.ts` and `cli.fault.test.ts`: the parsed arguments reach the collector, a configuration failure carries `args` and no `toolCalls`, both thinking flags give `USAGE_ERROR` with neither, and a key in `--model` or in a call's `arguments` or `output` becomes `[redacted]`. Covers Arguments received, Flag errors still report as JSON, Secrets stay out. Then wire `setArgs` and the redaction into `cli.ts`. Verify the integration test from 1.1 now passes.
+- [x] 1.7 Write the failing tests in `output.test.ts` and `json.schema.test.ts`: the schema rejects every row of the new table (missing `toolCalls` or `args` on success, an entry with a missing or extra field, `round` 0 or 1.5, `args` without `verbose`, a non-boolean `thinking`) and accepts the new valid example; the drift test and the Ajv check of every integration object pass. Add the examples to `outputExamples.ts`. Covers Published JSON Schema. Then extend the Zod schema in `output.ts`, run `pnpm --filter openrouter-langfuse-agent-ts run schema:generate` and keep the regenerated file. Verify the tests pass.
+- [x] 1.8 Update `docs/src/content/docs/json-output.mdx`: the example, the field tables, a section on `toolCalls` (the rounds, the raw `arguments`, the full `output`, which results are errors, the limit round and that its output is a reason and not a result), a section on `args`, and the sentence that said `--verbose` changes nothing. Adjust the `--json` paragraphs of `README.md` and `ask-a-question.md`, and the `--json` line of `help.ts` if it contradicts the new object. Use the `beautiful-prose` skill with the settings of AGENTS.md. Verify with `pnpm docs:build` that the page renders the schema, and that the example matches the integration test output.
+- [x] 1.9 Refactor only where `QUALITY_RUBRIC.md` calls for it, at most 3 passes. Name the criterion for each.
+- [x] 1.10 Run `pnpm check`, `pnpm typecheck`, `pnpm test` and `pnpm mutation`. The score stays at or above the `break` threshold. Read every survivor.
+- [x] 1.11 Run `reviewer-code-high`, `reviewer-code-low` and `reviewer-docs`. Fix every must-fix finding.
+- [ ] 1.12 Write the full report. Wait for user approval, which also approves the commit. Commit.
+
+## 2. Archive
+
+- [ ] 2.1 Verify the change with `/opsx:verify` and fix what it finds.
+- [ ] 2.2 Once the user approves, archive it as `chore: archive add-tool-calls-to-json`, as the last commit before merge.
+
+## Workflow follow-up
+
+- Push the branch and open the pull request only with the user's permission, asked every time. Never merge.

@@ -167,7 +167,10 @@ describe('ask: the events', () => {
     const { events } = await collect();
     expect(
       events.map((e) =>
-        e.kind === 'done' || e.kind === 'tool' || e.kind === 'trace'
+        e.kind === 'done' ||
+        e.kind === 'tool' ||
+        e.kind === 'tool-call' ||
+        e.kind === 'trace'
           ? e.kind
           : e.text,
       ),

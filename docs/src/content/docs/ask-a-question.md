@@ -92,7 +92,7 @@ Only readable thinking is shown. Some providers return their reasoning encrypted
 
 ## For scripts
 
-Add `--json` and the tool writes a single JSON object when the run ends: to stdout on success, to stderr on failure, with a stable error code. Exit codes do not change. [JSON output](../json-output/) has the details and the JSON Schema.
+Add `--json` and the tool writes a single JSON object when the run ends: to stdout on success, to stderr on failure, with a stable error code. The object also lists every tool call the model made, with its arguments and its result, so you do not need `--verbose` to see them. Exit codes do not change. [JSON output](../json-output/) has the details and the JSON Schema.
 
 ## If something goes wrong
 

@@ -69,6 +69,70 @@
           "title": "Usage",
           "description": "What the question used, over every request it took."
         },
+        "toolCalls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "round": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "description": "The number of the model response that asked for the call, from 1. Calls made together share a round."
+              },
+              "name": {
+                "type": "string",
+                "description": "The tool name the model sent."
+              },
+              "arguments": {
+                "type": "string",
+                "description": "The arguments exactly as the model sent them, valid JSON or not."
+              },
+              "output": {
+                "type": "string",
+                "description": "The text the tool returned to the model, complete. For a call that never ran or never returned, the reason, such as [LIMIT_EXCEEDED] Tool calls limit exceeded."
+              },
+              "failed": {
+                "type": "boolean",
+                "description": "True when the result was an error: an unknown tool, bad arguments, a failed request, a tool that threw, or a call that did not run or complete."
+              }
+            },
+            "required": [
+              "round",
+              "name",
+              "arguments",
+              "output",
+              "failed"
+            ],
+            "additionalProperties": false,
+            "title": "ToolCall",
+            "description": "One tool call the model made, and how it ended."
+          },
+          "description": "The tool calls of the run, ordered by round and then as the model listed them. Empty when there were none."
+        },
+        "args": {
+          "type": "object",
+          "properties": {
+            "verbose": {
+              "type": "boolean",
+              "description": "True when --verbose was given."
+            },
+            "thinking": {
+              "type": "boolean",
+              "description": "True with --thinking, false with --no-thinking. Absent when neither was given."
+            },
+            "model": {
+              "type": "string",
+              "description": "The value of --model. Absent when it was not given."
+            }
+          },
+          "required": [
+            "verbose"
+          ],
+          "additionalProperties": false,
+          "title": "Args",
+          "description": "The arguments the CLI received, parsed."
+        },
         "thinking": {
           "type": "string",
           "description": "The readable thinking of the model. Absent when there is none."
@@ -83,7 +147,9 @@
         "answer",
         "success",
         "model",
-        "usage"
+        "usage",
+        "toolCalls",
+        "args"
       ],
       "additionalProperties": false,
       "title": "Success",
@@ -103,6 +169,70 @@
         "success": {
           "type": "boolean",
           "const": false
+        },
+        "toolCalls": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "round": {
+                "type": "integer",
+                "minimum": 1,
+                "maximum": 9007199254740991,
+                "description": "The number of the model response that asked for the call, from 1. Calls made together share a round."
+              },
+              "name": {
+                "type": "string",
+                "description": "The tool name the model sent."
+              },
+              "arguments": {
+                "type": "string",
+                "description": "The arguments exactly as the model sent them, valid JSON or not."
+              },
+              "output": {
+                "type": "string",
+                "description": "The text the tool returned to the model, complete. For a call that never ran or never returned, the reason, such as [LIMIT_EXCEEDED] Tool calls limit exceeded."
+              },
+              "failed": {
+                "type": "boolean",
+                "description": "True when the result was an error: an unknown tool, bad arguments, a failed request, a tool that threw, or a call that did not run or complete."
+              }
+            },
+            "required": [
+              "round",
+              "name",
+              "arguments",
+              "output",
+              "failed"
+            ],
+            "additionalProperties": false,
+            "title": "ToolCall",
+            "description": "One tool call the model made, and how it ended."
+          },
+          "description": "The tool calls up to the failure. Absent when the failure came before the first request to the model."
+        },
+        "args": {
+          "type": "object",
+          "properties": {
+            "verbose": {
+              "type": "boolean",
+              "description": "True when --verbose was given."
+            },
+            "thinking": {
+              "type": "boolean",
+              "description": "True with --thinking, false with --no-thinking. Absent when neither was given."
+            },
+            "model": {
+              "type": "string",
+              "description": "The value of --model. Absent when it was not given."
+            }
+          },
+          "required": [
+            "verbose"
+          ],
+          "additionalProperties": false,
+          "title": "Args",
+          "description": "The arguments the CLI received. Absent when the arguments were rejected."
         },
         "thinking": {
           "type": "string",

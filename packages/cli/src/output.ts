@@ -48,6 +48,62 @@ const usage = z
     description: 'What the question used, over every request it took.',
   });
 
+const toolCall = z
+  .strictObject({
+    round: z
+      .number()
+      .int()
+      .min(1)
+      .describe(
+        'The number of the model response that asked for the call, from 1. Calls made together share a round.',
+      ),
+    name: z.string().describe('The tool name the model sent.'),
+    arguments: z
+      .string()
+      .describe(
+        'The arguments exactly as the model sent them, valid JSON or not.',
+      ),
+    output: z
+      .string()
+      .describe(
+        'The text the tool returned to the model, complete. For a call that never ran or never returned, the reason, such as [LIMIT_EXCEEDED] Tool calls limit exceeded.',
+      ),
+    failed: z
+      .boolean()
+      .describe(
+        'True when the result was an error: an unknown tool, bad arguments, a failed request, a tool that threw, or a call that did not run or complete.',
+      ),
+  })
+  .meta({
+    title: 'ToolCall',
+    description: 'One tool call the model made, and how it ended.',
+  });
+
+const toolCalls = z
+  .array(toolCall)
+  .describe(
+    'The tool calls of the run, ordered by round and then as the model listed them. Empty when there were none.',
+  );
+
+const args = z
+  .strictObject({
+    verbose: z.boolean().describe('True when --verbose was given.'),
+    thinking: z
+      .boolean()
+      .describe(
+        'True with --thinking, false with --no-thinking. Absent when neither was given.',
+      )
+      .optional(),
+    model: z
+      .string()
+      .describe('The value of --model. Absent when it was not given.')
+      .optional(),
+  })
+  .meta({
+    title: 'Args',
+    description: 'The arguments the CLI received, parsed.',
+  });
+
 const success = z
   .strictObject({
     question: fields.question,
@@ -55,6 +111,8 @@ const success = z
     success: z.literal(true),
     model: z.string().describe('The model that served the final response.'),
     usage,
+    toolCalls,
+    args,
     thinking: fields.thinking.optional(),
     traceId: fields.traceId.optional(),
   })
@@ -76,6 +134,16 @@ const failure = z
       )
       .optional(),
     success: z.literal(false),
+    toolCalls: toolCalls
+      .describe(
+        'The tool calls up to the failure. Absent when the failure came before the first request to the model.',
+      )
+      .optional(),
+    args: args
+      .describe(
+        'The arguments the CLI received. Absent when the arguments were rejected.',
+      )
+      .optional(),
     thinking: fields.thinking.optional(),
     traceId: fields.traceId.optional(),
     error: z.strictObject({
