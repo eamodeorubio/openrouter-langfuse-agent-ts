@@ -27,10 +27,18 @@ export const assistantTurn = (round: Round): ChatMessages => ({
     round.reasoningDetails as unknown as ChatAssistantMessage['reasoningDetails'],
 });
 
+/** How a call ended: the text that went back to the model, or the message of a tool that threw, and whether it was an error. */
+export interface CallOutcome {
+  output: string;
+  failed: boolean;
+}
+
 /**
  * Starts every call at once and waits for all of them. The tool messages come
  * back in the order of the calls, with the key redacted from each result.
- * Each call is recorded on `root` as it starts and as it ends.
+ * Each call is recorded on `root` as it starts and as it ends, and its
+ * outcome is written to `outcomes` at the call's index as it ends. A call that
+ * has not ended when another throws has none.
  */
 export const runCalls = async (
   tools: readonly Tool[],
@@ -38,9 +46,11 @@ export const runCalls = async (
   context: ToolContext,
   apiKey: string,
   root: RootSpan = NO_ROOT,
+  // Stryker disable next-line ArrayDeclaration: equivalent because a list the caller does not pass is only written to, never read.
+  outcomes: (CallOutcome | undefined)[] = [],
 ): Promise<ChatMessages[]> =>
   Promise.all(
-    calls.map(async (call) => {
+    calls.map(async (call, index) => {
       const span = root.tool({ name: call.name, arguments: call.arguments });
       try {
         const result = await callTool(tools, call.name, call.arguments, {
@@ -49,15 +59,15 @@ export const runCalls = async (
         });
         const content = redactKey(toContent(result), apiKey);
         span.end({ output: content, failed: !result.ok });
+        outcomes[index] = { output: content, failed: !result.ok };
         return { role: 'tool' as const, toolCallId: call.id, content };
       } catch (error) {
-        span.end({
-          output: redactKey(
-            error instanceof Error ? error.message : String(error),
-            apiKey,
-          ),
-          failed: true,
-        });
+        const output = redactKey(
+          error instanceof Error ? error.message : String(error),
+          apiKey,
+        );
+        span.end({ output, failed: true });
+        outcomes[index] = { output, failed: true };
         throw error;
       }
     }),

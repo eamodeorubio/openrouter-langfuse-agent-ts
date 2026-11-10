@@ -1,10 +1,19 @@
 const usage = { promptTokens: 1, completionTokens: 2, totalTokens: 3 };
+const entry = {
+  round: 1,
+  name: 'calculate',
+  arguments: '{"expression":"1+1"}',
+  output: '{"formula":"1+1","result":"2"}',
+  failed: false,
+};
 const success = {
   question: 'q',
   answer: 'a',
   success: true,
   model: 'x/y',
   usage,
+  toolCalls: [],
+  args: { verbose: false },
 };
 
 const failure = (code: string) => ({
@@ -49,17 +58,79 @@ export const EXAMPLES: [name: string, object: unknown, valid: boolean][] = [
   ['a failure object without an error', { success: false }, false],
   [
     'a success object without an answer',
-    { question: 'q', success: true, model: 'x/y', usage },
+    { ...success, answer: undefined },
+    false,
+  ],
+  ['a success object without a model', { ...success, model: undefined }, false],
+  ['a success object without usage', { ...success, usage: undefined }, false],
+  [
+    'a success object without toolCalls',
+    { ...success, toolCalls: undefined },
+    false,
+  ],
+  ['a success object without args', { ...success, args: undefined }, false],
+  [
+    'a success object with tool calls, a failed one among them',
+    {
+      ...success,
+      toolCalls: [
+        entry,
+        { ...entry, round: 2, output: '{"error":"bad"}', failed: true },
+      ],
+    },
+    true,
+  ],
+  [
+    'a success object with every optional argument',
+    {
+      ...success,
+      args: { verbose: true, thinking: false, model: 'x/y' },
+    },
+    true,
+  ],
+  [
+    'a failure object with tool calls and args',
+    {
+      ...failure('LIMIT_EXCEEDED'),
+      toolCalls: [entry],
+      args: { verbose: false },
+    },
+    true,
+  ],
+  [
+    'a tool call without a field',
+    { ...success, toolCalls: [{ ...entry, output: undefined }] },
     false,
   ],
   [
-    'a success object without a model',
-    { question: 'q', answer: 'a', success: true, usage },
+    'a tool call with an extra field',
+    { ...success, toolCalls: [{ ...entry, truncated: false }] },
     false,
   ],
   [
-    'a success object without usage',
-    { question: 'q', answer: 'a', success: true, model: 'x/y' },
+    'a tool call with round 0',
+    { ...success, toolCalls: [{ ...entry, round: 0 }] },
+    false,
+  ],
+  [
+    'a tool call with a fractional round',
+    { ...success, toolCalls: [{ ...entry, round: 1.5 }] },
+    false,
+  ],
+  [
+    'a tool call whose failed is not a boolean',
+    { ...success, toolCalls: [{ ...entry, failed: 'no' }] },
+    false,
+  ],
+  ['args without verbose', { ...success, args: { thinking: true } }, false],
+  [
+    'args with a thinking that is not a boolean',
+    { ...success, args: { verbose: false, thinking: 'yes' } },
+    false,
+  ],
+  [
+    'args with a field that is not in the table',
+    { ...success, args: { verbose: false, json: true } },
     false,
   ],
   [

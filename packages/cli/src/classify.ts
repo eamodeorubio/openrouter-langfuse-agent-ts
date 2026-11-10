@@ -1,6 +1,7 @@
 import {
   ApiError,
   ConfigError,
+  LIMIT_EXCEEDED,
   LimitError,
   TimeoutError,
   UsageError,
@@ -60,7 +61,7 @@ export const classify = (error: unknown): Failure => {
     };
   }
   if (error instanceof LimitError) {
-    return { code: 'LIMIT_EXCEEDED', exit: EXIT_LIMIT, message: error.message };
+    return { code: LIMIT_EXCEEDED, exit: EXIT_LIMIT, message: error.message };
   }
   if (error instanceof TimeoutError) {
     return { code: 'TIMEOUT', exit: EXIT_API, message: error.message };

@@ -32,6 +32,23 @@ describe('the published JSON Schema', () => {
     ]);
   });
 
+  it('defines the tool calls and the args once, and refers to them from the success and the failure object', () => {
+    const schema = JSON.parse(publishedSchemaText);
+    expect(Object.keys(schema.$defs ?? {}).sort()).toEqual([
+      'Args',
+      'ToolCall',
+      'ToolCalls',
+    ]);
+    const [success, failure] = schema.oneOf;
+    for (const object of [success, failure]) {
+      expect(object.properties.toolCalls).toEqual({
+        $ref: '#/$defs/ToolCalls',
+      });
+      expect(object.properties.args).toEqual({ $ref: '#/$defs/Args' });
+    }
+    expect(publishedSchemaText.match(/"round"/g)).toHaveLength(2);
+  });
+
   it('declares draft 2020-12', () => {
     expect(JSON.parse(publishedSchemaText).$schema).toBe(
       'https://json-schema.org/draft/2020-12/schema',

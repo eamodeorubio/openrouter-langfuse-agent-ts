@@ -260,6 +260,22 @@ describe('tool calls', () => {
     expect(out).toEqual({ stdout: '', stderr: '' });
   });
 
+  it.each([[true], [false]])(
+    'writes nothing for the end of a call, with verbose %s: its line came with the start',
+    (verbose) => {
+      const { out, play } = setup({ verbose });
+      play({
+        kind: 'tool-call',
+        round: 1,
+        name: 'get_model',
+        arguments: '{}',
+        output: '{}',
+        failed: false,
+      });
+      expect(out).toEqual({ stdout: '', stderr: '' });
+    },
+  );
+
   it('writes one line to stderr per call with --verbose, and nothing to stdout', () => {
     const { out, play } = setup({ verbose: true });
     play(tool('{"slug":"a/b"}'), tool('{"slug":"c/d"}', 'other'));

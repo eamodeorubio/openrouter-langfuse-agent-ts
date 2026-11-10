@@ -16,16 +16,16 @@ The question comes from `-q`, or from standard input when `-q` is absent. The to
 
 ## Flags
 
-| Flag              | What it does                                                                               |
-| ----------------- | ------------------------------------------------------------------------------------------ |
-| `-q <question>`   | The question. Without it, the question is read from standard input.                        |
-| `--model <model>` | The model that answers, a slug such as `openai/gpt-4o-mini`. Overrides `OPENROUTER_MODEL`. |
-| `--thinking`      | Show the model's thinking on stderr, even when stderr is not a terminal.                   |
-| `--no-thinking`   | Do not show the thinking, even on a terminal. Giving both thinking flags is an error.      |
-| `--verbose`       | Show each tool call the model makes, and the trace id, on stderr.                          |
-| `--json`          | Write one JSON object when the run ends: to stdout on success, to stderr on failure.       |
-| `-v`, `--version` | Print the version and exit.                                                                |
-| `-h`, `--help`    | Print the help and exit.                                                                   |
+| Flag              | What it does                                                                                              |
+| ----------------- | --------------------------------------------------------------------------------------------------------- |
+| `-q <question>`   | The question. Without it, the question is read from standard input.                                       |
+| `--model <model>` | The model that answers, a slug such as `openai/gpt-4o-mini`. Overrides `OPENROUTER_MODEL`.                |
+| `--thinking`      | Show the model's thinking on stderr, even when stderr is not a terminal.                                  |
+| `--no-thinking`   | Do not show the thinking, even on a terminal. Giving both thinking flags is an error.                     |
+| `--verbose`       | Show each tool call the model makes, and the trace id, on stderr.                                         |
+| `--json`          | Write one JSON object when the run ends, with the tool calls: to stdout on success, to stderr on failure. |
+| `-v`, `--version` | Print the version and exit.                                                                               |
+| `-h`, `--help`    | Print the help and exit.                                                                                  |
 
 `-q` takes the next argument as the question, whatever it starts with, so `-q "-5 degrees in Fahrenheit"` is a question. The price is that `-q --help` asks the model the question "--help" and prints no help. `--model` is stricter: a model slug never starts with a dash, so `--model --verbose` is an error that says the model is missing.
 

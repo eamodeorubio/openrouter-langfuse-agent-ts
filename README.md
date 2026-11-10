@@ -49,7 +49,7 @@ ask-openrouter -q "What is a token, and why do providers charge for them?"
 echo "Name one planet." | ask-openrouter --model openai/gpt-4o-mini
 ```
 
-If the model thinks before it answers, the thinking shows on stderr when you are watching a terminal. Add `--verbose` to see each lookup the model makes. Add `--json` for a script: the tool then stays silent until the run ends and writes one JSON object, with a JSON Schema to validate it.
+If the model thinks before it answers, the thinking shows on stderr when you are watching a terminal. Add `--verbose` to see each lookup the model makes. Add `--json` for a script: the tool then stays silent until the run ends and writes one JSON object, with every tool call the model made and a JSON Schema to validate it.
 
 A run exits 0 on success, 1 when the arguments or the settings are wrong, 2 when the API call fails or a trace cannot be delivered, and 3 when the model keeps calling tools past eight rounds. When something is wrong, the message says what to do about it. `ask-openrouter --help` prints every flag, every setting and every exit code.
 

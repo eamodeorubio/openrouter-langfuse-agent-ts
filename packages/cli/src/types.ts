@@ -22,6 +22,20 @@ export type AskEvent =
   | { kind: 'content'; text: string }
   /** The model called a tool; `arguments` is the JSON text it sent. */
   | { kind: 'tool'; name: string; arguments: string }
+  /**
+   * A tool call ended: with its result, or with the reason it has none. Comes
+   * after the `tool` event of the same call, once its batch is over.
+   */
+  | {
+      kind: 'tool-call';
+      /** The number of the model response that asked for the call, from 1. */
+      round: number;
+      name: string;
+      arguments: string;
+      /** The text that went back to the model, or the reason there is none. */
+      output: string;
+      failed: boolean;
+    }
   /** The run is traced, under this trace id. */
   | { kind: 'trace'; id: string }
   | ({ kind: 'done' } & Completion);

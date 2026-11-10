@@ -147,7 +147,14 @@ const execute = async (
       session.collector = undefined;
     }
     verbose = args.verbose;
+    session.collector?.setArgs(args);
+    session.collector?.setSecrets([
+      env.OPENROUTER_API_KEY,
+      env.LANGFUSE_PUBLIC_KEY,
+      env.LANGFUSE_SECRET_KEY,
+    ]);
     config = await loadConfig(args, env, io.cwd);
+    session.collector?.setSecrets(secretsOf(config));
     if (config.langfuse) {
       session.tracer = await openTracer(
         config.apiKey,
@@ -168,6 +175,7 @@ const execute = async (
           verbose: args.verbose,
           noColor: env.NO_COLOR,
         });
+    session.collector?.startRun();
     for await (const event of ask(config, question, {
       serverURL: io.serverURL,
       idleTimeoutMs: io.idleTimeoutMs,

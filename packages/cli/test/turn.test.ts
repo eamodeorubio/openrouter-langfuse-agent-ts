@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { z } from 'zod';
 import type { Tool, ToolContext } from '../src/tools/types.js';
 import type { RootSpan } from '../src/tracing/tracer.js';
-import { runCalls } from '../src/turn.js';
+import { type CallOutcome, runCalls } from '../src/turn.js';
 
 const context = {} as ToolContext;
 
@@ -189,5 +189,95 @@ describe('runCalls with a tracer', () => {
       'key',
     );
     expect(seen).toBeUndefined();
+  });
+});
+
+describe('runCalls outcomes', () => {
+  it('writes the output and failed of each call at the index of the call', async () => {
+    const outcomes: (CallOutcome | undefined)[] = [];
+    await runCalls(
+      [
+        tool('ok', async () => ({ ok: true, value: { a: 1 } })),
+        tool('bad', async () => ({ ok: false, message: 'No such model.' })),
+      ],
+      [call('1', 'ok'), call('2', 'bad'), call('3', 'nope')],
+      context,
+      'key',
+      undefined,
+      outcomes,
+    );
+    expect(outcomes).toEqual([
+      { output: '{"a":1}', failed: false },
+      { output: '{"error":"No such model."}', failed: true },
+      {
+        output: '{"error":"Unknown tool \\"nope\\". The tools are: ok, bad."}',
+        failed: true,
+      },
+    ]);
+  });
+
+  it('keeps each outcome at its own index when the later call returns first', async () => {
+    let release = () => {};
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const outcomes: (CallOutcome | undefined)[] = [];
+    const running = runCalls(
+      [
+        tool('slow', async () => {
+          await gate;
+          return { ok: true, value: 'slow' };
+        }),
+        tool('fast', async () => ({ ok: true, value: 'fast' })),
+      ],
+      [call('1', 'slow'), call('2', 'fast')],
+      context,
+      'key',
+      undefined,
+      outcomes,
+    );
+    await new Promise((resolve) => setTimeout(resolve, 5));
+    expect(outcomes[0]).toBeUndefined();
+    expect(outcomes[1]).toEqual({ output: '"fast"', failed: false });
+    release();
+    await running;
+    expect(outcomes[0]).toEqual({ output: '"slow"', failed: false });
+  });
+
+  it('keeps the key out of an outcome', async () => {
+    const outcomes: (CallOutcome | undefined)[] = [];
+    await runCalls(
+      [tool('t', async () => ({ ok: true, value: 'the key is sk-secret' }))],
+      [call('1', 't')],
+      context,
+      'sk-secret',
+      undefined,
+      outcomes,
+    );
+    expect(outcomes[0]?.output).not.toContain('sk-secret');
+  });
+
+  it('writes the redacted message of a tool that throws, as failed, and leaves a call still running without one', async () => {
+    const outcomes: (CallOutcome | undefined)[] = [];
+    await expect(
+      runCalls(
+        [
+          tool('stalled', () => new Promise(() => {})),
+          tool('boom', async () => {
+            throw new Error('exploded with sk-secret');
+          }),
+        ],
+        [call('1', 'stalled'), call('2', 'boom')],
+        context,
+        'sk-secret',
+        undefined,
+        outcomes,
+      ),
+    ).rejects.toThrow('exploded');
+    expect(outcomes[0]).toBeUndefined();
+    expect(outcomes[1]).toEqual({
+      output: 'exploded with [redacted]',
+      failed: true,
+    });
   });
 });
