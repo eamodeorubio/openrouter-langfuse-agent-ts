@@ -75,15 +75,17 @@ const toolCall = z
       ),
   })
   .meta({
+    id: 'ToolCall',
     title: 'ToolCall',
     description: 'One tool call the model made, and how it ended.',
   });
 
-const toolCalls = z
-  .array(toolCall)
-  .describe(
+const toolCalls = z.array(toolCall).meta({
+  id: 'ToolCalls',
+  title: 'ToolCalls',
+  description:
     'The tool calls of the run, ordered by round and then as the model listed them. Empty when there were none.',
-  );
+});
 
 const args = z
   .strictObject({
@@ -100,6 +102,7 @@ const args = z
       .optional(),
   })
   .meta({
+    id: 'Args',
     title: 'Args',
     description: 'The arguments the CLI received, parsed.',
   });
@@ -134,16 +137,8 @@ const failure = z
       )
       .optional(),
     success: z.literal(false),
-    toolCalls: toolCalls
-      .describe(
-        'The tool calls up to the failure. Absent when the failure came before the first request to the model.',
-      )
-      .optional(),
-    args: args
-      .describe(
-        'The arguments the CLI received. Absent when the arguments were rejected.',
-      )
-      .optional(),
+    toolCalls: toolCalls.optional(),
+    args: args.optional(),
     thinking: fields.thinking.optional(),
     traceId: fields.traceId.optional(),
     error: z.strictObject({
@@ -158,7 +153,8 @@ const failure = z
   })
   .meta({
     title: 'Failure',
-    description: 'The run failed. Written to stderr.',
+    description:
+      'The run failed. Written to stderr. `toolCalls` is absent when the failure came before the first request to the model, and `args` when the arguments were rejected.',
   });
 
 /** The one object `--json` writes. The published JSON Schema is generated from it. */
