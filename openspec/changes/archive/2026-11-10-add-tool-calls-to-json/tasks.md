@@ -20,7 +20,7 @@ Commit type `feat:`. PR title `feat: add the tool calls and the arguments to the
 ## 2. Archive
 
 - [x] 2.1 Verify the change with `/opsx:verify` and fix what it finds.
-- [ ] 2.2 Once the user approves, archive it as `chore: archive add-tool-calls-to-json`, as the last commit before merge.
+- [x] 2.2 Once the user approves, archive it as `chore: archive add-tool-calls-to-json`, as the last commit before merge.
 
 ## Workflow follow-up
 
