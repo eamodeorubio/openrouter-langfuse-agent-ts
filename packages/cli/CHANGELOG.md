@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v1.0.1...v1.1.0) (2026-11-10)
+
+
+### Features
+
+* add the tool calls and the arguments to the --json object ([#42](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues/42)) ([2ad74c9](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/commit/2ad74c9945677f6e8add1e37ae4a3de368def7b8))
+
 ## [1.0.1](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v1.0.0...v1.0.1) (2026-10-25)
 
 
