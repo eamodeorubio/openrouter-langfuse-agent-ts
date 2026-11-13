@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BUILT_CLI } from '../src/cliPath.js';
+import { type Snapshot, SnapshotError } from '../src/oracle/snapshot.js';
 import {
   DEFAULT_REPEAT,
   type Deps,
@@ -10,10 +11,24 @@ import {
   promptfooArgs,
   run,
 } from '../src/runner.js';
+import { serveCatalog } from './catalogServer.js';
 import { many, resultsFile } from './resultsFixture.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 const stub = path.join(root, 'test/fixtures/stub-cli.mjs');
+
+const SNAPSHOT: Snapshot = {
+  fetchedAt: '2026-11-13T22:00:00.000Z',
+  models: [
+    {
+      id: 'a/b',
+      contextLength: 8000,
+      supportedParameters: ['tools'],
+      inputPrice: 1,
+      outputPrice: 4,
+    },
+  ],
+};
 
 describe('the arguments of the eval script', () => {
   const options = (argv: string[]) => {
@@ -29,6 +44,7 @@ describe('the arguments of the eval script', () => {
     expect(options([])).toStrictEqual({
       config: path.join(root, 'promptfooconfig.yaml'),
       repeat: 10,
+      set: 'core',
       out: path.join(root, 'results', '2026-11-13T21-30-00-123Z'),
     });
     expect(DEFAULT_REPEAT).toBe(10);
@@ -43,12 +59,15 @@ describe('the arguments of the eval script', () => {
         'here',
         '--repeat',
         '4',
+        '--set',
+        'full',
         '--config',
         'my.yaml',
       ]),
     ).toEqual({
       config: path.resolve('my.yaml'),
       repeat: 4,
+      set: 'full',
       out: path.resolve('here'),
       k: '1,3',
     });
@@ -63,7 +82,7 @@ describe('the arguments of the eval script', () => {
     }
   });
 
-  it.each(['--config', '--repeat', '--out', '--k'])(
+  it.each(['--config', '--repeat', '--out', '--k', '--set'])(
     'refuse %s without a value',
     (flag) => {
       expect(parseRunArgs([flag])).toBe(`Unexpected argument: ${flag}`);
@@ -108,11 +127,24 @@ describe('the k list against the repeats', () => {
   );
 });
 
+describe('the set of cases', () => {
+  it('is the core set unless --set says full', () => {
+    expect(parseRunArgs([])).toMatchObject({ set: 'core' });
+    expect(parseRunArgs(['--set', 'core'])).toMatchObject({ set: 'core' });
+    expect(parseRunArgs(['--set', 'full'])).toMatchObject({ set: 'full' });
+  });
+
+  it.each(['all', '', 'Core', 'full '])('refuses --set %j', (value) => {
+    expect(parseRunArgs(['--set', value])).toBe(
+      `--set takes core or full, got ${value}.`,
+    );
+  });
+});
+
 describe('the promptfoo command', () => {
   it('runs the config, repeats it, never reads the cache and saves JSON', () => {
-    expect(
-      promptfooArgs({ config: '/c/config.yaml', repeat: 7, out: '/o/dir' }),
-    ).toEqual([
+    const options = { config: '/c/config.yaml', repeat: 7, out: '/o/dir' };
+    const common = [
       'eval',
       '-c',
       '/c/config.yaml',
@@ -121,8 +153,17 @@ describe('the promptfoo command', () => {
       '--no-cache',
       '--no-progress-bar',
       '--no-table',
-      '-o',
-      path.join('/o/dir', 'results.json'),
+    ];
+    const saved = ['-o', path.join('/o/dir', 'results.json')];
+    expect(promptfooArgs({ ...options, set: 'full' })).toEqual([
+      ...common,
+      ...saved,
+    ]);
+    expect(promptfooArgs({ ...options, set: 'core' })).toEqual([
+      ...common,
+      '--filter-metadata',
+      'set=core',
+      ...saved,
     ]);
   });
 });
@@ -131,6 +172,7 @@ describe('a run', () => {
   let out: string;
   let stdout: string;
   let stderr: string;
+  let order: string[];
   let spawned: {
     command: string;
     args: string[];
@@ -149,7 +191,12 @@ describe('a run', () => {
 
   /** A promptfoo that writes the results file of `runs` runs and exits with `status`. */
   const fakePromptfoo = (status: number | null, runs = 5): Deps => ({
+    snapshot: async () => {
+      order.push('snapshot');
+      return SNAPSHOT;
+    },
     spawn: (command, args, options) => {
+      order.push('spawn');
       spawned.push({
         command,
         args,
@@ -173,6 +220,7 @@ describe('a run', () => {
     stdout = '';
     stderr = '';
     spawned = [];
+    order = [];
     vi.stubEnv('EVAL_CLI', stub);
   });
 
@@ -184,9 +232,13 @@ describe('a run', () => {
     });
   });
 
-  it('creates the results directory, runs promptfoo once with flags that keep the report whole, then reports', () => {
+  it('creates the results directory, runs promptfoo once with flags that keep the report whole, then reports', async () => {
     fs.mkdirSync(out, { recursive: true });
-    const code = run(['--repeat', '5', '--out', out], io, fakePromptfoo(0));
+    const code = await run(
+      ['--repeat', '5', '--out', out],
+      io,
+      fakePromptfoo(0),
+    );
     expect(code).toBe(0);
     expect(spawned).toHaveLength(1);
     const [call] = spawned;
@@ -195,6 +247,7 @@ describe('a run', () => {
       promptfooArgs({
         config: path.join(root, 'promptfooconfig.yaml'),
         repeat: 5,
+        set: 'core',
         out,
       }),
     );
@@ -211,9 +264,10 @@ describe('a run', () => {
     expect(stderr).toBe('');
   });
 
-  it('makes the results directory, however deep', () => {
+  it('makes the results directory, however deep', async () => {
     const missing = path.join(out, 'deeper');
     const deps: Deps = {
+      ...fakePromptfoo(0),
       spawn: (command, args, options) => {
         expect(fs.existsSync(missing)).toBe(true);
         fs.writeFileSync(
@@ -224,46 +278,48 @@ describe('a run', () => {
       },
     };
     fs.mkdirSync(out, { recursive: true });
-    expect(run(['--out', missing], io, deps)).toBe(0);
+    expect(await run(['--out', missing], io, deps)).toBe(0);
   });
 
-  it('hands the --k list to the report', () => {
+  it('hands the --k list to the report', async () => {
     fs.mkdirSync(out, { recursive: true });
-    run(['--out', out, '--k', '1,2'], io, fakePromptfoo(0));
+    await run(['--out', out, '--k', '1,2'], io, fakePromptfoo(0));
     expect(stdout).toContain('pass@2=');
     expect(stdout).not.toContain('pass@5=');
   });
 
-  it('exits with the code of a promptfoo that stopped, and prints no report', () => {
+  it('exits with the code of a promptfoo that stopped, and prints no report', async () => {
     fs.mkdirSync(out, { recursive: true });
-    expect(run(['--out', out], io, fakePromptfoo(7))).toBe(7);
+    expect(await run(['--out', out], io, fakePromptfoo(7))).toBe(7);
     expect(stderr).toBe('promptfoo stopped with exit code 7.\n');
     expect(stdout).toBe('');
   });
 
-  it('exits 1 when promptfoo was killed and left no code', () => {
+  it('exits 1 when promptfoo was killed and left no code', async () => {
     fs.mkdirSync(out, { recursive: true });
-    expect(run(['--out', out], io, fakePromptfoo(null))).toBe(1);
+    expect(await run(['--out', out], io, fakePromptfoo(null))).toBe(1);
     expect(stderr).toBe('promptfoo stopped with exit code 1.\n');
   });
 
-  it('returns the exit code of a report that failed', () => {
+  it('returns the exit code of a report that failed', async () => {
     fs.mkdirSync(out, { recursive: true });
-    expect(run(['--out', out, '--k', '9'], io, fakePromptfoo(0, 2))).toBe(1);
+    expect(await run(['--out', out, '--k', '9'], io, fakePromptfoo(0, 2))).toBe(
+      1,
+    );
     expect(stderr).toMatch(/n=2.*k=9/);
   });
 
-  it('stops with a message and the usage on a bad argument, and runs nothing', () => {
-    expect(run(['--bogus'], io, fakePromptfoo(0))).toBe(2);
+  it('stops with a message and the usage on a bad argument, and runs nothing', async () => {
+    expect(await run(['--bogus'], io, fakePromptfoo(0))).toBe(2);
     expect(stderr).toBe(
-      'Unexpected argument: --bogus\nUsage: run [--config <file>] [--repeat <n>] [--k 1,3,5] [--out <dir>]\n',
+      'Unexpected argument: --bogus\nUsage: run [--set core|full] [--config <file>] [--repeat <n>] [--k 1,3,5] [--out <dir>]\n',
     );
     expect(spawned).toEqual([]);
   });
 
-  it('stops before the first request when the CLI is not built, and makes no directory', () => {
+  it('stops before the first request when the CLI is not built, and makes no directory', async () => {
     vi.stubEnv('EVAL_CLI', path.join(out, 'missing.js'));
-    expect(run(['--out', out], io, fakePromptfoo(0))).toBe(2);
+    expect(await run(['--out', out], io, fakePromptfoo(0))).toBe(2);
     expect(stderr).toBe(
       `The CLI is not built: ${path.join(out, 'missing.js')} does not exist. Run \`pnpm build\` at the repository root, then run the evals again.\n`,
     );
@@ -271,11 +327,11 @@ describe('a run', () => {
     expect(fs.existsSync(out)).toBe(false);
   });
 
-  it('looks for the built CLI when EVAL_CLI is not set', () => {
+  it('looks for the built CLI when EVAL_CLI is not set', async () => {
     vi.stubEnv('EVAL_CLI', undefined as unknown as string);
     delete process.env.EVAL_CLI;
     fs.mkdirSync(out, { recursive: true });
-    const code = run(['--out', out], io, fakePromptfoo(0));
+    const code = await run(['--out', out], io, fakePromptfoo(0));
     if (fs.existsSync(BUILT_CLI)) {
       expect(spawned).toHaveLength(1);
       expect(code).toBe(0);
@@ -285,8 +341,11 @@ describe('a run', () => {
     }
   });
 
-  it('starts the real promptfoo when no spawn is given, and reports what the stub CLI answered', () => {
-    const code = run(['--repeat', '2', '--k', '1,2', '--out', out], io);
+  it('starts the real promptfoo when no spawn is given, and reports what the stub CLI answered', async () => {
+    const catalog = await serveCatalog();
+    vi.stubEnv('EVAL_CATALOG_URL', catalog.url);
+    const code = await run(['--repeat', '2', '--k', '1,2', '--out', out], io);
+    await catalog.close();
     expect(stderr).not.toContain('promptfoo stopped');
     expect(code).toBe(0);
     for (const model of [
@@ -295,35 +354,81 @@ describe('a run', () => {
     ]) {
       expect(stdout).toContain(model);
     }
-    expect(stdout).toMatch(/A1\s+n=2/);
+    expect(stdout).toMatch(/lookup\/known-model\s+n=2/);
   });
 
-  it('says why promptfoo did not start, and exits 1', () => {
+  it('says why promptfoo did not start, and exits 1', async () => {
     fs.mkdirSync(out, { recursive: true });
     const deps: Deps = {
+      ...fakePromptfoo(0),
       spawn: () => ({
         status: null,
         error: new Error('spawn promptfoo ENOENT'),
       }),
     };
-    expect(run(['--out', out], io, deps)).toBe(1);
+    expect(await run(['--out', out], io, deps)).toBe(1);
     expect(stderr).toBe('promptfoo could not start: spawn promptfoo ENOENT\n');
     expect(stdout).toBe('');
   });
 
-  it('says which signal stopped promptfoo, and exits 1', () => {
+  it('says which signal stopped promptfoo, and exits 1', async () => {
     fs.mkdirSync(out, { recursive: true });
-    const deps: Deps = { spawn: () => ({ status: null, signal: 'SIGKILL' }) };
-    expect(run(['--out', out], io, deps)).toBe(1);
+    const deps: Deps = {
+      ...fakePromptfoo(0),
+      spawn: () => ({ status: null, signal: 'SIGKILL' }),
+    };
+    expect(await run(['--out', out], io, deps)).toBe(1);
     expect(stderr).toBe('promptfoo was stopped by the signal SIGKILL.\n');
   });
 
-  it('stops on a bad --k before it makes the results directory or runs promptfoo', () => {
-    expect(run(['--out', out, '--repeat', '2'], io, fakePromptfoo(0))).toBe(2);
+  it('stops on a bad --k before it makes the results directory or runs promptfoo', async () => {
+    expect(
+      await run(['--out', out, '--repeat', '2'], io, fakePromptfoo(0)),
+    ).toBe(2);
     expect(stderr).toMatch(
       /^--k 1,3,5 needs at least 5 repeats and --repeat is 2\./,
     );
     expect(spawned).toEqual([]);
     expect(fs.existsSync(out)).toBe(false);
+  });
+
+  it('takes the snapshot before it starts promptfoo, saves it as catalog.json, and passes its path on', async () => {
+    fs.mkdirSync(out, { recursive: true });
+    await run(['--out', out, '--repeat', '5'], io, fakePromptfoo(0));
+    expect(order).toEqual(['snapshot', 'spawn']);
+    const saved = JSON.parse(
+      fs.readFileSync(path.join(out, 'catalog.json'), 'utf8'),
+    );
+    expect(saved).toEqual(SNAPSHOT);
+    expect(spawned[0]?.env.EVAL_CATALOG).toBe(path.join(out, 'catalog.json'));
+  });
+
+  it('stops before any case when the snapshot cannot be taken, and says why', async () => {
+    const deps: Deps = {
+      ...fakePromptfoo(0),
+      snapshot: async () => {
+        throw new SnapshotError(
+          'Could not fetch the model catalog from x: the API answered 500.',
+        );
+      },
+    };
+    expect(await run(['--out', out, '--repeat', '5'], io, deps)).toBe(1);
+    expect(stderr).toBe(
+      'Could not fetch the model catalog from x: the API answered 500.\n',
+    );
+    expect(stdout).toBe('');
+    expect(spawned).toEqual([]);
+  });
+
+  it('does not hide a failure that is not a snapshot error', async () => {
+    const deps: Deps = {
+      ...fakePromptfoo(0),
+      snapshot: async () => {
+        throw new TypeError('a bug');
+      },
+    };
+    await expect(
+      run(['--out', out, '--repeat', '5'], io, deps),
+    ).rejects.toThrow('a bug');
   });
 });

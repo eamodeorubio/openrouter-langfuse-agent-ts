@@ -1,4 +1,4 @@
-import type { Figure, ModelSummary, Stats } from './summary.js';
+import type { ClassSummary, Figure, ModelSummary, Stats } from './summary.js';
 
 const fixed = (value: number, digits: number): string => value.toFixed(digits);
 
@@ -38,6 +38,26 @@ const lines = (
   ];
 };
 
+const estimate = (value: number | null): string =>
+  value === null ? '-' : fixed(value, 4);
+
+/** The error classes of a model: how many runs each judged, passed and failed, and its estimators. */
+const classLines = (classes: ClassSummary[], ks: number[]): string[] => {
+  const width = Math.max(...classes.map((entry) => entry.name.length));
+  return [
+    '  by error class',
+    ...classes.map((entry) => {
+      const at = ks.map(
+        (k) => `pass@${k}=${estimate(entry.passAt[k] as number | null)}`,
+      );
+      const hat = ks.map(
+        (k) => `pass^${k}=${estimate(entry.passHat[k] as number | null)}`,
+      );
+      return `    ${entry.name.padEnd(width)}  judged=${entry.judged}  passed=${entry.passed}  failed=${entry.failed}  ${at.join(' ')}  ${hat.join(' ')}`;
+    }),
+  ];
+};
+
 /** What a file says about how the eval ran. */
 interface Timing {
   wallTimeMs?: number;
@@ -61,6 +81,7 @@ export const formatReport = (models: ModelSummary[], ks: number[]): string => {
       model.model,
       ...model.cells.flatMap((cell) => lines(cell.case, width, cell, ks)),
       ...lines('mean', width, model.row, ks),
+      ...classLines(model.classes, ks),
       '',
     ])
     .join('\n');

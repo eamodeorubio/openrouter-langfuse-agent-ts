@@ -8,11 +8,13 @@ const render = (runs: ReturnType<typeof run>[], ks: number[]) =>
   formatReport(summarize(readRuns(resultsFile(runs)).runs, ks, 0.7), ks);
 
 describe('the text of the report', () => {
-  it('is a block per model, a line group per case, and a mean row', () => {
+  it('is a block per model, a line group per case, a mean row and the error classes', () => {
+    const all = ['run-failed', 'memory-answer', 'wrong-value'];
     const text = render(
       [
         ...many(3, {
           caseName: 'A1',
+          checks: all,
           cost: 0.1,
           rounds: [1, 2],
           latencyMs: 100,
@@ -20,16 +22,23 @@ describe('the text of the report', () => {
         }),
         run({
           caseName: 'A1',
+          checks: ['run-failed'],
           cost: 0.2,
           rounds: [1],
           latencyMs: 200,
           failed: ['wrong-value', 'memory-answer'],
           judge: { 'judge-relevance': 0.5 },
         }),
-        run({ caseName: 'LongerCase', latencyMs: 50 }),
+        run({ caseName: 'LongerCase', checks: all, latencyMs: 50 }),
         run({ caseName: 'LongerCase', error: true, latencyMs: 51 }),
-        run({ model: 'm/two', caseName: 'A1', latencyMs: 10 }),
-        run({ model: 'm/two', caseName: 'A1', latencyMs: 12, failed: ['x'] }),
+        run({ model: 'm/two', caseName: 'A1', checks: all, latencyMs: 10 }),
+        run({
+          model: 'm/two',
+          caseName: 'A1',
+          checks: ['run-failed', 'memory-answer'],
+          latencyMs: 12,
+          failed: ['wrong-value'],
+        }),
       ],
       [1, 2],
     );
@@ -47,19 +56,49 @@ describe('the text of the report', () => {
         '              failed: memory-answer=1 wrong-value=1',
         '              cost 0.1250 (4 runs)  latency 100 ms  rounds 1.40 (5 runs)  cost/solved 0.1250',
         '              judge-relevance 0.75 (2 unscored)',
+        '  by error class',
+        '    run-failed     judged=6  passed=5  failed=1  pass@1=0.7500 pass@2=1.0000  pass^1=0.7500 pass^2=0.5000',
+        '    memory-answer  judged=5  passed=4  failed=1  pass@1=0.8750 pass@2=1.0000  pass^1=0.8750 pass^2=0.5000',
+        '    wrong-value    judged=4  passed=4  failed=0  pass@1=1.0000 pass@2=1.0000  pass^1=1.0000 pass^2=1.0000',
         '',
         'm/two',
         '  A1          n=2  c=1  err=0  pass@1=0.5000 pass@2=1.0000  pass^1=0.5000 pass^2=0.0000',
-        '              failed: x=1',
+        '              failed: wrong-value=1',
         '              cost n/a (0 runs)  latency 11 ms  rounds 0.00 (2 runs)  cost/solved -',
         '              judge-relevance n/a (2 unscored)',
         '  mean        n=2  c=1  err=0  pass@1=0.5000 pass@2=1.0000  pass^1=0.5000 pass^2=0.0000',
-        '              failed: x=1',
+        '              failed: wrong-value=1',
         '              cost n/a (0 runs)  latency 11 ms  rounds 0.00 (2 runs)  cost/solved -',
         '              judge-relevance n/a (2 unscored)',
+        '  by error class',
+        '    run-failed     judged=2  passed=2  failed=0  pass@1=1.0000 pass@2=1.0000  pass^1=1.0000 pass^2=1.0000',
+        '    memory-answer  judged=2  passed=2  failed=0  pass@1=1.0000 pass@2=1.0000  pass^1=1.0000 pass^2=1.0000',
+        '    wrong-value    judged=2  passed=1  failed=1  pass@1=0.5000 pass@2=1.0000  pass^1=0.5000 pass^2=0.0000',
         '',
       ].join('\n'),
     );
+  });
+
+  it('shows - for the estimators of a class that no case can give', () => {
+    const text = render(
+      [
+        ...many(3, { checks: ['run-failed', 'wrong-value'] }),
+        ...many(7, { checks: ['run-failed'], failed: ['memory-answer'] }),
+      ],
+      [5],
+    );
+    expect(text).toContain(
+      '    wrong-value    judged=3  passed=3  failed=0  pass@5=-  pass^5=-',
+    );
+  });
+
+  it('shows run-failed alone for a model whose runs all ended in an error', () => {
+    const text = render(many(2, { error: true }), [1]);
+    expect(text).toContain('  by error class\n');
+    expect(text).toContain(
+      '    run-failed  judged=2  passed=0  failed=2  pass@1=0.0000  pass^1=0.0000',
+    );
+    expect(text).not.toContain('memory-answer');
   });
 
   it('is empty when there are no runs', () => {

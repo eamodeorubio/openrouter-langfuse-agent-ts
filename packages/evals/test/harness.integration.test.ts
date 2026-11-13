@@ -1,11 +1,11 @@
-import { type SpawnSyncReturns, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { serveCatalog } from './catalogServer.js';
+import { type Finished, runTsx } from './runTsx.js';
 
 const root = path.resolve(import.meta.dirname, '..');
-const tsx = path.join(root, 'node_modules/.bin/tsx');
 const stub = path.join(root, 'test/fixtures/stub-cli.mjs');
 const config = path.join(root, 'test/fixtures/harness.config.yaml');
 const DUMMY_KEY = 'DUMMY-KEY-do-not-leak-0123456789';
@@ -22,29 +22,38 @@ const filesUnder = (dir: string): string[] =>
         )
     : [];
 
+let catalogUrl = '';
+
 const runEval = (
   args: string[],
   env: Record<string, string> = {},
-): SpawnSyncReturns<string> =>
-  spawnSync(tsx, [path.join(root, 'src/run.ts'), ...args], {
-    cwd: root,
-    encoding: 'utf8',
-    env: { ...process.env, EVAL_CLI: stub, ...env },
+): Promise<Finished> =>
+  runTsx([path.join(root, 'src/run.ts'), ...args], {
+    EVAL_CLI: stub,
+    EVAL_CATALOG_URL: catalogUrl,
+    ...env,
   });
 
 describe('the eval harness, end to end, with a stub CLI', () => {
   let out: string;
-  let run: SpawnSyncReturns<string>;
+  let run: Finished;
 
-  beforeAll(() => {
+  let catalog: Awaited<ReturnType<typeof serveCatalog>>;
+
+  beforeAll(async () => {
+    catalog = await serveCatalog();
+    catalogUrl = catalog.url;
     out = fs.mkdtempSync(path.join(os.tmpdir(), 'evals-harness-'));
-    run = runEval(
+    run = await runEval(
       ['--config', config, '--repeat', '3', '--k', '1,3', '--out', out],
       { OPENROUTER_API_KEY: DUMMY_KEY },
     );
   });
 
-  afterAll(() => fs.rmSync(out, { recursive: true, force: true }));
+  afterAll(async () => {
+    fs.rmSync(out, { recursive: true, force: true });
+    await catalog.close();
+  });
 
   it('prints the report and exits 0 although runs failed and errored', () => {
     expect(run.status, run.stderr).toBe(0);
@@ -98,9 +107,9 @@ describe('the eval harness, end to end, with a stub CLI', () => {
     expect(run.stderr).not.toContain(DUMMY_KEY);
   });
 
-  it('stops before any run when the CLI is not built', () => {
+  it('stops before any run when the CLI is not built', async () => {
     const empty = fs.mkdtempSync(path.join(os.tmpdir(), 'evals-nobuild-'));
-    const result = runEval(
+    const result = await runEval(
       ['--config', config, '--repeat', '1', '--k', '1', '--out', empty],
       {
         EVAL_CLI: path.join(empty, 'missing.js'),
@@ -112,9 +121,9 @@ describe('the eval harness, end to end, with a stub CLI', () => {
     fs.rmSync(empty, { recursive: true, force: true });
   });
 
-  it('exits non-zero and prints no report when promptfoo itself fails', () => {
+  it('exits non-zero and prints no report when promptfoo itself fails', async () => {
     const broken = fs.mkdtempSync(path.join(os.tmpdir(), 'evals-broken-'));
-    const result = runEval([
+    const result = await runEval([
       '--config',
       path.join(broken, 'absent.yaml'),
       '--repeat',

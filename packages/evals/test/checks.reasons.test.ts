@@ -122,7 +122,7 @@ describe('the reason of every verdict', () => {
     );
   });
 
-  it('wrong-value ignores a figure name it does not know, and a null price', () => {
+  it('wrong-value has no figure to compare when the output holds a null price', () => {
     const calls = [
       {
         ...getModel('a/b', 1, 1),
@@ -135,9 +135,19 @@ describe('the reason of every verdict', () => {
     ];
     const asked = meta({
       askedModel: 'a/b',
-      askedFigures: ['inputPrice', 'outputPrice', 'colour'],
+      askedFigures: ['inputPrice', 'outputPrice'],
     });
     expect(askedFigures(success('no figures', calls), asked).pass).toBe(true);
+  });
+
+  it('wrong-value refuses a figure name it does not know, as a case that cannot be judged', () => {
+    const asked = meta({
+      askedModel: 'a/b',
+      askedFigures: ['inputPrice', 'colour'],
+    });
+    expect(() =>
+      askedFigures(success('x', [getModel('a/b', 1, 1)]), asked),
+    ).toThrow(/askedFigures of a case must be a list of figure names/);
   });
 
   it('wrong-value says nothing about a figure the output does not hold', () => {

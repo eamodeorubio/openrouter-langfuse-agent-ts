@@ -1,0 +1,16 @@
+- description: Looks up the prices and the context window of a named model, and reports what the tools returned
+  vars:
+    question: What are the input and output prices of openai/gpt-oss-20b, and how large is its context window?
+  metadata:
+    id: lookup/known-model
+    set: core
+    needsLookup: true
+    askedModel: openai/gpt-oss-20b
+    askedFigures: [inputPrice, outputPrice, contextLength]
+  assert:
+    - type: javascript
+      metric: wrong-search
+      value: file://src/checks/assertions.ts:askedModelFound
+    - type: javascript
+      metric: wrong-value
+      value: file://src/checks/assertions.ts:askedFigures

@@ -10,6 +10,8 @@ export interface Run {
   passed: boolean;
   /** The metrics of the checks that failed, judge rubrics left out. */
   failures: string[];
+  /** The metrics of every check that ran on the run, passed or failed, judge rubrics left out. */
+  judged: string[];
   /** The cost the CLI reported. Absent when none was reported, and for a provider error. */
   cost?: number;
   latencyMs?: number;
@@ -42,6 +44,15 @@ const failedMetrics = (grading: unknown): string[] => {
     const metric = text(pathOf(component, 'assertion', 'metric'));
     const failed = isObject(component) && component.pass === false;
     return failed && metric && !metric.startsWith(JUDGE_PREFIX) ? [metric] : [];
+  });
+};
+
+const judgedMetrics = (grading: unknown): string[] => {
+  const components = pathOf(grading, 'componentResults');
+  if (!Array.isArray(components)) return [];
+  return components.flatMap((component) => {
+    const metric = text(pathOf(component, 'assertion', 'metric'));
+    return metric && !metric.startsWith(JUDGE_PREFIX) ? [metric] : [];
   });
 };
 
@@ -91,6 +102,7 @@ const toRun = (entry: unknown): Run => {
     error,
     passed: !error && entry.success === true,
     failures: error ? [] : failedMetrics(entry.gradingResult),
+    judged: error ? [] : judgedMetrics(entry.gradingResult),
     // A provider error carries a cost of 0 in the record. It reported none.
     ...(!error && finite(reported) ? { cost: reported } : {}),
     ...(finite(entry.latencyMs) ? { latencyMs: entry.latencyMs } : {}),

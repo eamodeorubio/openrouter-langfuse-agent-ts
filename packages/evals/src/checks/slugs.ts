@@ -55,7 +55,11 @@ export const slugTokens = (text: string): string[] =>
 
 /** The authors of a list of slugs. */
 export const authorsOf = (slugs: Iterable<string>): Set<string> =>
-  new Set([...slugs].map((slug) => slug.slice(0, slug.indexOf('/'))));
+  new Set(
+    [...slugs]
+      .filter((slug) => slug.includes('/'))
+      .map((slug) => slug.slice(0, slug.indexOf('/'))),
+  );
 
 /**
  * A slug without a suffix is grounded by the same slug with any suffix. A

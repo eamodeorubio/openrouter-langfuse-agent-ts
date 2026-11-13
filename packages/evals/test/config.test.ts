@@ -1,10 +1,12 @@
-import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
+import { readCase } from '../src/checks/caseSpec.js';
 import { DEFAULT_REPEAT, parseRunArgs, promptfooArgs } from '../src/runner.js';
+import { serveCatalog } from './catalogServer.js';
+import { type Finished, runTsx } from './runTsx.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 const configFile = path.join(root, 'promptfooconfig.yaml');
@@ -23,8 +25,19 @@ const config = parse(fs.readFileSync(configFile, 'utf8')) as {
     vars: { model: string[] };
     assert: { metric: string; value: string }[];
   };
-  tests: Case[];
+  tests: string;
 };
+
+/** The cases of the files under `cases/`, each with the family its file is named for. */
+const cases: (Case & { family: string })[] = fs
+  .readdirSync(path.join(root, 'cases'))
+  .filter((file) => file.endsWith('.yaml'))
+  .sort()
+  .flatMap((file) =>
+    (
+      parse(fs.readFileSync(path.join(root, 'cases', file), 'utf8')) as Case[]
+    ).map((test) => ({ ...test, family: file.replace(/\.yaml$/, '') })),
+  );
 
 describe('the model matrix', () => {
   const models = config.defaultTest.vars.model;
@@ -34,7 +47,7 @@ describe('the model matrix', () => {
       'nvidia/nemotron-3-ultra-550b-a55b:free',
       'anthropic/claude-haiku-5.5',
     ]);
-    for (const test of config.tests) {
+    for (const test of cases) {
       expect(test.vars.model, test.metadata.id).toBeUndefined();
     }
   });
@@ -49,13 +62,57 @@ describe('the model matrix', () => {
   });
 });
 
+describe('the files of cases', () => {
+  it('are all the tests of the config, which names them by a glob', () => {
+    expect(config.tests).toBe('file://cases/*.yaml');
+    expect(cases.length).toBeGreaterThan(0);
+  });
+
+  it('give every case a set, and the core set is the three cases of the core', () => {
+    for (const test of cases) {
+      expect(['core', 'full'], test.metadata.id).toContain(test.metadata.set);
+    }
+    expect(
+      cases
+        .filter((test) => test.metadata.set === 'core')
+        .map((test) => test.metadata.id),
+    ).toEqual([
+      'calculation/given-prices',
+      'lookup/known-model',
+      'search/cheapest-blended',
+    ]);
+  });
+});
+
+describe('the core set', () => {
+  it('holds the three cases of the core set, one for each family', () => {
+    expect(cases.map((test) => test.metadata.id)).toEqual([
+      'calculation/given-prices',
+      'lookup/known-model',
+      'search/cheapest-blended',
+    ]);
+  });
+});
+
+describe('the declarations of the cases', () => {
+  it('are all known and of the right kind, so that no typo can turn a check into a pass', () => {
+    for (const test of cases) {
+      expect(() => readCase({ test }), test.metadata.id).not.toThrow();
+      expect(readCase({ test }).id).toBe(test.metadata.id);
+    }
+  });
+});
+
 describe('the cases', () => {
   it('say in one line what they test, and keep their code in metadata.id', () => {
-    for (const test of config.tests) {
+    for (const test of cases) {
       expect(test.description).not.toContain('\n');
       expect(test.description.split(/\s+/).length).toBeGreaterThan(4);
       expect(test.description).not.toBe(test.metadata.id);
-      expect(test.metadata.id).toMatch(/^[A-Z]\d+$/);
+      expect(test.metadata.id).toMatch(
+        /^[a-z]+(-[a-z]+)*\/[a-z0-9]+(-[a-z0-9]+)*$/,
+      );
+      expect(test.metadata.id.split('/')[0]).toBe(test.family);
     }
   });
 });
@@ -109,11 +166,12 @@ describe('the config', () => {
     }
   });
 
-  it('declares the case A1 with what it needs', () => {
-    const a1 = config.tests.find((test) => test.metadata.id === 'A1');
+  it('declares the case lookup/known-model with what it needs', () => {
+    const a1 = cases.find((test) => test.metadata.id === 'lookup/known-model');
     expect(a1?.vars.question).toMatch(/openai\/gpt-oss-20b/);
     expect(a1?.metadata).toEqual({
-      id: 'A1',
+      id: 'lookup/known-model',
+      set: 'core',
       needsLookup: true,
       askedModel: 'openai/gpt-oss-20b',
       askedFigures: ['inputPrice', 'outputPrice', 'contextLength'],
@@ -125,8 +183,54 @@ describe('the config', () => {
   });
 
   it('gives every case its own code, so that no two cells merge', () => {
-    const ids = config.tests.map((test) => test.metadata.id);
+    const ids = cases.map((test) => test.metadata.id);
     expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('declares the case calculation/given-prices: the prices are in the question, so no lookup, and the cost is 3', () => {
+    const b7 = cases.find(
+      (test) => test.metadata.id === 'calculation/given-prices',
+    );
+    expect(b7?.vars.question).toMatch(/0\.50 USD per million input tokens/);
+    expect(b7?.vars.question).toMatch(/1\.50 USD per million output tokens/);
+    expect(b7?.vars.question).toMatch(
+      /3 million input tokens and 1 million output tokens/,
+    );
+    expect(b7?.metadata).toEqual({
+      id: 'calculation/given-prices',
+      set: 'core',
+      needsLookup: false,
+      needsArithmetic: true,
+      expectedCost: 3,
+    });
+    expect(0.5 * 3 + 1.5 * 1).toBe(3);
+    expect(b7?.assert?.map((a) => a.metric).sort()).toEqual([
+      'arithmetic-in-head',
+      'needless-lookup',
+      'wrong-value',
+    ]);
+  });
+
+  it('declares the case search/cheapest-blended: the cheapest paid model with 200000 tokens and tools, at a mix of 3', () => {
+    const c1 = cases.find(
+      (test) => test.metadata.id === 'search/cheapest-blended',
+    );
+    expect(c1?.vars.question).toMatch(/200,000 tokens of context/);
+    expect(c1?.vars.question).toMatch(/3 input tokens for every output token/);
+    expect(c1?.metadata).toEqual({
+      id: 'search/cheapest-blended',
+      set: 'core',
+      needsLookup: true,
+      oracle: {
+        query: 'cheapest-blended',
+        params: { minContext: 200000, supportedParameters: ['tools'], mix: 3 },
+        search: { min_context_length: 200000, supported_parameters: ['tools'] },
+      },
+    });
+    expect(c1?.assert?.map((a) => a.metric).sort()).toEqual([
+      'wrong-answer',
+      'wrong-search',
+    ]);
   });
 
   it('tags every universal check with its class', () => {
@@ -144,12 +248,13 @@ describe('the config', () => {
 
 describe('the config, run for real against a stub CLI', () => {
   let out: string;
-  let result: ReturnType<typeof spawnSync>;
+  let result: Finished;
+  let catalog: Awaited<ReturnType<typeof serveCatalog>>;
 
-  beforeAll(() => {
+  beforeAll(async () => {
+    catalog = await serveCatalog();
     out = fs.mkdtempSync(path.join(os.tmpdir(), 'evals-config-'));
-    result = spawnSync(
-      path.join(root, 'node_modules/.bin/tsx'),
+    result = await runTsx(
       [
         path.join(root, 'src/run.ts'),
         '--repeat',
@@ -159,34 +264,60 @@ describe('the config, run for real against a stub CLI', () => {
         '--out',
         out,
       ],
-      { cwd: root, encoding: 'utf8', env: { ...process.env, EVAL_CLI: stub } },
+      { EVAL_CLI: stub, EVAL_CATALOG_URL: catalog.url },
     );
   });
 
-  afterAll(() => fs.rmSync(out, { recursive: true, force: true }));
+  afterAll(async () => {
+    fs.rmSync(out, { recursive: true, force: true });
+    await catalog.close();
+  });
 
-  it('loads every check, and each of the two models runs the case twice', () => {
+  it('loads every check, and each of the two models runs each of the three cases twice', () => {
     expect(result.status, String(result.stderr)).toBe(0);
     const saved = JSON.parse(
       fs.readFileSync(path.join(out, 'results.json'), 'utf8'),
     );
-    expect(saved.results.results).toHaveLength(4);
+    expect(saved.results.results).toHaveLength(12);
     const errors = saved.results.results.filter(
       (r: { failureReason: number }) => r.failureReason === 2,
     );
     expect(errors).toHaveLength(0);
   });
 
-  it('reads what the case declares: the stub holds another model, so the search is wrong', () => {
+  it('reads what each case declares, and the snapshot of the run', () => {
     const stdout = String(result.stdout);
     for (const model of config.defaultTest.vars.model) {
       expect(stdout).toContain(model);
     }
-    expect(stdout).toMatch(/A1\s+n=2\s+c=0\s+err=0/);
-    expect(stdout).toContain('wrong-search=2');
-    // The stub made a lookup and its answer names no invented model.
-    expect(stdout).not.toContain('memory-answer');
-    expect(stdout).not.toContain('invented-data');
-    expect(stdout).not.toContain('run-failed');
+    // The stub answers every question with a lookup of a/b and the words "GOOD answer".
+    // lookup/known-model: the model it was asked about is not in its lookups.
+    expect(stdout).toMatch(/lookup\/known-model\s+n=2\s+c=0\s+err=0/);
+    expect(stdout).toMatch(
+      /lookup\/known-model[^\n]*\n\s+failed: wrong-search=2\n/,
+    );
+    // calculation/given-prices: it looked data up that the question held, did no arithmetic and stated no cost.
+    expect(stdout).toMatch(/calculation\/given-prices\s+n=2\s+c=0\s+err=0/);
+    expect(stdout).toMatch(
+      /calculation\/given-prices[^\n]*\n\s+failed: arithmetic-in-head=2 needless-lookup=2 wrong-value=2\n/,
+    );
+    // search/cheapest-blended: no lookup surfaced the one acceptable model of the snapshot.
+    expect(stdout).toMatch(/search\/cheapest-blended\s+n=2\s+c=0\s+err=0/);
+    expect(stdout).toMatch(
+      /search\/cheapest-blended[^\n]*\n\s+failed: wrong-search=2\n/,
+    );
+    // The stub made lookups and its answer names no invented model.
+    const failedLines = stdout
+      .split('\n')
+      .filter((line) => line.includes('failed:'))
+      .join('\n');
+    expect(failedLines).not.toContain('memory-answer');
+    expect(failedLines).not.toContain('invented-data');
+    expect(failedLines).not.toContain('run-failed');
+    expect(failedLines).not.toContain('wrong-answer');
+    // The block by error class counts what each class judged.
+    expect(stdout).toContain('by error class');
+    expect(stdout).toMatch(/wrong-search\s+judged=\d+\s+passed=0\s+failed=\d+/);
+    expect(fs.existsSync(path.join(out, 'catalog.json'))).toBe(true);
   });
 });

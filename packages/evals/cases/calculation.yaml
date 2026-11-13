@@ -1,0 +1,19 @@
+- description: Works out a cost from prices given in the question, with no lookup, and does the arithmetic with the tool
+  vars:
+    question: A model costs 0.50 USD per million input tokens and 1.50 USD per million output tokens. What do 3 million input tokens and 1 million output tokens cost?
+  metadata:
+    id: calculation/given-prices
+    set: core
+    needsLookup: false
+    needsArithmetic: true
+    expectedCost: 3
+  assert:
+    - type: javascript
+      metric: arithmetic-in-head
+      value: file://src/checks/assertions.ts:arithmeticInHead
+    - type: javascript
+      metric: needless-lookup
+      value: file://src/checks/assertions.ts:needlessLookup
+    - type: javascript
+      metric: wrong-value
+      value: file://src/checks/assertions.ts:statedCost

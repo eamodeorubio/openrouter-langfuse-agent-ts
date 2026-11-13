@@ -7,6 +7,7 @@ import {
   memoryAnswer,
   runFailed,
 } from '../src/checks/assertions.js';
+import { CaseError } from '../src/checks/caseSpec.js';
 
 interface Call {
   round: number;
@@ -277,10 +278,15 @@ describe('every check, for any output and any case', () => {
     fc.assert(
       fc.property(fc.anything(), fc.anything(), (output, context) => {
         for (const check of checks) {
-          const result = check(output, context as never);
-          expect(typeof result.pass).toBe('boolean');
-          expect(typeof result.reason).toBe('string');
-          expect(result.score).toBe(result.pass ? 1 : 0);
+          try {
+            const result = check(output, context as never);
+            expect(typeof result.pass).toBe('boolean');
+            expect(typeof result.reason).toBe('string');
+            expect(result.score).toBe(result.pass ? 1 : 0);
+          } catch (error) {
+            // Only a case that declares something unreadable may fail.
+            expect(error).toBeInstanceOf(CaseError);
+          }
         }
       }),
     );

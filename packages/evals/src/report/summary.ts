@@ -32,9 +32,24 @@ export interface CellSummary extends Stats {
   case: string;
 }
 
+/** What one error class did over the runs it judged. */
+export interface ClassSummary {
+  name: string;
+  /** The cases that have a check of this class. */
+  cases: number;
+  judged: number;
+  passed: number;
+  failed: number;
+  /** The mean of the cases whose judged runs are at least k. Null when no case is. */
+  passAt: Record<number, number | null>;
+  passHat: Record<number, number | null>;
+}
+
 export interface ModelSummary {
   model: string;
   cells: CellSummary[];
+  /** The error classes, in the order of the taxonomy. */
+  classes: ClassSummary[];
   /** The mean of the estimators of the cells, and the figures of all the runs pooled. */
   row: Stats;
 }
@@ -118,6 +133,97 @@ const meanOver = (
     ]),
   );
 
+/** The order the taxonomy lists the classes in. The others follow, by name. */
+const TAXONOMY = [
+  'run-failed',
+  'memory-answer',
+  'wrong-search',
+  'wrong-answer',
+  'phantom-match',
+  'bad-recommendation',
+  'invented-data',
+  'wrong-value',
+];
+
+/**
+ * How early a class comes in the chain. A class does not judge a run that a
+ * class of an earlier level failed. A class that is not listed stands beside
+ * the chain: only `run-failed` comes before it.
+ */
+const LEVEL: Record<string, number> = {
+  'run-failed': 0,
+  'memory-answer': 1,
+  'wrong-search': 2,
+  'wrong-answer': 3,
+  'phantom-match': 3,
+  'bad-recommendation': 3,
+  'invented-data': 4,
+  'wrong-value': 4,
+};
+const BESIDE_THE_CHAIN = 1;
+const level = (name: string): number => LEVEL[name] ?? BESIDE_THE_CHAIN;
+
+const failedClass = (run: Run, name: string): boolean =>
+  // Stryker disable next-line ConditionalExpression: equivalent because only the run-failed class is asked about a run that errored, as the others judge no such run
+  name === 'run-failed'
+    ? run.error || run.failures.includes(name)
+    : run.failures.includes(name);
+
+/** Whether the class judged the run: it ran a check on it, and no class before it failed the run. */
+const judgedBy = (run: Run, name: string): boolean => {
+  if (name === 'run-failed') return true;
+  // A provider error ran no check, so its `judged` is empty.
+  if (!run.judged.includes(name)) return false;
+  const before = (other: string) => level(other) < level(name);
+  return ![...TAXONOMY, ...run.failures].some(
+    (other) => before(other) && failedClass(run, other),
+  );
+};
+
+const classNames = (runs: Run[]): string[] => {
+  const seen = new Set<string>(['run-failed']);
+  for (const run of runs) for (const name of run.judged) seen.add(name);
+  const known = TAXONOMY.filter((name) => seen.has(name));
+  const others = [...seen].filter((name) => !TAXONOMY.includes(name)).sort();
+  return [...known, ...others];
+};
+
+const summarizeClass = (
+  name: string,
+  runs: Run[],
+  ks: number[],
+): ClassSummary => {
+  const judged = runs.filter((run) => judgedBy(run, name));
+  const byCase = new Map<string, Run[]>();
+  for (const run of judged) {
+    byCase.set(run.caseName, [...(byCase.get(run.caseName) ?? []), run]);
+  }
+  const cells = [...byCase.values()].map((cell) => ({
+    n: cell.length,
+    c: cell.filter((run) => !failedClass(run, name)).length,
+  }));
+  const mean = (
+    estimate: (n: number, c: number, k: number) => number,
+    k: number,
+  ): number | null => {
+    const fit = cells.filter((cell) => cell.n >= k);
+    return fit.length === 0
+      ? null
+      : fit.reduce((sum, cell) => sum + estimate(cell.n, cell.c, k), 0) /
+          fit.length;
+  };
+  const failed = judged.filter((run) => failedClass(run, name)).length;
+  return {
+    name,
+    cases: cells.length,
+    judged: judged.length,
+    passed: judged.length - failed,
+    failed,
+    passAt: Object.fromEntries(ks.map((k) => [k, mean(passAtK, k)])),
+    passHat: Object.fromEntries(ks.map((k) => [k, mean(passHatK, k)])),
+  };
+};
+
 /** Groups the runs by model and case and works out the figures of each cell and of each model. */
 export const summarize = (
   runs: Run[],
@@ -141,6 +247,9 @@ export const summarize = (
     return {
       model,
       cells,
+      classes: classNames(ofModel).map((name) =>
+        summarizeClass(name, ofModel, ks),
+      ),
       row: {
         ...describe(ofModel, rubrics, threshold),
         passAt: meanOver(cells, ks, (cell) => cell.passAt),

@@ -7,7 +7,7 @@ import net from 'node:net';
 // 1. The test run forgets every credential and setting of the shell that
 //    started it, so that nothing can fall back on them.
 for (const name of Object.keys(process.env)) {
-  if (/^(OPENROUTER_|TYPESAFE_|LANGFUSE_|OTEL_|PROMPTFOO_)/.test(name)) {
+  if (/^(OPENROUTER_|TYPESAFE_|LANGFUSE_|OTEL_|PROMPTFOO_|EVAL_)/.test(name)) {
     delete process.env[name];
   }
 }

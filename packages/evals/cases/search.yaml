@@ -1,0 +1,23 @@
+- description: Finds the cheapest paid model that meets a context and a tool-calling constraint, by searching the catalog with those filters
+  vars:
+    question: Which is the cheapest paid model with at least 200,000 tokens of context and tool calling? Assume 3 input tokens for every output token.
+  metadata:
+    id: search/cheapest-blended
+    set: core
+    needsLookup: true
+    oracle:
+      query: cheapest-blended
+      params:
+        minContext: 200000
+        supportedParameters: [tools]
+        mix: 3
+      search:
+        min_context_length: 200000
+        supported_parameters: [tools]
+  assert:
+    - type: javascript
+      metric: wrong-search
+      value: file://src/checks/assertions.ts:wrongSearch
+    - type: javascript
+      metric: wrong-answer
+      value: file://src/checks/assertions.ts:wrongAnswer

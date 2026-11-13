@@ -11,17 +11,17 @@ defaultTest:
       value: output.answer.includes('GOOD')
 tests:
   - description: A CLI that answers well
-    metadata: { id: ok }
+    metadata: { id: ok, set: core }
     vars: { question: 'ok', model: m/one }
   - description: A CLI that answers wrongly
-    metadata: { id: wrong }
+    metadata: { id: wrong, set: core }
     vars: { question: 'wrong', model: m/one }
   - description: A CLI that exits with code 1
-    metadata: { id: exit1 }
+    metadata: { id: exit1, set: core }
     vars: { question: 'exit1', model: m/one }
   - description: A CLI that prints text that is not JSON
-    metadata: { id: garbage }
+    metadata: { id: garbage, set: core }
     vars: { question: 'garbage', model: m/two }
   - description: A case that names no model
-    metadata: { id: nomodel }
+    metadata: { id: nomodel, set: core }
     vars: { question: 'ok' }

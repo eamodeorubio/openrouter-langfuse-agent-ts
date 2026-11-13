@@ -10,7 +10,10 @@ const model = flag('--model');
 
 // Proof that the CLI was started at all.
 if (process.env.STUB_MARK) {
-  fs.appendFileSync(process.env.STUB_MARK, 'started\n');
+  fs.appendFileSync(
+    process.env.STUB_MARK,
+    `started ${Date.now()} ${process.env.EVAL_CATALOG ?? ''}\n`,
+  );
 }
 
 const success = (extra = {}) => ({

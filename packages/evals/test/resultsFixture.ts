@@ -7,6 +7,8 @@ export interface RunSpec {
   error?: boolean;
   /** Metrics of checks that failed, so the run did not pass. */
   failed?: string[];
+  /** Metrics of checks that ran and passed. */
+  checks?: string[];
   /** The cost the CLI reported. Absent means none was reported. */
   cost?: number;
   /** `null` leaves the latency out of the record. */
@@ -23,6 +25,7 @@ export const run = (spec: RunSpec = {}) => {
     caseName = 'A1',
     error = false,
     failed = [],
+    checks = [],
     cost,
     latencyMs = 100,
     rounds = [],
@@ -33,6 +36,11 @@ export const run = (spec: RunSpec = {}) => {
     ...failed.map((metric) => ({
       pass: false,
       score: 0,
+      assertion: { type: 'javascript', metric },
+    })),
+    ...checks.map((metric) => ({
+      pass: true,
+      score: 1,
       assertion: { type: 'javascript', metric },
     })),
     ...Object.entries(judge).map(([metric, score]) => ({
