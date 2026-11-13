@@ -24,13 +24,14 @@ The other scripts (`test:watch`, `test:coverage`, `mutation:full`, `build`, `doc
 
 Run the tool from your clone with `pnpm dev`, for example `pnpm dev -q "What is a token?"`. It runs from `packages/cli/`, so that is where its `.env` belongs.
 
-Tests never touch the network. Mock HTTP with `nock`. When a test has to cancel or cut a response stream, use the loopback server in `packages/cli/test/fakeApi.ts`, because `nock`'s mock sockets cannot survive a cancel. The tests of the Langfuse calls (the credential check and the OTLP upload) use it too, because `nock` failed with them intermittently. To run the tool against real services, copy `.env.example` to `packages/cli/.env` and fill in your keys. Never commit `.env`. To report a security problem, follow [SECURITY.md](SECURITY.md) instead of opening an issue.
+Tests never touch the network. Mock HTTP with `nock`. When a test has to cancel or cut a response stream, use the loopback server in `packages/cli/test/fakeApi.ts`, because `nock`'s mock sockets cannot survive a cancel. The tests of the Langfuse calls (the credential check and the OTLP upload) use it too, because `nock` failed with them intermittently. To run the tool against real services, copy `.env.example` to `packages/cli/.env` and fill in your keys. Never commit `.env`. The evals in `packages/evals` are the one exception: they run the built CLI against real models, cost money, and start only on request (see its README). To report a security problem, follow [SECURITY.md](SECURITY.md) instead of opening an issue.
 
 ### Project layout
 
 | Path                | What lives there                             |
 | ------------------- | -------------------------------------------- |
 | `packages/cli/`     | The CLI: source in `src/`, tests in `test/`  |
+| `packages/evals/`   | The evals: real-model runs and their report  |
 | `docs/`             | The documentation site                       |
 | `openspec/`         | Specs and change proposals                   |
 | `QUALITY_RUBRIC.md` | The yardstick for writing and reviewing code |

@@ -11,6 +11,7 @@ The stack, scripts and CI are in `package.json`, the config files and `.github/w
 These bind every spec, design and implementation.
 
 - Tests never reach the public network. Mock HTTP with `nock`. Where a test must cancel, cut or stall a response stream, use a real server on `127.0.0.1` instead (`packages/cli/test/fakeApi.ts`): `nock`'s mock sockets cannot survive a cancel, and the failures they cause are intermittent. The Langfuse tests (the credential check, which uses `fetch`, and the OTLP exporter) use a real server too, because `nock` failed with them intermittently. A test run cannot reach a real service by accident: `packages/cli/test/setup.ts` clears `LANGFUSE_*`, `OPENROUTER_*` and `OTEL_*` from the environment and refuses every request that `nock` does not answer, except to the loopback interface.
+- Evals are the one exception to the line above. `packages/evals` runs the built CLI against real OpenRouter models with the user's key, and it costs money. Run it only when the user asks. Its own unit tests follow the rule: `pnpm test` never starts an eval run, and `packages/evals/test/setup.ts` refuses every request except to the loopback interface.
 - API keys come from the environment (see `.env.example`). Never log them, print them, commit them, or send them to Langfuse in traces or metadata. Never read or print `.env` contents.
 - Use pnpm, never npm or yarn.
 - Validate untrusted input (arguments, environment, API responses) at the boundary, with clear error messages.
@@ -68,7 +69,7 @@ A technical decision we want to remember needs a spec whatever the row says. Out
 
 ### Mutation testing
 
-- Run `pnpm mutation` whenever you change `src/` logic. The score must stay at or above the `break` threshold in `stryker.config.json`. Do not lower `thresholds` to make a run pass. CI runs it too, but its result arrives after the PR is opened, so run it first and report the result.
+- Run `pnpm mutation` whenever you change `src/` logic, and `pnpm mutation:evals` for `packages/evals/src/`. The score must stay at or above the `break` threshold in `stryker.config.json`. Do not lower `thresholds` to make a run pass. CI runs it too, but its result arrives after the PR is opened, so run it first and report the result.
 - Read every survivor. Kill it with a better test, often a property test. If the invariant was too weak, strengthen it or add an example.
 - Equivalent mutants (a change that cannot alter observable behavior): first try to rewrite the code so the mutant is gone. Only if that harms readability, disable it with `// Stryker disable next-line <MutatorName>: equivalent because <reason>`. Never use a bare `all`, and never disable a mutant to hide a missing test. A survivor that no longer type-checks counts as equivalent: give "does not type-check" as the reason.
 - Do not write tests whose only purpose is to kill a mutant in `console` calls or trivial code (declarations, re-exports, constant tables, thin wiring).

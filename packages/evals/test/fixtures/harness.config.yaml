@@ -1,0 +1,27 @@
+# A config for the harness test: the real provider, a stub CLI (EVAL_CLI) and
+# one case per outcome the provider and the reporter have to handle.
+prompts: ['{{question}}']
+providers:
+  - id: file://../../src/provider/cli.ts
+    label: cli
+defaultTest:
+  assert:
+    - type: javascript
+      metric: wrong-value
+      value: output.answer.includes('GOOD')
+tests:
+  - description: A CLI that answers well
+    metadata: { id: ok }
+    vars: { question: 'ok', model: m/one }
+  - description: A CLI that answers wrongly
+    metadata: { id: wrong }
+    vars: { question: 'wrong', model: m/one }
+  - description: A CLI that exits with code 1
+    metadata: { id: exit1 }
+    vars: { question: 'exit1', model: m/one }
+  - description: A CLI that prints text that is not JSON
+    metadata: { id: garbage }
+    vars: { question: 'garbage', model: m/two }
+  - description: A case that names no model
+    metadata: { id: nomodel }
+    vars: { question: 'ok' }

@@ -1,0 +1,48 @@
+# The core eval set. It runs the built CLI against real models, so it costs
+# money and needs OPENROUTER_API_KEY. Run it with `pnpm --filter
+# ask-openrouter-evals run eval`, and only when you mean to.
+description: ask-openrouter evals, core set
+
+prompts:
+  - '{{question}}'
+
+providers:
+  - id: file://src/provider/cli.ts
+    label: ask-openrouter-cli
+
+# Every case passes through the checks of the first three error classes. The
+# order is the order of the precedence: a later check does not judge a run an
+# earlier class already failed.
+defaultTest:
+  vars:
+    # The matrix: promptfoo runs every case once per model.
+    model:
+      - nvidia/nemotron-3-ultra-550b-a55b:free
+      - anthropic/claude-haiku-5.5
+  assert:
+    - type: javascript
+      metric: run-failed
+      value: file://src/checks/assertions.ts:runFailed
+    - type: javascript
+      metric: memory-answer
+      value: file://src/checks/assertions.ts:memoryAnswer
+    - type: javascript
+      metric: invented-data
+      value: file://src/checks/assertions.ts:inventedModels
+
+tests:
+  - description: Looks up the prices and the context window of a named model, and reports what the tools returned
+    vars:
+      question: What are the input and output prices of openai/gpt-oss-20b, and how large is its context window?
+    metadata:
+      id: A1
+      needsLookup: true
+      askedModel: openai/gpt-oss-20b
+      askedFigures: [inputPrice, outputPrice, contextLength]
+    assert:
+      - type: javascript
+        metric: wrong-search
+        value: file://src/checks/assertions.ts:askedModelFound
+      - type: javascript
+        metric: wrong-value
+        value: file://src/checks/assertions.ts:askedFigures
