@@ -113,7 +113,7 @@ A case SHALL name the figures its answer must hold. Each expected figure SHALL c
 - **THEN** that number does not match, because it carries no `$` or `USD`
 
 ### Requirement: Search checks
-A case that names an oracle query SHALL fail with `wrong-search` when no successful call output holds an acceptable slug, or when the run made a `search_models` call and none of those calls carries every constraint the case requires. It SHALL fail with `wrong-answer` when the answer names no acceptable slug.
+A case that names an oracle query SHALL fail with `wrong-search` when no successful call output holds an acceptable slug, or when the run made a `search_models` call and none of those calls carries every filter the case declares in its `search`. A case with no acceptable model, a count or a sorted search SHALL still fail with `wrong-search` when no successful search carried those filters. It SHALL fail with `wrong-answer` when the answer names no acceptable slug.
 
 #### Scenario: Constraint dropped
 - **WHEN** the case requires `min_context_length` of at least 200000 and the call sent none
@@ -147,7 +147,7 @@ A case that declares `needsArithmetic` SHALL fail with `arithmetic-in-head` when
 - **THEN** the run carries `needless-lookup`
 
 ### Requirement: Search efficiency
-A case that declares `singleSearch` SHALL fail with `wasteful-search` when the run made more than one successful `search_models` call, or when no such call sent a `sort`. Its answer SHALL name the model listed first by the first search, or the case fails with `wrong-answer`.
+A case that runs the single-search check SHALL fail with `wasteful-search` when the run made more than one successful `search_models` call, or when no such call sent a `sort`. Its answer SHALL name the model listed first by the first search, or the case fails with `wrong-answer`.
 
 #### Scenario: Two searches
 - **WHEN** a run made two successful `search_models` calls
@@ -162,7 +162,7 @@ A case that declares `singleSearch` SHALL fail with `wasteful-search` when the r
 - **THEN** the run carries `wrong-answer`
 
 ### Requirement: Counts
-A case that declares a count query SHALL fail with `wrong-value` when the answer holds neither the number of models the query returns on the snapshot nor the `total` of a successful search that carried the case's constraints. It SHALL fail with `wrong-search` when no search carried them.
+A case that runs the count check SHALL fail with `wrong-value` when the answer holds neither the number of models the query returns on the snapshot nor the `total` of a successful search that carried the case's constraints. It SHALL fail with `wrong-search` when no search carried them.
 
 #### Scenario: Count from the first page
 - **WHEN** the query returns 205, the search reported a total of 205 and the answer says 10
@@ -173,7 +173,7 @@ A case that declares a count query SHALL fail with `wrong-value` when the answer
 - **THEN** the run passes this check
 
 ### Requirement: No match
-A case whose query returns no model SHALL fail with `phantom-match` when the answer holds no phrase of a fixed list that says no model matches: `no model`, `no models`, `none`, `does not exist`, `doesn't exist`, `no such`, `no match`, `not find`, `nothing`. It SHALL still carry `wrong-search` when no search sent the constraints.
+A case that runs the no-match check, and whose oracle query returns no model on the snapshot, SHALL fail with `phantom-match` when the answer holds no phrase of a fixed list that says no model matches: `no model`, `no models`, `none`, `does not exist`, `doesn't exist`, `no such`, `no match`, `not find`, `nothing`. It SHALL still carry `wrong-search` when no search sent the constraints.
 
 #### Scenario: Invented match
 - **WHEN** no model has 2M tokens of context, image output and a low price, and the answer recommends `a/b`
@@ -320,7 +320,7 @@ The core set SHALL hold `lookup/known-model`, `calculation/given-prices` and `se
 | `search/image-input` | lowest input price among paid models that accept image input | `needsLookup` | query `cheapest-input`, constraint `input_modalities` `image` |
 | `search/none-exists` | a model with 2M tokens of context, image output and an input price under 0.01 USD | `needsLookup` | query `matching` returns none; `phantom-match` |
 | `search/count` | how many models support tool calling and have 1M tokens of context | `needsLookup` | count of query `matching` or the search `total`; the tool pages 10 by default, 50 at most |
-| `search/single-search` | the cheapest model with 200,000 tokens of context that supports tools | `needsLookup`, `singleSearch` | one search with filters and `sort`; the answer names the first listed model |
+| `search/single-search` | the cheapest model with 200,000 tokens of context that supports tools | `needsLookup` | one search with filters and `sort`; the answer names the first listed model |
 | `recommendation/budget-chatbot` | a support chatbot with tools, 2,000 chats a day, 1,500 input and 400 output tokens, 30 days, a budget of 300 USD | `needsLookup`, `needsArithmetic` | a named model within the budget, with tools |
 | `recommendation/flagship-affordability` | whether `flagshipModel` fits 5 USD a month at 10M tokens a day, half input and half output | `needsLookup`, `needsArithmetic` | the cost within 1% of the run's own prices; an alternative within the budget |
 | `discipline/parallel-lookups` | compare the prices of `openai/gpt-oss-20b` and `anthropic/claude-haiku-4.5` | `needsLookup`, `parallelLookups` | both looked up in one round; both prices |

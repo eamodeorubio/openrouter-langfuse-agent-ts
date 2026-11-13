@@ -40,10 +40,26 @@ Commit type `test:`. PR title stays `test: add the evals package`. Bump: none. B
 - [x] 2.15 Report the results by error class: how many runs each class judged, passed and failed, with pass@k and pass^k of its own. Verify the exact text in `test/format.test.ts` and the counts in `test/classes.test.ts`.
 - [x] 2.12 Write the full report, with a live run of the core set if the user asks for it. Wait for user approval, which also approves the commit. Commit.
 
-## 3. Archive
+## 3. Search, filter and count (product slice 3)
 
-- [ ] 3.1 After the last slice, verify the change with `/opsx:verify` and fix what it finds.
-- [ ] 3.2 Once the user approves, archive it as `chore: archive add-evals-package`, as the last commit before merge.
+Commit type `test:`. PR title stays `test: add the evals package`. Bump: none. Branch `evals`. Slice 3 adds five cases to `cases/search.yaml`: `search/cheapest-input`, `search/image-input`, `search/none-exists`, `search/count` and `search/single-search`. A case now declares the search a good run sends in a top-level `search`, apart from its `oracle` (query and params), so that a case with no acceptable model, a count or a sort can still require its filters. The check a case runs says what it expects: the existing `wrong-answer` check for a model, the new `phantom-match` check for none, the count check for a number and the top-of-search check for the first model of a sorted search. Docs: the rows of the new classes and cases.
+
+- [x] 3.1 Move the required `search` out of `oracle` into its own declaration of the case, and accept a text requirement such as `sort`. Write the failing tests in `test/caseSpec.test.ts` first, and move the case `search/cheapest-blended` to the new shape. Covers Search checks (a required sort). Verify the tests pass and the config runs against the stub.
+- [x] 3.2 Add the input and output modalities of a model to the snapshot. Write the failing tests in `test/snapshot.test.ts` first, with the API's `architecture` in the fixture. Covers Snapshot before the first run. Verify the tests pass.
+- [x] 3.3 Add the queries `cheapest-input` and `matching`. Write the failing tests in `test/queries.test.ts` first: the examples of the spec, a free model never winning, the modality filters, `maxInputPrice` as a strict bound, and the invariants as properties. Covers Cheapest by input price, Matching models, Query invariants. Verify the tests pass.
+- [x] 3.4 Add the checks `searchArguments` (`wrong-search`: a successful search carried every required filter), `phantomMatch`, `singleSearch` (`wasteful-search`), `topOfSearch` (`wrong-answer`) and `countStated` (`wrong-value`). Write the failing tests in `test/searchChecks.test.ts` first, one scenario of the spec each, with the precedence. Covers Search efficiency, Counts, No match, Search checks. Verify the tests pass.
+- [x] 3.5 Add the five cases to `cases/search.yaml`, with the config tests first (ids, descriptions, declarations, assertions) and the run against the stub CLI and the catalog fixture. Covers Cases and sets. Verify the config tests pass.
+- [x] 3.6 Extend the docs page `docs/src/content/docs/evals.md` and the README with the classes `phantom-match` and `wasteful-search` and the five cases, and add a test that the cases column of the taxonomy table agrees with the case files. Use the `beautiful-prose` skill with the settings of `AGENTS.md`. Verify `pnpm docs:build` passes.
+- [x] 3.7 Run `pnpm mutation:evals`. The score stays at or above the `break` threshold. Read every survivor, kill it or justify it.
+- [x] 3.8 Refactor only where `QUALITY_RUBRIC.md` calls for it, at most 3 passes. Name the criterion for each.
+- [x] 3.9 Run `pnpm check`, `pnpm typecheck` and `pnpm test`. Verify all pass.
+- [x] 3.10 Run `reviewer-code-high`, `reviewer-code-low` and `reviewer-docs`. Fix every must-fix finding.
+- [x] 3.11 Write the full report, with a live run of the core set if the user asks for it. Wait for user approval, which also approves the commit. Commit.
+
+## 4. Archive
+
+- [ ] 4.1 After the last slice, verify the change with `/opsx:verify` and fix what it finds.
+- [ ] 4.2 Once the user approves, archive it as `chore: archive add-evals-package`, as the last commit before merge.
 
 ## Workflow follow-up
 
