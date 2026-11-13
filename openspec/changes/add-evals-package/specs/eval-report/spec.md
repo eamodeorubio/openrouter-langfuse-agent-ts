@@ -65,6 +65,32 @@ Each cell SHALL show how many of its runs carried each class, read from the metr
 - **WHEN** 2 runs failed `memory-answer` and 1 failed `wrong-value`
 - **THEN** the cell shows `memory-answer` 2 and `wrong-value` 1
 
+### Requirement: Results by error class
+After the cells of a model the report SHALL show, for each error class, how many runs the class judged, how many passed it and how many failed it. A class judges a run when a check of that class ran on it. A run that an earlier class of the chain failed is not judged by a later one. A provider error is a failed run of `run-failed` and is judged by no other class.
+
+#### Scenario: Counts of a class
+- **WHEN** 10 runs of a case ran the check `wrong-value`, 8 passed it and 2 failed it
+- **THEN** the class shows judged 10, passed 8 and failed 2
+
+#### Scenario: A later class is not judged after an earlier one
+- **WHEN** 3 of 10 runs carry `memory-answer`
+- **THEN** `invented-data` judges the other 7 runs at most
+
+#### Scenario: Provider errors
+- **WHEN** 2 of 10 runs end in a provider error
+- **THEN** `run-failed` judges 10 runs and fails 2, and every other class judges at most 8
+
+### Requirement: Estimators by error class
+Each class of the report SHALL show pass@k and pass^k. They are the mean, over the cases that have the class, of the estimators of the judged runs of each case. A case whose judged runs are fewer than k SHALL be left out of that k, and a class with no such case SHALL show `-`.
+
+#### Scenario: Estimators of a class
+- **WHEN** a class has one case with 10 judged runs of which 7 passed
+- **THEN** its pass@3 is 0.9917 and its pass^3 is 0.2917
+
+#### Scenario: Too few judged runs
+- **WHEN** the only case of a class has 4 judged runs and k is 5
+- **THEN** the class shows `-` for the estimators of 5
+
 ### Requirement: Informational figures
 Each cell and model row SHALL show mean cost, mean latency, mean tool rounds and cost per solved task. These figures SHALL NOT affect the exit code.
 

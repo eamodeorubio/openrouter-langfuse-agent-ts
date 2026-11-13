@@ -6,6 +6,21 @@ Defines how an eval run executes the built CLI against real services and what it
 
 ## ADDED Requirements
 
+### Requirement: The target
+A run SHALL evaluate one CLI: the local build by default, or a published version when `--cli-version <x.y.z>` is given. The version SHALL be an exact version from 1.1.0, the first that lists tool calls in `--json`, and any other text SHALL be refused before any request. A published version SHALL start through `pnpm dlx ask-openrouter@<version>` with no shell. The results SHALL name the target, and the report SHALL show it.
+
+#### Scenario: A published version
+- **WHEN** the script runs with `--cli-version 1.1.0`
+- **THEN** each run starts `ask-openrouter@1.1.0` through `pnpm dlx`, and the report names that version
+
+#### Scenario: Refused versions
+- **WHEN** the version is `1.0.1`, `latest`, `^1.1.0` or `1.1.0; rm -rf /`
+- **THEN** the script exits non-zero with a message that names the rule, and no request is sent
+
+#### Scenario: The local build
+- **WHEN** no `--cli-version` is given
+- **THEN** the run uses `packages/cli/dist/index.js` and the report names it as the local build
+
 ### Requirement: Evals stay out of the offline suite
 The root `pnpm test` and CI SHALL NOT start an eval run or send a request to a real service. An eval run SHALL start only from the package's `eval` scripts. The package's own unit tests SHALL run offline.
 
