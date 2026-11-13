@@ -39,8 +39,11 @@ jobs:
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: printf '%s\n' "$PR_TITLE" | pnpm exec commitlint
+      # No --strict: since 2.0 the validator warns on a scenario without WHEN and
+      # THEN steps, and strict mode turns every warning into a failure. Our specs
+      # use tables and examples under the scenario header on purpose.
       - name: Validate OpenSpec changes and specs
-        run: pnpm dlx @fission-ai/openspec@1.14.3 validate --all --strict
+        run: pnpm dlx @fission-ai/openspec@2.0.0 validate --all
       - name: Format and lint
         run: pnpm check
       - name: Typecheck

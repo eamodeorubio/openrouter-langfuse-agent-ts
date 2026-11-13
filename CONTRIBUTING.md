@@ -79,7 +79,7 @@ Say you want the tool to list the cheapest model for a monthly token budget, and
 
 - **Issue.** "Let me ask for the cheapest model within a monthly budget, and export the result." The maintainer agrees.
 - **Branch.** `budget-ranking`. The whole feature lives on it, spec included.
-- **Specs.** Run `openspec new change budget-ranking`. The spec holds one requirement, "Rank models by monthly cost", with a decision table under its scenario: token mix and budget in, cheapest model out. A second requirement covers errors in a small table: unknown model, negative budget, missing prices. A second change, `csv-export`, specifies the export. Both pass `openspec validate --strict`, and you approve them before any code.
+- **Specs.** Run `openspec new change budget-ranking`. The spec holds one requirement, "Rank models by monthly cost", with a decision table under its scenario: token mix and budget in, cheapest model out. A second requirement covers errors in a small table: unknown model, negative budget, missing prices. A second change, `csv-export`, specifies the export. Both pass `openspec validate`, and you approve them before any code.
 - **Product slice 1, `feat:`.** A failing integration test asserts the ranking for three rows of the table. Unit tests drive the cost calculation and the sort. The code makes them pass, and the docs gain a usage section. The commit is `feat: rank models by monthly cost`.
 - **Product slice 2, `feat:`.** It shows the cost breakdown per model, with its own failing tests first: `feat: show the cost breakdown per model`.
 - **Product slice 3, `feat:`.** It exports the ranking: `feat: export the ranking as CSV`.
@@ -104,10 +104,10 @@ A change needs a spec, written with [OpenSpec](https://github.com/Fission-AI/Ope
 
 The spec comes before the code it covers and ships in the same pull request. There is no spec-only pull request, and a pull request that adds or changes behavior without a spec goes back to its author. A pull request normally holds one or two OpenSpec changes. Split the work when a reviewer could not take it in.
 
-1. Install the OpenSpec CLI at the version CI uses, with `pnpm add -g @fission-ai/openspec@1.14.3`, or run it ad hoc with `pnpm dlx @fission-ai/openspec@1.14.3 <command>`. Then read `openspec/config.yaml`, which holds the writing rules for each kind of artifact.
+1. Install the OpenSpec CLI at the version CI uses, with `pnpm add -g @fission-ai/openspec@2.0.0`, or run it ad hoc with `pnpm dlx @fission-ai/openspec@2.0.0 <command>`. Then read `openspec/config.yaml`, which holds the writing rules for each kind of artifact.
 2. Propose the change with `openspec new change <name>`, or `/opsx:propose` if you work with Claude Code.
 3. Fill in the proposal, the spec deltas, the design and the tasks. A requirement may use scenarios, tables, rules, invariants or examples. Pick the form that says the thing most clearly.
-4. Run `openspec validate <name> --strict` until it passes.
+4. Run `openspec validate <name>` until it passes. Warnings about a scenario without WHEN and THEN steps are expected for table-style scenarios.
 5. Approve the spec yourself before you build.
 6. Implement the tasks as product slices on the same branch. The spec may travel as its own `docs:` commit or ride along inside another one.
 7. Verify the change against the code, fix what that finds, and archive it in the last commit (`chore: archive <change-name>`).

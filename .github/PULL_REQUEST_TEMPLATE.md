@@ -10,7 +10,7 @@
 ## Checklist
 
 - [ ] The title follows Conventional Commits (it becomes the commit on `main` and sets the version bump)
-- [ ] The spec came first and passes `openspec validate --strict`, or this is a small fix, a small refactor, or a chore, docs or tooling change that needs none
+- [ ] The spec came first and passes `openspec validate`, or this is a small fix, a small refactor, or a chore, docs or tooling change that needs none
 - [ ] The OpenSpec changes are archived in the last commit, or I say below why not
 - [ ] For behavior changes and fixes, tests came first and cover the requirements, including edge cases; for refactors, tests, docs and chores, existing tests stay green
 - [ ] `pnpm check`, `pnpm typecheck` and `pnpm test` pass

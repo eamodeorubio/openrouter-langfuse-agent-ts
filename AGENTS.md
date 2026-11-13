@@ -15,7 +15,7 @@ These bind every spec, design and implementation.
 - Use pnpm, never npm or yarn.
 - Validate untrusted input (arguments, environment, API responses) at the boundary, with clear error messages.
 - Results go to stdout. Diagnostics and errors go to stderr. A failed run exits non-zero.
-- The `openspec` CLI is not in `package.json`. CI pins `@fission-ai/openspec@1.14.3`; install that version (`pnpm add -g @fission-ai/openspec@1.14.3`) or run it with `pnpm dlx`.
+- The `openspec` CLI is not in `package.json`. CI pins `@fission-ai/openspec@2.0.0`; install that version (`pnpm add -g @fission-ai/openspec@2.0.0`) or run it with `pnpm dlx`.
 - Docs scripts: Astro detaches the preview server into the background in agent sessions, and `pnpm docs:preview:stop` stops it.
 - `vitest` and `@vitest/coverage-v8` stay pinned until [stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210) is fixed. Stryker has no TypeScript checker (it does not support TypeScript 7), so a mutant that no longer compiles can survive.
 
