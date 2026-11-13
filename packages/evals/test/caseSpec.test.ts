@@ -19,11 +19,8 @@ describe('what a case declares', () => {
   });
 
   it('is read, typed, from the metadata', () => {
-    const oracle = {
-      query: 'cheapest-blended',
-      params: { minContext: 1 },
-      search: { min_context_length: 1, supported_parameters: ['tools'] },
-    };
+    const oracle = { query: 'cheapest-blended', params: { minContext: 1 } };
+    const search = { min_context_length: 1, supported_parameters: ['tools'] };
     expect(
       readCase(
         declare({
@@ -35,6 +32,7 @@ describe('what a case declares', () => {
           askedModel: 'a/b',
           askedFigures: ['inputPrice', 'outputPrice', 'contextLength'],
           oracle,
+          search,
         }),
       ),
     ).toEqual({
@@ -46,6 +44,7 @@ describe('what a case declares', () => {
       askedModel: 'a/b',
       askedFigures: ['inputPrice', 'outputPrice', 'contextLength'],
       oracle,
+      search,
     });
   });
 
@@ -69,6 +68,7 @@ describe('what a case declares', () => {
       'needsArithmetic',
       'needsLookup',
       'oracle',
+      'search',
       'set',
     ]);
   });
@@ -78,7 +78,7 @@ describe('a declaration that is not known', () => {
   it('fails loudly, with the name and the known ones, so that a typo cannot turn a check into a pass', () => {
     expect(() => readCase(declare({ needsLookp: true }))).toThrow(CaseError);
     expect(() => readCase(declare({ needsLookp: true }))).toThrow(
-      'Unknown declaration "needsLookp" in the metadata of a case. The known ones are: id, set, needsLookup, needsArithmetic, expectedCost, askedModel, askedFigures, oracle.',
+      'Unknown declaration "needsLookp" in the metadata of a case. The known ones are: id, set, needsLookup, needsArithmetic, expectedCost, askedModel, askedFigures, oracle, search.',
     );
   });
 
@@ -159,40 +159,55 @@ describe('the oracle of a case', () => {
     }
   });
 
-  it('takes its params and its search as objects, and fills in none', () => {
+  it('takes its params as an object, and fills in none', () => {
     expect(readCase(oracle({ query: 'q' })).oracle).toEqual({
       query: 'q',
       params: {},
-      search: {},
+    });
+    expect(readCase(oracle({ query: 'q', params: { a: 1 } })).oracle).toEqual({
+      query: 'q',
+      params: { a: 1 },
     });
     for (const bad of ['x', 5, null, []]) {
       expect(() => readCase(oracle({ query: 'q', params: bad }))).toThrow(
         'The oracle declaration of a case takes params as an object.',
       );
-      expect(() => readCase(oracle({ query: 'q', search: bad }))).toThrow(
-        'The oracle declaration of a case takes search as an object.',
+    }
+  });
+
+  it('refuses a key it does not know, such as the search that moved out of it', () => {
+    expect(() => readCase(oracle({ query: 'q', search: {} }))).toThrow(
+      'Unknown key "search" in the oracle declaration of a case. The known ones are: query, params.',
+    );
+  });
+});
+
+describe('the search of a case', () => {
+  const search = (value: unknown) => declare({ search: value });
+
+  it('takes a number, text and a list of text as requirements', () => {
+    const value = { a: 1, b: ['x', 'y'], c: [], d: 'pricing-low-to-high' };
+    expect(readCase(search(value)).search).toEqual(value);
+  });
+
+  it('must be an object', () => {
+    for (const bad of ['x', 5, null, []]) {
+      expect(() => readCase(search(bad))).toThrow(
+        'The declaration search of a case must be an object of requirements, got ' +
+          `${JSON.stringify(bad)}.`,
       );
     }
   });
 
   it.each([
-    ['text', '200000'],
     ['null', null],
     ['an object', {}],
     ['a list with a number', ['tools', 1]],
     ['a list with a null', [null]],
-  ])('refuses a search requirement that is %s', (_, value) => {
-    expect(() =>
-      readCase(oracle({ query: 'q', search: { min_context_length: value } })),
-    ).toThrow(
-      'The oracle search requirement min_context_length must be a number or a list of text.',
-    );
-  });
-
-  it('accepts a number, a list of text and an empty list as requirements', () => {
-    const search = { a: 1, b: ['x', 'y'], c: [] };
-    expect(readCase(oracle({ query: 'q', search })).oracle?.search).toEqual(
-      search,
+    ['true', true],
+  ])('refuses a requirement that is %s', (_, value) => {
+    expect(() => readCase(search({ min_context_length: value }))).toThrow(
+      'The search requirement min_context_length of a case must be a number, text or a list of text.',
     );
   });
 });

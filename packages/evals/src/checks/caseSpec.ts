@@ -11,13 +11,14 @@ export const FIGURE_NAMES = [
 ] as const;
 export type FigureName = (typeof FIGURE_NAMES)[number];
 
-/** What a case declares about its question: a query, and the search a good run makes. */
+/** What a case declares about the models the snapshot accepts: a named query and its parameters. */
 export interface Oracle {
   query: string;
   params: Record<string, unknown>;
-  /** Constraints of a search: a number is a lower bound, a list must be held whole. */
-  search: Record<string, number | string[]>;
 }
+
+/** What a good search sends: a number is a lower bound, text is an exact value, a list must be held whole. */
+export type SearchRequirements = Record<string, number | string | string[]>;
 
 /** What a case declares in its `metadata`, and the checks read. */
 export interface CaseSpec {
@@ -30,6 +31,7 @@ export interface CaseSpec {
   askedModel?: string;
   askedFigures?: FigureName[];
   oracle?: Oracle;
+  search?: SearchRequirements;
 }
 
 export const KNOWN_DECLARATIONS = [
@@ -41,6 +43,7 @@ export const KNOWN_DECLARATIONS = [
   'askedModel',
   'askedFigures',
   'oracle',
+  'search',
 ] as const;
 
 const wrong = (name: string, rule: string, value: unknown): CaseError =>
@@ -55,36 +58,43 @@ const isFigureList = (value: unknown): value is FigureName[] =>
   Array.isArray(value) &&
   value.every((name) => FIGURE_NAMES.includes(name as FigureName));
 
+const ORACLE_KEYS = ['query', 'params'];
+
 const readOracle = (value: unknown): Oracle => {
   if (!isObject(value) || typeof value.query !== 'string') {
     throw new CaseError('The oracle declaration of a case needs a query name.');
   }
-  const object = (name: 'params' | 'search'): Record<string, unknown> => {
-    const given = value[name];
-    if (given === undefined) return {};
-    if (!isObject(given)) {
+  for (const key of Object.keys(value)) {
+    if (!ORACLE_KEYS.includes(key)) {
       throw new CaseError(
-        `The oracle declaration of a case takes ${name} as an object.`,
-      );
-    }
-    return given;
-  };
-  const search = object('search');
-  for (const [name, required] of Object.entries(search)) {
-    const list =
-      Array.isArray(required) &&
-      required.every((item) => typeof item === 'string');
-    if (typeof required !== 'number' && !list) {
-      throw new CaseError(
-        `The oracle search requirement ${name} must be a number or a list of text.`,
+        `Unknown key "${key}" in the oracle declaration of a case. The known ones are: ${ORACLE_KEYS.join(', ')}.`,
       );
     }
   }
-  return {
-    query: value.query,
-    params: object('params'),
-    search: search as Oracle['search'],
-  };
+  const params = value.params === undefined ? {} : value.params;
+  if (!isObject(params)) {
+    throw new CaseError(
+      'The oracle declaration of a case takes params as an object.',
+    );
+  }
+  return { query: value.query, params };
+};
+
+const readSearch = (value: unknown): SearchRequirements => {
+  if (!isObject(value)) {
+    throw wrong('search', 'an object of requirements', value);
+  }
+  for (const [name, required] of Object.entries(value)) {
+    const list =
+      Array.isArray(required) &&
+      required.every((item) => typeof item === 'string');
+    if (typeof required !== 'number' && typeof required !== 'string' && !list) {
+      throw new CaseError(
+        `The search requirement ${name} of a case must be a number, text or a list of text.`,
+      );
+    }
+  }
+  return value as SearchRequirements;
 };
 
 /**
@@ -154,5 +164,6 @@ export const readCase = (context: unknown): CaseSpec => {
     spec.askedFigures = metadata.askedFigures;
   }
   if (metadata.oracle !== undefined) spec.oracle = readOracle(metadata.oracle);
+  if (metadata.search !== undefined) spec.search = readSearch(metadata.search);
   return spec;
 };

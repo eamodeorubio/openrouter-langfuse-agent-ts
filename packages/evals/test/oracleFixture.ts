@@ -10,10 +10,13 @@ export const catalogModel = (
   tools: boolean,
   inputPrice: number | null,
   outputPrice: number | null,
+  modalities: { input?: string[]; output?: string[] } = {},
 ): CatalogModel => ({
   id,
   contextLength,
   supportedParameters: tools ? ['tools', 'seed'] : ['seed'],
+  inputModalities: modalities.input ?? ['text'],
+  outputModalities: modalities.output ?? ['text'],
   inputPrice,
   outputPrice,
 });

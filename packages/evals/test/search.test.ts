@@ -50,9 +50,22 @@ const success = (answer: string, toolCalls: Call[] = [], question = 'q') => ({
 const oracle = {
   query: 'cheapest-blended',
   params: { minContext: 200000, supportedParameters: ['tools'], mix: 3 },
-  search: { min_context_length: 200000, supported_parameters: ['tools'] },
 };
-const c1 = { test: { metadata: { id: 'C1', needsLookup: true, oracle } } };
+const required = {
+  min_context_length: 200000,
+  supported_parameters: ['tools'],
+};
+/** The case `search/cheapest-blended`. */
+const c1 = {
+  test: {
+    metadata: {
+      id: 'search/cheapest-blended',
+      needsLookup: true,
+      oracle,
+      search: required,
+    },
+  },
+};
 
 const GOOD_ARGS = {
   min_context_length: 200000,
@@ -298,6 +311,8 @@ describe('invented-data with the authors of the snapshot', () => {
           id: 'openai/gpt-5',
           contextLength: 1,
           supportedParameters: [],
+          inputModalities: [],
+          outputModalities: [],
           inputPrice: 1,
           outputPrice: 1,
         },
@@ -305,6 +320,8 @@ describe('invented-data with the authors of the snapshot', () => {
           id: 'a/b',
           contextLength: 1,
           supportedParameters: [],
+          inputModalities: [],
+          outputModalities: [],
           inputPrice: 1,
           outputPrice: 1,
         },
@@ -347,63 +364,14 @@ describe('the search checks, for any output and any case', () => {
   });
 });
 
-describe('the declaration of an oracle', () => {
-  const declare = (oracle: unknown) => ({ test: { metadata: { oracle } } });
-  const run = success('t/g', [search(GOOD_ARGS, ['t/g'])]);
-
-  it.each([
-    ['text', 'cheapest-blended'],
-    ['a number', 5],
-    ['null', null],
-    ['an object with no query', { params: {} }],
-    ['a query that is not text', { query: 5 }],
-  ])(
-    'is refused when it is %s, with a message that says what it needs',
-    (_, oracle) => {
-      withSnapshot();
-      expect(() => wrongSearch(run, declare(oracle))).toThrow(
-        'The oracle declaration of a case needs a query name.',
-      );
-      expect(() => wrongAnswer(run, declare(oracle))).toThrow(
-        'The oracle declaration of a case needs a query name.',
-      );
-    },
-  );
-
-  it.each([
-    ['text', '200000'],
-    ['null', null],
-    ['an object', {}],
-    ['a list with a number in it', ['tools', 1]],
-    ['a list with a null in it', [null]],
-  ])('is refused when a search requirement is %s', (_, value) => {
-    withSnapshot();
-    const bad = declare({ ...oracle, search: { min_context_length: value } });
-    expect(() => wrongSearch(run, bad)).toThrow(
-      'The oracle search requirement min_context_length must be a number or a list of text.',
-    );
-  });
-
-  it('accepts a number, a list of text and an empty list as requirements, and no search or params', () => {
-    withSnapshot();
-    expect(() =>
-      wrongSearch(
-        run,
-        declare({ ...oracle, search: { a: 1, b: ['x'], c: [] } }),
-      ),
-    ).not.toThrow();
-    expect(() =>
-      wrongSearch(run, declare({ query: 'cheapest-blended' })),
-    ).not.toThrow();
-  });
-});
-
 describe('the wording of the search verdicts', () => {
   it('lists up to five acceptable models, and counts the rest', () => {
     const models = Array.from({ length: 7 }, (_, index) => ({
       id: `m/${index}`,
       contextLength: 300000,
       supportedParameters: ['tools'],
+      inputModalities: ['text'],
+      outputModalities: ['text'],
       inputPrice: 1,
       outputPrice: 1,
     }));
@@ -423,12 +391,10 @@ describe('the wording of the search verdicts', () => {
     const wide = {
       test: {
         metadata: {
-          oracle: {
-            ...oracle,
-            search: {
-              min_context_length: 1,
-              supported_parameters: ['tools', 'seed'],
-            },
+          oracle,
+          search: {
+            min_context_length: 1,
+            supported_parameters: ['tools', 'seed'],
           },
         },
       },
@@ -447,10 +413,8 @@ describe('the wording of the search verdicts', () => {
     const both = {
       test: {
         metadata: {
-          oracle: {
-            ...oracle,
-            search: { supported_parameters: ['tools', 'seed'] },
-          },
+          oracle,
+          search: { supported_parameters: ['tools', 'seed'] },
         },
       },
     };

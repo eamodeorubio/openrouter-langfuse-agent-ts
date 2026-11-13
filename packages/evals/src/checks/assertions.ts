@@ -8,6 +8,13 @@
  */
 export { askedFigures, askedModelFound } from './lookup.js';
 export { wrongAnswer, wrongSearch } from './search.js';
+export {
+  countStated,
+  phantomMatch,
+  searchArguments,
+  singleSearch,
+  topOfSearch,
+} from './searchChecks.js';
 export { arithmeticInHead, needlessLookup, statedCost } from './toolUse.js';
 export { inventedModels, memoryAnswer, runFailed } from './universal.js';
 export type { CheckContext, GradingResult } from './verdict.js';

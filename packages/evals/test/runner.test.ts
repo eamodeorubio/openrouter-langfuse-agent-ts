@@ -24,6 +24,8 @@ const SNAPSHOT: Snapshot = {
       id: 'a/b',
       contextLength: 8000,
       supportedParameters: ['tools'],
+      inputModalities: ['text'],
+      outputModalities: ['text'],
       inputPrice: 1,
       outputPrice: 4,
     },

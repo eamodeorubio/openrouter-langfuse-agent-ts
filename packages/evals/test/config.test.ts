@@ -84,12 +84,129 @@ describe('the files of cases', () => {
   });
 });
 
+describe('the search cases of the full set', () => {
+  const byId = (id: string) => cases.find((test) => test.metadata.id === id);
+  const metrics = (id: string) =>
+    (byId(id)?.assert ?? []).map((a) => a.metric).sort();
+
+  it('are in cases/search.yaml, tagged full, and read by the case contract', () => {
+    for (const id of [
+      'search/cheapest-input',
+      'search/image-input',
+      'search/none-exists',
+      'search/count',
+      'search/single-search',
+    ]) {
+      expect(byId(id)?.family, id).toBe('search');
+      expect(readCase({ test: byId(id) }).set, id).toBe('full');
+      expect(readCase({ test: byId(id) }).needsLookup, id).toBe(true);
+    }
+  });
+
+  it('search/cheapest-input asks for the lowest input price with 200,000 tokens and tools', () => {
+    const spec = readCase({ test: byId('search/cheapest-input') });
+    expect(byId('search/cheapest-input')?.vars.question).toBe(
+      'Which paid model on OpenRouter has the lowest input price among models with at least 200,000 tokens of context that support tool calling?',
+    );
+    expect(spec.oracle).toEqual({
+      query: 'cheapest-input',
+      params: { minContext: 200000, supportedParameters: ['tools'] },
+    });
+    expect(spec.search).toEqual({
+      min_context_length: 200000,
+      supported_parameters: ['tools'],
+    });
+    expect(metrics('search/cheapest-input')).toEqual([
+      'wrong-answer',
+      'wrong-search',
+    ]);
+  });
+
+  it('search/image-input asks for the lowest input price among models that accept images', () => {
+    const spec = readCase({ test: byId('search/image-input') });
+    expect(byId('search/image-input')?.vars.question).toBe(
+      'Which paid model that accepts image input has the lowest input price?',
+    );
+    expect(spec.oracle).toEqual({
+      query: 'cheapest-input',
+      params: { inputModalities: ['image'] },
+    });
+    expect(spec.search).toEqual({ input_modalities: ['image'] });
+    expect(metrics('search/image-input')).toEqual([
+      'wrong-answer',
+      'wrong-search',
+    ]);
+  });
+
+  it('search/none-exists asks for a model that does not exist, and expects the answer to say so', () => {
+    const spec = readCase({ test: byId('search/none-exists') });
+    expect(byId('search/none-exists')?.vars.question).toBe(
+      'Find a model with at least 2 million tokens of context that can output images and costs less than 0.01 USD per million input tokens.',
+    );
+    expect(spec.oracle).toEqual({
+      query: 'matching',
+      params: {
+        minContext: 2000000,
+        outputModalities: ['image'],
+        maxInputPrice: 0.01,
+      },
+    });
+    expect(spec.search).toEqual({
+      min_context_length: 2000000,
+      output_modalities: ['image'],
+    });
+    expect(metrics('search/none-exists')).toEqual([
+      'phantom-match',
+      'wrong-search',
+    ]);
+  });
+
+  it('search/count asks how many models support tools with 1 million tokens, and expects the count', () => {
+    const spec = readCase({ test: byId('search/count') });
+    expect(byId('search/count')?.vars.question).toBe(
+      'How many models on OpenRouter support tool calling and have a context window of at least 1 million tokens?',
+    );
+    expect(spec.oracle).toEqual({
+      query: 'matching',
+      params: { minContext: 1000000, supportedParameters: ['tools'] },
+    });
+    expect(spec.search).toEqual({
+      min_context_length: 1000000,
+      supported_parameters: ['tools'],
+    });
+    expect(metrics('search/count')).toEqual(['wrong-search', 'wrong-value']);
+  });
+
+  it('search/single-search expects one sorted search that does the filtering on the server', () => {
+    const spec = readCase({ test: byId('search/single-search') });
+    expect(byId('search/single-search')?.vars.question).toBe(
+      'Which is the cheapest model with at least 200,000 tokens of context that supports tools?',
+    );
+    expect(spec.oracle).toBeUndefined();
+    expect(spec.search).toEqual({
+      min_context_length: 200000,
+      supported_parameters: ['tools'],
+      sort: 'pricing-low-to-high',
+    });
+    expect(metrics('search/single-search')).toEqual([
+      'wasteful-search',
+      'wrong-answer',
+      'wrong-search',
+    ]);
+  });
+});
+
 describe('the core set', () => {
-  it('holds the three cases of the core set, one for each family', () => {
+  it('holds the cases of the files, in the order of the files and then of each file', () => {
     expect(cases.map((test) => test.metadata.id)).toEqual([
       'calculation/given-prices',
       'lookup/known-model',
       'search/cheapest-blended',
+      'search/cheapest-input',
+      'search/image-input',
+      'search/none-exists',
+      'search/count',
+      'search/single-search',
     ]);
   });
 });
@@ -224,8 +341,8 @@ describe('the config', () => {
       oracle: {
         query: 'cheapest-blended',
         params: { minContext: 200000, supportedParameters: ['tools'], mix: 3 },
-        search: { min_context_length: 200000, supported_parameters: ['tools'] },
       },
+      search: { min_context_length: 200000, supported_parameters: ['tools'] },
     });
     expect(c1?.assert?.map((a) => a.metric).sort()).toEqual([
       'wrong-answer',
@@ -319,5 +436,58 @@ describe('the config, run for real against a stub CLI', () => {
     expect(stdout).toContain('by error class');
     expect(stdout).toMatch(/wrong-search\s+judged=\d+\s+passed=0\s+failed=\d+/);
     expect(fs.existsSync(path.join(out, 'catalog.json'))).toBe(true);
+  });
+});
+
+describe('the full set, run for real against a stub CLI', () => {
+  let out: string;
+  let result: Finished;
+  let catalog: Awaited<ReturnType<typeof serveCatalog>>;
+
+  beforeAll(async () => {
+    catalog = await serveCatalog();
+    out = fs.mkdtempSync(path.join(os.tmpdir(), 'evals-full-'));
+    result = await runTsx(
+      [
+        path.join(root, 'src/run.ts'),
+        '--set',
+        'full',
+        '--repeat',
+        '1',
+        '--k',
+        '1',
+        '--out',
+        out,
+      ],
+      { EVAL_CLI: stub, EVAL_CATALOG_URL: catalog.url },
+    );
+  });
+
+  afterAll(async () => {
+    fs.rmSync(out, { recursive: true, force: true });
+    await catalog.close();
+  });
+
+  it('asks every case, each of the two models once', () => {
+    expect(result.status, String(result.stderr)).toBe(0);
+    const saved = JSON.parse(
+      fs.readFileSync(path.join(out, 'results.json'), 'utf8'),
+    );
+    expect(saved.results.results).toHaveLength(cases.length * 2);
+  });
+
+  it('names the class each search case fails when the stub never searches', () => {
+    const stdout = String(result.stdout);
+    const failed = (id: string) =>
+      new RegExp(
+        `${id.replace('/', '\\/')}[^\\n]*\\n\\s+failed: ([^\\n]*)\\n`,
+      ).exec(stdout)?.[1];
+    expect(failed('search/cheapest-input')).toBe('wrong-search=1');
+    expect(failed('search/image-input')).toBe('wrong-search=1');
+    expect(failed('search/none-exists')).toBe('wrong-search=1');
+    expect(failed('search/count')).toBe('wrong-search=1');
+    expect(failed('search/single-search')).toBe(
+      'wasteful-search=1 wrong-search=1',
+    );
   });
 });

@@ -66,6 +66,8 @@ describe('the catalog snapshot of an eval run', () => {
         id: 'openai/gpt-oss-20b',
         contextLength: 131072,
         supportedParameters: expect.arrayContaining(['tools']),
+        inputModalities: ['text'],
+        outputModalities: ['text'],
         inputPrice: 0.03,
         outputPrice: 0.13,
       });

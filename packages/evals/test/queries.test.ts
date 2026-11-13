@@ -150,10 +150,14 @@ describe('a tighter constraint', () => {
 
 describe('the names of the queries', () => {
   it('list the known queries when a name is not one of them', () => {
-    expect(QUERY_NAMES).toEqual(['cheapest-blended']);
+    expect(QUERY_NAMES).toEqual([
+      'cheapest-blended',
+      'cheapest-input',
+      'matching',
+    ]);
     expect(() => runQuery('cheapest-bogus', TABLE, {})).toThrow(QueryError);
     expect(() => runQuery('cheapest-bogus', TABLE, {})).toThrow(
-      'Unknown oracle query "cheapest-bogus". The known queries are: cheapest-blended.',
+      'Unknown oracle query "cheapest-bogus". The known queries are: cheapest-blended, cheapest-input, matching.',
     );
   });
 

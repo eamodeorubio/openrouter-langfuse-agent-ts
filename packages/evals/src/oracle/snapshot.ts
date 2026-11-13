@@ -16,6 +16,10 @@ export interface CatalogModel {
   id: string;
   contextLength: number | null;
   supportedParameters: string[];
+  /** What the model accepts, such as `text` or `image`. */
+  inputModalities: string[];
+  /** What the model produces. */
+  outputModalities: string[];
   /** USD per million tokens. */
   inputPrice: number | null;
   /** USD per million tokens. */
@@ -47,19 +51,23 @@ export const perMillion = (price: unknown): number | null => {
   return Number.isFinite(shifted) ? shifted : null;
 };
 
+const texts = (value: unknown): string[] =>
+  Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === 'string')
+    : [];
+
 const toModel = (entry: unknown): CatalogModel | undefined => {
   if (!isObject(entry) || typeof entry.id !== 'string' || entry.id === '') {
     return undefined;
   }
   const pricing = isObject(entry.pricing) ? entry.pricing : {};
+  const architecture = isObject(entry.architecture) ? entry.architecture : {};
   return {
     id: entry.id,
     contextLength: finite(entry.context_length) ? entry.context_length : null,
-    supportedParameters: Array.isArray(entry.supported_parameters)
-      ? entry.supported_parameters.filter(
-          (name): name is string => typeof name === 'string',
-        )
-      : [],
+    supportedParameters: texts(entry.supported_parameters),
+    inputModalities: texts(architecture.input_modalities),
+    outputModalities: texts(architecture.output_modalities),
     inputPrice: perMillion(pricing.prompt),
     outputPrice: perMillion(pricing.completion),
   };
@@ -147,12 +155,16 @@ export const writeSnapshot = (dir: string, snapshot: Snapshot): string => {
 
 const isPrice = (value: unknown): boolean => value === null || finite(value);
 
+const isTexts = (value: unknown): boolean =>
+  Array.isArray(value) && value.every((item) => typeof item === 'string');
+
 const isModel = (value: unknown): value is CatalogModel =>
   isObject(value) &&
   typeof value.id === 'string' &&
   (value.contextLength === null || finite(value.contextLength)) &&
-  Array.isArray(value.supportedParameters) &&
-  value.supportedParameters.every((name) => typeof name === 'string') &&
+  isTexts(value.supportedParameters) &&
+  isTexts(value.inputModalities) &&
+  isTexts(value.outputModalities) &&
   isPrice(value.inputPrice) &&
   isPrice(value.outputPrice);
 
@@ -174,7 +186,7 @@ export const loadSnapshot = (file: string): Snapshot => {
     !body.models.every(isModel)
   ) {
     throw new SnapshotError(
-      `The snapshot ${file} is not a snapshot: it needs a fetch time and a list of models.`,
+      `The snapshot ${file} is not a snapshot: it needs a fetch time and a list of models with their prices, parameters and modalities. A snapshot taken by an earlier version of the evals lacks the modalities: run the eval again to take a new one.`,
     );
   }
   return { fetchedAt: body.fetchedAt, models: body.models };

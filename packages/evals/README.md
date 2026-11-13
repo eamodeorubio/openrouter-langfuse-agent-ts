@@ -26,7 +26,7 @@ pnpm --filter ask-openrouter-evals run eval --repeat 2 --k 1,2
 
 ## The cases
 
-The core set holds three cases, one for each family of question: a lookup, a calculation with no lookup, and a filtered search:
+The core set holds three cases, one for each family of question: a lookup, a calculation with no lookup, and a filtered search. `--set full` adds the other cases. The [docs page](https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/evals/) lists what each case asks, and the class each one is built to provoke. The core cases are:
 
 | Case                       | What it asks                                                            | What a good run does                                                                                                                                        |
 | -------------------------- | ----------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -69,18 +69,20 @@ Both use the unbiased estimators, so the ten runs say something about any k up t
 
 A run passes when no error class fired. The page [Evals](https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/evals/) on the docs site holds the full taxonomy: for each class its definition, an example, how a check detects it and the cases built to provoke it. Each failed check carries the name of its class, and the `failed:` line counts them:
 
-| Class                | The run                                                                                     |
-| -------------------- | ------------------------------------------------------------------------------------------- |
-| `run-failed`         | ended without an answer                                                                     |
-| `memory-answer`      | needed a lookup and made no successful tool call                                            |
-| `wrong-search`       | made lookups that never surfaced a model the snapshot accepts, or that dropped a constraint |
-| `wrong-answer`       | had an acceptable model in its lookups and named none                                       |
-| `invented-data`      | named a model that no source holds                                                          |
-| `wrong-value`        | left out a figure the tool returned, or the cost the question implies                       |
-| `arithmetic-in-head` | needed arithmetic and never called the calculator                                           |
-| `needless-lookup`    | looked up data the question already held                                                    |
+| Class                | The run                                                                                 |
+| -------------------- | --------------------------------------------------------------------------------------- |
+| `run-failed`         | ended without an answer                                                                 |
+| `memory-answer`      | needed a lookup and made no successful tool call                                        |
+| `wrong-search`       | made lookups that never surfaced a model the snapshot accepts, or that dropped a filter |
+| `wrong-answer`       | had an acceptable model in its lookups and named none                                   |
+| `phantom-match`      | presented a model as a match for a request that no model meets                          |
+| `invented-data`      | named a model that no source holds                                                      |
+| `wrong-value`        | left out a figure the tool returned, or the cost or the count the question implies      |
+| `arithmetic-in-head` | needed arithmetic and never called the calculator                                       |
+| `needless-lookup`    | looked up data the question already held                                                |
+| `wasteful-search`    | searched more than once, or without a sort, when one sorted search answers              |
 
-The grounding classes form a chain: `run-failed`, then `memory-answer`, then `wrong-search`, then `wrong-answer`, then `invented-data` and `wrong-value`. A run that never looked anything up carries `memory-answer` and nothing after it, so one cause is counted once. `arithmetic-in-head` and `needless-lookup` stand beside the chain. A judge that grades relevance and usefulness arrives with a later change.
+The classes that judge the content of a run form a chain: `run-failed`, then `memory-answer`, then `wrong-search`, then `wrong-answer` (or `phantom-match`), then `invented-data` and `wrong-value`. A run that never looked anything up carries `memory-answer` and nothing after it, so one cause is counted once. `arithmetic-in-head` and `needless-lookup` stand beside the chain. A judge that grades relevance and usefulness arrives with a later change.
 
 The report ends with the wall time of the whole eval, as promptfoo measured it, with the number of runs and how many ran at once. The last line of each cell is informational and never fails anything. It shows the mean cost over the runs that reported one, the mean latency, the mean tool rounds, and the cost per solved task: total cost divided by passing runs. A figure that does not exist reads `n/a` or `-`, never 0.
 

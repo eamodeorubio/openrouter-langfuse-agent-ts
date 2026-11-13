@@ -21,6 +21,10 @@ const apiModel = (over: Record<string, unknown> = {}) => ({
   context_length: 8000,
   pricing: { prompt: '0.000001', completion: '0.000004' },
   supported_parameters: ['tools', 'temperature'],
+  architecture: {
+    input_modalities: ['text', 'image'],
+    output_modalities: ['text'],
+  },
   ...over,
 });
 
@@ -98,6 +102,8 @@ describe('the models of the API list', () => {
         id: 'a/b',
         contextLength: 8000,
         supportedParameters: ['tools', 'temperature'],
+        inputModalities: ['text', 'image'],
+        outputModalities: ['text'],
         inputPrice: 1,
         outputPrice: 4,
       },
@@ -126,9 +132,38 @@ describe('the models of the API list', () => {
       id: 'x/y',
       contextLength: null,
       supportedParameters: [],
+      inputModalities: [],
+      outputModalities: [],
       inputPrice: null,
       outputPrice: null,
     });
+  });
+
+  it('keep the modalities that are text, and none when the architecture says none', () => {
+    const [kept] = toModels({
+      data: [
+        apiModel({
+          architecture: {
+            input_modalities: ['text', 3, null, 'audio'],
+            output_modalities: ['image', {}],
+          },
+        }),
+      ],
+    });
+    expect(kept).toMatchObject({
+      inputModalities: ['text', 'audio'],
+      outputModalities: ['image'],
+    });
+    for (const architecture of [
+      undefined,
+      null,
+      'x',
+      {},
+      { input_modalities: 'text', output_modalities: 5 },
+    ]) {
+      const [bare] = toModels({ data: [apiModel({ architecture })] });
+      expect(bare).toMatchObject({ inputModalities: [], outputModalities: [] });
+    }
   });
 
   it('keep only the parameters that are text', () => {
@@ -254,6 +289,8 @@ describe('the snapshot file', () => {
     id: 'a/b',
     contextLength: 1,
     supportedParameters: ['tools'],
+    inputModalities: ['text'],
+    outputModalities: ['text'],
     inputPrice: 0.5,
     outputPrice: null,
   };
@@ -278,6 +315,8 @@ describe('the snapshot file', () => {
         nil: null,
       }),
       supportedParameters: fc.array(fc.string()),
+      inputModalities: fc.array(fc.string()),
+      outputModalities: fc.array(fc.string()),
       inputPrice: price,
       outputPrice: price,
     });
@@ -401,6 +440,8 @@ describe('a snapshot file that is not a snapshot', () => {
     id: 'a/b',
     contextLength: 1,
     supportedParameters: ['tools'],
+    inputModalities: ['text'],
+    outputModalities: ['text'],
     inputPrice: 1,
     outputPrice: 2,
   };
@@ -420,6 +461,22 @@ describe('a snapshot file that is not a snapshot', () => {
       'a parameter that is not text',
       { ...good, supportedParameters: ['tools', 2] },
     ],
+    [
+      'input modalities that are not a list',
+      { ...good, inputModalities: 'text' },
+    ],
+    [
+      'an input modality that is not text',
+      { ...good, inputModalities: ['text', 1] },
+    ],
+    [
+      'output modalities that are missing',
+      { ...good, outputModalities: undefined },
+    ],
+    [
+      'an output modality that is not text',
+      { ...good, outputModalities: [null] },
+    ],
     ['an input price that is text', { ...good, inputPrice: '1' }],
     ['an input price that is missing', { ...good, inputPrice: undefined }],
     ['an output price that is text', { ...good, outputPrice: '2' }],
@@ -427,7 +484,7 @@ describe('a snapshot file that is not a snapshot', () => {
   ])('is refused for %s, as not a snapshot', (_, model) => {
     const file = write(snapshot(model));
     expect(() => loadSnapshot(file)).toThrow(
-      `The snapshot ${file} is not a snapshot: it needs a fetch time and a list of models.`,
+      `The snapshot ${file} is not a snapshot: it needs a fetch time and a list of models with their prices, parameters and modalities. A snapshot taken by an earlier version of the evals lacks the modalities: run the eval again to take a new one.`,
     );
   });
 
@@ -436,6 +493,8 @@ describe('a snapshot file that is not a snapshot', () => {
       ...good,
       contextLength: null,
       supportedParameters: [],
+      inputModalities: [],
+      outputModalities: [],
       inputPrice: null,
       outputPrice: null,
     };

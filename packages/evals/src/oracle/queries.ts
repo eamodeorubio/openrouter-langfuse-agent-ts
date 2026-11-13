@@ -55,22 +55,75 @@ const strings = (query: string, name: string, value: unknown): string[] => {
   return value;
 };
 
-/** The paid models that meet every constraint and whose blended price is within one percent of the lowest. */
-const cheapestBlended: Query = (models, params) => {
-  const name = 'cheapest-blended';
-  const minContext = number(
-    name,
+/** Refuses a parameter a query does not know, so that a typo cannot turn a constraint into nothing. */
+const known = (
+  query: string,
+  params: Record<string, unknown>,
+  names: string[],
+): void => {
+  for (const name of Object.keys(params)) {
+    if (!names.includes(name)) {
+      throw new QueryError(
+        `Unknown parameter "${name}" for the query ${query}. The known ones are: ${names.join(', ')}.`,
+      );
+    }
+  }
+};
+
+const FROM_ZERO = (n: number): boolean => n >= 0;
+
+/** The constraints most queries share: a context, parameters and modalities. */
+interface Constraints {
+  minContext: number;
+  parameters: string[];
+  inputModalities: string[];
+  outputModalities: string[];
+}
+
+const SHARED = [
+  'minContext',
+  'supportedParameters',
+  'inputModalities',
+  'outputModalities',
+];
+
+const constraintsOf = (
+  query: string,
+  params: Record<string, unknown>,
+): Constraints => ({
+  minContext: number(
+    query,
     'minContext',
     params.minContext,
     0,
-    (n) => n >= 0,
+    FROM_ZERO,
     'a number from 0',
-  );
-  const required = strings(
-    name,
-    'supportedParameters',
-    params.supportedParameters,
-  );
+  ),
+  parameters: strings(query, 'supportedParameters', params.supportedParameters),
+  inputModalities: strings(query, 'inputModalities', params.inputModalities),
+  outputModalities: strings(query, 'outputModalities', params.outputModalities),
+});
+
+const meets = (model: CatalogModel, c: Constraints): boolean =>
+  (model.contextLength ?? 0) >= c.minContext &&
+  c.parameters.every((name) => model.supportedParameters.includes(name)) &&
+  c.inputModalities.every((name) => model.inputModalities.includes(name)) &&
+  c.outputModalities.every((name) => model.outputModalities.includes(name));
+
+/** The ids of the models within one percent of the lowest of `price`, in ascending order. */
+const lowest = (priced: { id: string; price: number }[]): string[] => {
+  const cheapest = Math.min(...priced.map((entry) => entry.price));
+  return priced
+    .filter((entry) => entry.price <= cheapest * (1 + TIE))
+    .map((entry) => entry.id)
+    .sort();
+};
+
+/** The paid models that meet every constraint and whose blended price is within one percent of the lowest. */
+const cheapestBlended: Query = (models, params) => {
+  const name = 'cheapest-blended';
+  known(name, params, ['minContext', 'supportedParameters', 'mix']);
+  const { minContext, parameters } = constraintsOf(name, params);
   const mix = number(
     name,
     'mix',
@@ -79,26 +132,68 @@ const cheapestBlended: Query = (models, params) => {
     (n) => n > 0,
     'a number above 0',
   );
-
   const priced = models.flatMap((model) => {
     // A model with no price is as good as a free one: not paid.
     const blended = blendedPrice(model, mix) ?? 0;
-    const eligible =
-      blended > 0 &&
-      (model.contextLength ?? 0) >= minContext &&
-      required.every((parameter) =>
-        model.supportedParameters.includes(parameter),
-      );
-    return eligible ? [{ id: model.id, blended }] : [];
+    return blended > 0 &&
+      meets(model, {
+        minContext,
+        parameters,
+        inputModalities: [],
+        outputModalities: [],
+      })
+      ? [{ id: model.id, price: blended }]
+      : [];
   });
-  const cheapest = Math.min(...priced.map((entry) => entry.blended));
-  return priced
-    .filter((entry) => entry.blended <= cheapest * (1 + TIE))
-    .map((entry) => entry.id)
+  return lowest(priced);
+};
+
+/** The models with an input price above 0 that meet every constraint, within one percent of the lowest input price. */
+const cheapestInput: Query = (models, params) => {
+  const name = 'cheapest-input';
+  known(name, params, SHARED);
+  const constraints = constraintsOf(name, params);
+  const priced = models.flatMap((model) => {
+    const price = model.inputPrice ?? 0;
+    return price > 0 && meets(model, constraints)
+      ? [{ id: model.id, price }]
+      : [];
+  });
+  return lowest(priced);
+};
+
+/** Every model that meets every constraint, and has an input price below `maxInputPrice` when one is given. */
+const matching: Query = (models, params) => {
+  const name = 'matching';
+  known(name, params, [...SHARED, 'maxInputPrice']);
+  const constraints = constraintsOf(name, params);
+  const max =
+    params.maxInputPrice === undefined
+      ? undefined
+      : number(
+          name,
+          'maxInputPrice',
+          params.maxInputPrice,
+          0,
+          FROM_ZERO,
+          'a number from 0',
+        );
+  return models
+    .filter(
+      (model) =>
+        meets(model, constraints) &&
+        (max === undefined ||
+          (model.inputPrice !== null && model.inputPrice < max)),
+    )
+    .map((model) => model.id)
     .sort();
 };
 
-const QUERIES = new Map<string, Query>([['cheapest-blended', cheapestBlended]]);
+const QUERIES = new Map<string, Query>([
+  ['cheapest-blended', cheapestBlended],
+  ['cheapest-input', cheapestInput],
+  ['matching', matching],
+]);
 
 export const QUERY_NAMES: string[] = [...QUERIES.keys()];
 
@@ -110,7 +205,6 @@ export const runQuery = (
 ): string[] => {
   const query = QUERIES.get(name);
   if (!query) {
-    // Stryker disable next-line StringLiteral: equivalent while only one query exists, as a list of one has no separator
     const known = QUERY_NAMES.join(', ');
     throw new QueryError(
       `Unknown oracle query "${name}". The known queries are: ${known}.`,
