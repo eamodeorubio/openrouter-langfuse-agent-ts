@@ -2,6 +2,8 @@ import { type ExecException, execFile } from 'node:child_process';
 import { resolveCli } from '../cliPath.js';
 import { finite, isObject, parseJson } from '../json.js';
 import { optionalSnapshot } from '../oracle/catalog.js';
+import { dlxArguments, pnpmCommand } from '../published.js';
+import { parseCliVersion } from '../target.js';
 import { resolvePlaceholders } from './placeholders.js';
 
 const DEFAULT_TIMEOUT_MS = 300_000;
@@ -52,16 +54,22 @@ const usageOf = (
   };
 };
 
+/** What starts a run: a command and the arguments before the ones of the CLI. */
+interface Launcher {
+  command: string;
+  args: string[];
+}
+
 /** Starts the CLI with an argument array, so no shell reads the question. */
 const startCli = (
-  cli: string,
+  launcher: Launcher,
   args: string[],
   timeoutMs: number,
 ): Promise<Finished> =>
   new Promise((resolve) => {
     execFile(
-      process.execPath,
-      [cli, ...args],
+      launcher.command,
+      [...launcher.args, ...args],
       {
         encoding: 'utf8',
         env: process.env,
@@ -75,15 +83,27 @@ const startCli = (
 
 /** A promptfoo provider that answers a question by running the built CLI with `--json`. */
 export default class CliProvider {
-  private readonly cli: string;
+  private readonly launcher: Launcher;
   private readonly timeoutMs: number;
   private readonly providerId: string;
 
   constructor(options: { id?: string; config?: CliProviderConfig } = {}) {
     const config = options.config ?? {};
-    this.cli = resolveCli(config.cli);
+    // A published version starts through pnpm dlx. The runner checked it, and the
+    // provider checks it again, because promptfoo can start the provider alone.
+    const version = process.env.EVAL_CLI_VERSION || undefined;
+    if (version !== undefined && parseCliVersion(version) === undefined) {
+      throw new Error(
+        `EVAL_CLI_VERSION must be an exact version from 1.1.0, got ${JSON.stringify(version)}.`,
+      );
+    }
+    this.launcher =
+      version === undefined
+        ? { command: process.execPath, args: [resolveCli(config.cli)] }
+        : { command: pnpmCommand(), args: dlxArguments(version) };
     this.timeoutMs = config.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    this.providerId = options.id ?? 'ask-openrouter-cli';
+    const base = options.id ?? 'ask-openrouter-cli';
+    this.providerId = version ? `${base}@${version}` : base;
   }
 
   id(): string {
@@ -115,7 +135,7 @@ export default class CliProvider {
     }
 
     const { stdout, stderr, failure } = await startCli(
-      this.cli,
+      this.launcher,
       ['--json', '--model', model, '-q', question],
       this.timeoutMs,
     );

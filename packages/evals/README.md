@@ -52,6 +52,18 @@ A question may hold the placeholder `{flagship_model}`, `{free_model}` or `{fake
 
 The report also counts, for each model, how many runs every error class judged, passed and failed, with pass@k and pass^k of its own. It sits under the model, after the `mean` row. A class judges a run when one of its checks ran on it, and a run that an earlier class of the chain failed is not judged by a later one, so the counts of a class say how often that check passed when it was asked.
 
+## Against a published version
+
+`--cli-version <x.y.z>` runs the same eval against a version of `ask-openrouter` from npm, started through `pnpm dlx`, in place of the local build:
+
+```sh
+pnpm --filter ask-openrouter-evals run eval --cli-version 1.1.0
+```
+
+The version must be exact and from 1.1.0. A tag, a range or a pre-release is refused before any request.
+
+The run starts the version once first, so that its download stays out of the latency, and stops with a message that names it if that fails. It reads the instructions that `prompt-leak` compares answers with from the installed package, so each version is judged against its own. The report starts with the line `target: ask-openrouter@1.1.0`, and `target.txt` beside the results holds the same text. The [docs page](https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/evals/) says more.
+
 ## Reading the report
 
 The report goes to stdout, one block per model and one line group per case:
@@ -104,7 +116,7 @@ The report ends with the wall time of the whole eval, as promptfoo measured it, 
 
 ## Where the results go
 
-Each run writes `results/<timestamp>/results.json`, a promptfoo results file, and `catalog.json`, the snapshot of the catalog it judged by, in a folder named for the start time, such as `results/2026-11-13T10-20-30-123Z/`. The newest is last in the list. `--out <dir>` puts the run somewhere else. The directory is ignored by git. The reporter only reads that file, so you can rerun it for free, with other values of k:
+Each run writes a folder named for the start time, such as `results/2026-11-13T10-20-30-123Z/`. It holds `results.json`, a promptfoo results file, `catalog.json`, the snapshot of the catalog the run judged by, `instructions.txt`, the instructions of the CLI it ran, and `target.txt`, which names the CLI. The newest folder is last in the list. `--out <dir>` puts the run somewhere else. The directory is ignored by git. The reporter only reads that file, so you can rerun it for free, with other values of k:
 
 ```sh
 pnpm --filter ask-openrouter-evals run report results/<timestamp>/results.json --k 1,5,10

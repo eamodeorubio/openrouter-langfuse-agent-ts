@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BUILT_CLI } from '../src/cliPath.js';
 import { InstructionsError } from '../src/oracle/instructions.js';
 import { type Snapshot, SnapshotError } from '../src/oracle/snapshot.js';
+import { PublishedError } from '../src/published.js';
 import {
   DEFAULT_REPEAT,
   type Deps,
@@ -195,6 +196,13 @@ describe('a run', () => {
 
   /** A promptfoo that writes the results file of `runs` runs and exits with `status`. */
   const fakePromptfoo = (status: number | null, runs = 5): Deps => ({
+    warm: async (version) => {
+      order.push(`warm ${version}`);
+    },
+    publishedEntry: async (version) => {
+      order.push(`entry ${version}`);
+      return `/dlx/${version}/node_modules/ask-openrouter/dist/index.js`;
+    },
     instructions: async () => {
       order.push('instructions');
       return 'Be brief.';
@@ -323,7 +331,7 @@ describe('a run', () => {
   it('stops with a message and the usage on a bad argument, and runs nothing', async () => {
     expect(await run(['--bogus'], io, fakePromptfoo(0))).toBe(2);
     expect(stderr).toBe(
-      'Unexpected argument: --bogus\nUsage: run [--set core|full] [--config <file>] [--repeat <n>] [--k 1,3,5] [--out <dir>]\n',
+      'Unexpected argument: --bogus\nUsage: run [--set core|full] [--config <file>] [--repeat <n>] [--k 1,3,5] [--out <dir>] [--cli-version <x.y.z>]\n',
     );
     expect(spawned).toEqual([]);
   });
@@ -412,6 +420,113 @@ describe('a run', () => {
     );
     expect(saved).toEqual(SNAPSHOT);
     expect(spawned[0]?.env.EVAL_CATALOG).toBe(path.join(out, 'catalog.json'));
+  });
+
+  it('runs a published version: warms it first, reads its instructions from the package, and needs no build', async () => {
+    vi.stubEnv('EVAL_CLI', '/nonexistent/dist/index.js');
+    const asked: string[] = [];
+    const deps: Deps = {
+      ...fakePromptfoo(0),
+      instructions: async (cli) => {
+        asked.push(cli);
+        order.push('instructions');
+        return 'Be brief.';
+      },
+    };
+    const code = await run(
+      ['--out', out, '--repeat', '5', '--cli-version', '1.1.0'],
+      io,
+      deps,
+    );
+    expect(code).toBe(0);
+    expect(order).toEqual([
+      'warm 1.1.0',
+      'entry 1.1.0',
+      'instructions',
+      'snapshot',
+      'spawn',
+    ]);
+    expect(asked).toEqual([
+      '/dlx/1.1.0/node_modules/ask-openrouter/dist/index.js',
+    ]);
+    expect(spawned[0]?.env.EVAL_CLI_VERSION).toBe('1.1.0');
+  });
+
+  it('tells the provider that the target is the local build, with an empty version', async () => {
+    await run(['--out', out, '--repeat', '5'], io, fakePromptfoo(0));
+    expect(spawned[0]?.env.EVAL_CLI_VERSION).toBe('');
+  });
+
+  it('stops before any request when the warm-up fails, and names the version', async () => {
+    const deps: Deps = {
+      ...fakePromptfoo(0),
+      warm: async () => {
+        throw new PublishedError(
+          'Could not start ask-openrouter@1.1.0 through pnpm dlx: no network',
+        );
+      },
+    };
+    expect(
+      await run(
+        ['--out', out, '--cli-version', '1.1.0', '--repeat', '5'],
+        io,
+        deps,
+      ),
+    ).toBe(1);
+    expect(stderr).toBe(
+      'Could not start ask-openrouter@1.1.0 through pnpm dlx: no network\n',
+    );
+    expect(order).toEqual([]);
+    expect(spawned).toEqual([]);
+    expect(stdout).toBe('');
+  });
+
+  it('stops before any request when the package cannot be found, and does not hide a bug', async () => {
+    const lost: Deps = {
+      ...fakePromptfoo(0),
+      publishedEntry: async () => {
+        throw new PublishedError(
+          'pnpm dlx installed ask-openrouter@1.1.0 but reported no ask-openrouter binary.',
+        );
+      },
+    };
+    expect(
+      await run(
+        ['--out', out, '--cli-version', '1.1.0', '--repeat', '5'],
+        io,
+        lost,
+      ),
+    ).toBe(1);
+    expect(stderr).toContain('reported no ask-openrouter binary');
+    expect(spawned).toEqual([]);
+    const bug: Deps = {
+      ...fakePromptfoo(0),
+      warm: async () => {
+        throw new TypeError('a bug');
+      },
+    };
+    await expect(
+      run(['--out', out, '--cli-version', '1.1.0', '--repeat', '5'], io, bug),
+    ).rejects.toThrow('a bug');
+  });
+
+  it('writes the target beside the results, and hands it to the report', async () => {
+    await run(
+      ['--out', out, '--repeat', '5', '--cli-version', '1.1.0'],
+      io,
+      fakePromptfoo(0),
+    );
+    expect(fs.readFileSync(path.join(out, 'target.txt'), 'utf8')).toBe(
+      'ask-openrouter@1.1.0',
+    );
+    expect(stdout.split('\n')[0]).toBe('target: ask-openrouter@1.1.0');
+  });
+
+  it('names the local build as the target, by the path of the entry it started', async () => {
+    await run(['--out', out, '--repeat', '5'], io, fakePromptfoo(0));
+    const target = fs.readFileSync(path.join(out, 'target.txt'), 'utf8');
+    expect(target).toMatch(/^local build \(.+\)$/);
+    expect(stdout.split('\n')[0]).toBe(`target: ${target}`);
   });
 
   it('writes the instructions of the CLI beside the results, and tells the checks where, before any request', async () => {

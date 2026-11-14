@@ -34,6 +34,27 @@ const exec = (args: string[]) => {
 const USAGE = 'Usage: report <results.json> [--k 1,3,5]\n';
 const file = () => write(JSON.stringify(resultsFile(many(6))));
 
+describe('the target of the report', () => {
+  const withTarget = (target?: string) => {
+    const results = file();
+    if (target !== undefined) {
+      fs.writeFileSync(path.join(path.dirname(results), 'target.txt'), target);
+    }
+    return results;
+  };
+
+  it('starts the report with a line that names it, from the file beside the results', () => {
+    const done = exec([withTarget('ask-openrouter@1.1.0\n')]);
+    expect(done.status).toBe(0);
+    expect(done.stdout.split('\n')[0]).toBe('target: ask-openrouter@1.1.0');
+    expect(done.stdout.split('\n')[1]).toBe('m/one');
+  });
+
+  it('adds no line when the run left none', () => {
+    expect(exec([withTarget()]).stdout.split('\n')[0]).toBe('m/one');
+  });
+});
+
 describe('the arguments of the report', () => {
   it('print the usage and exit 2 without a results file', () => {
     expect(exec([])).toEqual({

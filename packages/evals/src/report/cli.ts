@@ -1,9 +1,20 @@
 import fs from 'node:fs';
+import path from 'node:path';
 import type { Io } from '../io.js';
+import { TARGET_FILE } from '../target.js';
 import { formatReport, wallTimeLine } from './format.js';
 import { DEFAULT_KS, parseKs } from './ks.js';
 import { readRuns } from './results.js';
 import { summarize } from './summary.js';
+
+/** The line that names what the run evaluated, from the file beside the results. Empty when the run left none. */
+const targetLine = (results: string): string => {
+  try {
+    return `target: ${fs.readFileSync(path.join(path.dirname(results), TARGET_FILE), 'utf8').trim()}\n`;
+  } catch {
+    return '';
+  }
+};
 
 const USAGE = 'Usage: report <results.json> [--k 1,3,5]\n';
 
@@ -37,7 +48,8 @@ export const report = (argv: string[], io: Io): number => {
     const raw = fs.readFileSync(file, 'utf8');
     const read = readRuns(JSON.parse(raw));
     io.out(
-      formatReport(summarize(read.runs, ks, read.threshold), ks) +
+      targetLine(file) +
+        formatReport(summarize(read.runs, ks, read.threshold), ks) +
         wallTimeLine(read, read.runs.length),
     );
     return 0;

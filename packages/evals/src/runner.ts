@@ -19,8 +19,10 @@ import {
   SnapshotError,
   writeSnapshot,
 } from './oracle/snapshot.js';
+import { PublishedError, publishedEntry, warmUp } from './published.js';
 import { report } from './report/cli.js';
 import { DEFAULT_KS, parseKs } from './report/ks.js';
+import { cliVersionProblem, TARGET_FILE } from './target.js';
 
 const packageRoot = path.resolve(import.meta.dirname, '..');
 const PROMPTFOO = path.join(packageRoot, 'node_modules/.bin/promptfoo');
@@ -29,6 +31,13 @@ const PROMPTFOO = path.join(packageRoot, 'node_modules/.bin/promptfoo');
 export const DEFAULT_REPEAT = 10;
 
 const RESULTS_FILE = 'results.json';
+const repositoryRoot = path.resolve(packageRoot, '../..');
+
+/** What the run evaluates, in words: a published version, or the entry of the local build. */
+const describeTarget = (version: string | undefined, cli: string): string =>
+  version === undefined
+    ? `local build (${path.relative(repositoryRoot, cli)})`
+    : `ask-openrouter@${version}`;
 
 export interface RunOptions {
   config: string;
@@ -38,10 +47,12 @@ export interface RunOptions {
   out: string;
   /** Passed to the reporter as `--k`. */
   k?: string;
+  /** The published version of the CLI to evaluate. Absent for the local build. */
+  cliVersion?: string;
 }
 
 const USAGE =
-  'Usage: run [--set core|full] [--config <file>] [--repeat <n>] [--k 1,3,5] [--out <dir>]\n';
+  'Usage: run [--set core|full] [--config <file>] [--repeat <n>] [--k 1,3,5] [--out <dir>] [--cli-version <x.y.z>]\n';
 
 /** Reads the arguments of the eval script. Returns the options, or the message that explains the mistake. */
 export const parseRunArgs = (
@@ -53,6 +64,7 @@ export const parseRunArgs = (
   let set: RunOptions['set'] = 'core';
   let out: string | undefined;
   let k: string | undefined;
+  let cliVersion: string | undefined;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i] as string;
     const value = argv[i + 1];
@@ -73,6 +85,11 @@ export const parseRunArgs = (
       i++;
     } else if (arg === '--out' && value !== undefined) {
       out = path.resolve(value);
+      i++;
+    } else if (arg === '--cli-version' && value !== undefined) {
+      const problem = cliVersionProblem(value);
+      if (problem !== undefined) return problem;
+      cliVersion = value;
       i++;
     } else if (arg === '--k' && value !== undefined) {
       k = value;
@@ -96,6 +113,7 @@ export const parseRunArgs = (
     set,
     out: out ?? path.join(packageRoot, 'results', stamp),
     ...(k === undefined ? {} : { k }),
+    ...(cliVersion === undefined ? {} : { cliVersion }),
   };
 };
 
@@ -130,6 +148,10 @@ export const modelsUnderTest = (config: string): string[] => {
 
 /** What `run` does besides compute: fetch the catalog and start a process. Tests replace it. */
 export interface Deps {
+  /** Starts a published version once, so that its download is not in the latency of a case. */
+  warm: (version: string) => Promise<void>;
+  /** The entry of the installed package of a published version. */
+  publishedEntry: (version: string) => Promise<string>;
   /** The instructions of the CLI that is started, which `prompt-leak` compares answers with. */
   instructions: (cli: string) => Promise<string>;
   snapshot: () => Promise<Snapshot>;
@@ -145,6 +167,8 @@ export interface Deps {
 }
 
 const defaultDeps: Deps = {
+  warm: warmUp,
+  publishedEntry,
   instructions: loadInstructions,
   snapshot: () => fetchSnapshot(process.env.EVAL_CATALOG_URL ?? CATALOG_URL),
   spawn: spawnSync,
@@ -162,15 +186,28 @@ export const run = async (
     return 2;
   }
 
-  const cli = resolveCli();
-  if (!fs.existsSync(cli)) {
-    io.err(
-      `The CLI is not built: ${cli} does not exist. Run \`pnpm build\` at the repository root, then run the evals again.\n`,
-    );
-    return 2;
+  let cli = resolveCli();
+  if (options.cliVersion === undefined) {
+    if (!fs.existsSync(cli)) {
+      io.err(
+        `The CLI is not built: ${cli} does not exist. Run \`pnpm build\` at the repository root, then run the evals again.\n`,
+      );
+      return 2;
+    }
+  } else {
+    try {
+      await deps.warm(options.cliVersion);
+      cli = await deps.publishedEntry(options.cliVersion);
+    } catch (error) {
+      if (!(error instanceof PublishedError)) throw error;
+      io.err(`${error.message}\n`);
+      return 1;
+    }
   }
+  const target = describeTarget(options.cliVersion, cli);
 
   fs.mkdirSync(options.out, { recursive: true });
+  fs.writeFileSync(path.join(options.out, TARGET_FILE), target);
   let instructions: string;
   try {
     instructions = writeInstructions(options.out, await deps.instructions(cli));
@@ -194,6 +231,8 @@ export const run = async (
       ...process.env,
       // Where the checks find the snapshot of this run.
       [CATALOG_ENV]: catalog,
+      // The published version the provider starts, or none for the local build.
+      EVAL_CLI_VERSION: options.cliVersion ?? '',
       // Where the checks find the instructions of the CLI under test.
       [INSTRUCTIONS_ENV]: instructions,
       // The models of the matrix, so that no repeat picks one as the free model.

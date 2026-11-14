@@ -17,13 +17,14 @@ export OPENROUTER_API_KEY=...
 pnpm --filter ask-openrouter-evals run eval
 ```
 
-This evaluates **the local build**, `packages/cli/dist/index.js`. It is the CLI as the branch you are on would ship it. Each question runs on each model ten times, with no cache, so that every repeat is a new request. Before the first question, the run fetches OpenRouter's public model list, which needs no key, and saves it beside the results as `catalog.json`. That snapshot is the oracle: it says which models are good answers to a question such as "the cheapest paid model with 200,000 tokens of context and tool calling", so that no question holds a model name that next week's catalog will outdate.
+By default this evaluates **the local build**, `packages/cli/dist/index.js`, the CLI as the branch you are on would ship it. To evaluate a version from npm instead, see [Against a published version](#against-a-published-version) below. Each question runs on each model ten times, with no cache, so that every repeat is a new request. Before the first question, the run fetches OpenRouter's public model list, which needs no key, and saves it beside the results as `catalog.json`. That snapshot is the oracle: it says which models are good answers to a question such as "the cheapest paid model with 200,000 tokens of context and tool calling", so that no question holds a model name that next week's catalog will outdate.
 
 The run saves one more file beside the results: the instructions of the CLI, which it reads from the file that sits beside the CLI's entry, as `instructions.txt`. A check can then tell whether an answer repeats them. A CLI with no readable instructions stops the run before any request.
 
 The report goes to stdout, one block per model, and ends with how long the whole eval took. This example is abridged to one case of one model:
 
 ```text
+target: local build (packages/cli/dist/index.js)
 anthropic/claude-haiku-5.5
   lookup/known-model  n=10  c=10  err=0  pass@1=1.0000 pass@3=1.0000 pass@5=1.0000  pass^1=1.0000 pass^3=1.0000 pass^5=1.0000
                       cost 0.0008 (10 runs)  latency 3382 ms  rounds 1.00 (10 runs)  cost/solved 0.0008
@@ -37,6 +38,22 @@ wall time 114.2 s for 60 runs (concurrency 4)
 ```
 
 Under each model, the block **by error class** counts how many runs every class judged, passed and failed, with pass@k and pass^k of its own. A class judges a run when one of its checks ran on it, and a run that an earlier class failed is not judged by a later one, so the counts say how often a check passed when it was asked. `n` is how many times a question ran, `c` how many runs passed, and `err` how many ended in a provider error, which counts as a failed run. **pass@k** is the chance that at least one of k runs passes: "if I may try k times, will it work?" **pass^k** is the chance that all k pass: "can I rely on it every time?" It is the harsher figure, and it falls as k rises. The package [README](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/blob/main/packages/evals/README.md) lists every flag.
+
+## Against a published version
+
+The local build is the CLI as your branch would ship it. Sometimes you want the CLI as users have it: the version on npm. Give the run an exact version with `--cli-version`:
+
+```sh
+pnpm --filter ask-openrouter-evals run eval --cli-version 1.1.0
+```
+
+Each run then starts `pnpm dlx ask-openrouter@1.1.0` in place of `packages/cli/dist/index.js`, and you need no build for it. Nothing else changes: the cases, the models, the checks and the catalog snapshot are the same.
+
+The version must be exact and from 1.1.0, the first that lists its tool calls in `--json`, which the checks read. `latest`, `^1.1.0`, `1.1`, a pre-release and any text that is not three whole numbers are refused before a request goes out, with exit code 2. A tag would let two runs a week apart measure different code. And the text goes straight into the command that starts the CLI, so only a plain version is allowed.
+
+Before the first case, the run starts the version once with `--version`, so that the download does not count toward the latency of any case. It waits up to three minutes for it, using the `pnpm` on your path, or the command that `EVAL_PNPM` names. If the warm-up fails, or the version that answers is another one, the run stops with exit code 1 and a message that names the version, and sends no request. The instructions that `prompt-leak` compares answers with are read from the package that `pnpm dlx` installed, so each version is judged against its own.
+
+The report starts with a line that names what it measured, `target: ask-openrouter@1.1.0` or `target: local build (packages/cli/dist/index.js)`. The run saves the same text as `target.txt` beside the results, so a rerun of the reporter shows the line too.
 
 ## The error taxonomy
 
