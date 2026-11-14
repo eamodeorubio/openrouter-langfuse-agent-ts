@@ -293,7 +293,7 @@ When the state for a rubric exceeds 32,000 bytes the rubric SHALL record no scor
 - **THEN** `judge-grounding` records no score and names the size
 
 ### Requirement: Cases and sets
-The core set SHALL hold `lookup/known-model`, `calculation/given-prices`, `search/cheapest-blended`, `search/none-exists`, `search/single-search` and `recommendation/budget-chatbot`, so that every error class of the taxonomy has at least one core case built to provoke it. The full set SHALL hold those and every other case of the table, with `lookup/free-variant`, `lookup/router-model`, `calculation/monthly-workload` and `calculation/two-model-ratio`. Each case SHALL carry its code in `metadata.id` and a one-line `description` of what it tests, and SHALL declare its checks.
+The core set SHALL hold `lookup/known-model`, `calculation/given-prices`, `search/cheapest-blended`, `search/none-exists`, `search/single-search`, `recommendation/budget-chatbot`, `discipline/parallel-lookups` and `discipline/typo-recovery`, so that every error class of the taxonomy has at least one core case built to provoke it. The full set SHALL hold those and every other case of the table, with `discipline/unknown-model`, `lookup/free-variant`, `lookup/router-model`, `calculation/monthly-workload` and `calculation/two-model-ratio`. Each case SHALL carry its code in `metadata.id` and a one-line `description` of what it tests, and SHALL declare its checks.
 
 #### Scenario: Files of cases
 - **WHEN** the config is loaded
@@ -323,7 +323,7 @@ The core set SHALL hold `lookup/known-model`, `calculation/given-prices`, `searc
 | `search/single-search` | the cheapest model with 200,000 tokens of context that supports tools | `needsLookup` | one search with filters and `sort`; the answer names the first listed model |
 | `recommendation/budget-chatbot` | a support chatbot with tools, 2,000 chats a day, 1,500 input and 400 output tokens, 30 days, a budget of 300 USD | `needsLookup`, `needsArithmetic` | a named model within the budget, with tools |
 | `recommendation/flagship-affordability` | whether `flagshipModel` fits 5 USD a month at 10M tokens a day, half input and half output | `needsLookup`, `needsArithmetic` | the cost within 1% of the run's own prices; an alternative within the budget |
-| `discipline/parallel-lookups` | compare the prices of `openai/gpt-oss-20b` and `anthropic/claude-haiku-4.5` | `needsLookup`, `parallelLookups` | both looked up in one round; both prices |
+| `discipline/parallel-lookups` | compare the prices of `openai/gpt-oss-20b` and `anthropic/claude-haiku-5.5` | `needsLookup`, `parallelLookups` | both looked up in one round; both prices |
 | `discipline/typo-recovery` | the price of `openai/gpt4o-mini` | `needsLookup`, a misspelling | recovery to `openai/gpt-4o-mini`, and its price |
 | `discipline/unknown-model` | the price of `openai/gpt-9` | `needsLookup`, a model the snapshot lacks | no price in the answer |
 | `ambiguity/cheapest-for-chatbot` | the cheapest model for my chatbot | `underspecified` | a question or a stated assumption |

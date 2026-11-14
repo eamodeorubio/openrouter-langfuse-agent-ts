@@ -69,12 +69,28 @@ Commit type `test:`. PR title stays `test: add the evals package`. Bump: none. B
 - [x] 4.7 Refactor only where `QUALITY_RUBRIC.md` calls for it, at most 3 passes. Name the criterion for each.
 - [x] 4.8 Run `pnpm check`, `pnpm typecheck` and `pnpm test`. Verify all pass.
 - [x] 4.9 Run `reviewer-code-high`, `reviewer-code-low` and `reviewer-docs`. Fix every must-fix finding.
-- [ ] 4.10 Write the full report, with a live run if the user asks for it. Wait for user approval, which also approves the commit. Commit.
+- [x] 4.10 Write the full report, with a live run if the user asks for it. Wait for user approval, which also approves the commit. Commit.
 
-## 5. Archive
+## 5. Lookup discipline (product slice 5)
 
-- [ ] 5.1 After the last slice, verify the change with `/opsx:verify` and fix what it finds.
-- [ ] 5.2 Once the user approves, archive it as `chore: archive add-evals-package`, as the last commit before merge.
+Commit type `test:`. PR title stays `test: add the evals package`. Bump: none. Branch `evals`. Slice 5 adds three cases and two classes: `discipline/parallel-lookups` (`serial-lookups`), `discipline/typo-recovery` (`no-recovery`) and `discipline/unknown-model` (`invented-data` for a model that is not in the snapshot). Three declarations are new, each read strictly by the case contract: `parallelLookups` (true: the models of the question are independent, and a good run reads them in one round), `recovery` (`misspelled` and `correction`, both slugs: the question holds the first, and the snapshot holds the second) and `unknownModel` (a slug that the snapshot lacks). The core set gains the two cases of the new classes, so that every class keeps a core case. The misspelled slug and the unknown slug are not models of the snapshot, so these checks read their models from the declaration and not from the question. A run that never tried the misspelling and read the correction at once passes `no-recovery`.
+
+- [x] 5.1 Add the three declarations to the case contract, with the tests first in `test/caseSpec.test.ts`: kinds, strictness, and the refusal of a `recovery` whose slugs are equal. Covers Cases and sets. Verify the tests pass.
+- [x] 5.2 Add the check `serialLookups` (`serial-lookups`). Write the failing tests in `test/disciplineChecks.test.ts` first, one scenario of the spec each, with the precedence: one round passes, two rounds fail, a model with no `get_model` call is left to `wrong-search`, failed calls count for nothing, and a property that reordering the calls never changes the verdict. Covers Independent lookups together. Verify the tests pass.
+- [x] 5.3 Add the check `recovered` (`no-recovery`), with the tests first: the typo recovered, a gave-up run, a correction read before the misspelling failed, a correction read in the same round, a correction found only by a search, and the answer that holds the prices of the correction (`wrong-value`, through the declared asked model and figures). Covers Recovery from a misspelled model. Verify the tests pass.
+- [x] 5.4 Add the check `noPriceForUnknown` (`invented-data`), with the tests first: a price in dollars, in USD and per million fail; "not found" passes; a declaration of a model that the snapshot holds is a `CaseError`. Covers A model that does not exist. Verify the tests pass.
+- [x] 5.5 Add the three cases, with the config tests first: ids, descriptions, declarations, assertions, sets (the first two `core`, the last `full`), and the run against the stub CLI and the catalog fixture. Covers Cases and sets. Verify the config tests pass.
+- [x] 5.6 Extend the docs page and the README with the classes `serial-lookups` and `no-recovery`, the new row of `invented-data`, and the three cases. The docs test must pass. Use the `beautiful-prose` skill with the settings of `AGENTS.md`. Verify `pnpm docs:build` passes.
+- [x] 5.7 Run `pnpm mutation:evals`. The score stays at or above the `break` threshold. Read every survivor, kill it or justify it.
+- [x] 5.8 Refactor only where `QUALITY_RUBRIC.md` calls for it, at most 3 passes. Name the criterion for each.
+- [x] 5.9 Run `pnpm check`, `pnpm typecheck` and `pnpm test`. Verify all pass.
+- [x] 5.10 Run `reviewer-code-high`, `reviewer-code-low` and `reviewer-docs`. Fix every must-fix finding.
+- [ ] 5.11 Write the full report. No live run until the user asks for one. Wait for user approval, which also approves the commit. Commit.
+
+## 6. Archive
+
+- [ ] 6.1 After the last slice, verify the change with `/opsx:verify` and fix what it finds.
+- [ ] 6.2 Once the user approves, archive it as `chore: archive add-evals-package`, as the last commit before merge.
 
 ## Workflow follow-up
 
