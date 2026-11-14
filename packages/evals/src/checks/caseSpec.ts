@@ -1,4 +1,5 @@
 import { finite, isObject } from '../json.js';
+import { parseWorkload, type Workload } from '../oracle/workload.js';
 
 /** A case declared something the checks cannot read. Raised before the check judges anything. */
 export class CaseError extends Error {}
@@ -32,6 +33,8 @@ export interface CaseSpec {
   askedFigures?: FigureName[];
   oracle?: Oracle;
   search?: SearchRequirements;
+  /** What the case asks a chatbot to do in a month, for the cost of it. */
+  workload?: Workload;
 }
 
 export const KNOWN_DECLARATIONS = [
@@ -44,6 +47,7 @@ export const KNOWN_DECLARATIONS = [
   'askedFigures',
   'oracle',
   'search',
+  'workload',
 ] as const;
 
 const wrong = (name: string, rule: string, value: unknown): CaseError =>
@@ -165,5 +169,16 @@ export const readCase = (context: unknown): CaseSpec => {
   }
   if (metadata.oracle !== undefined) spec.oracle = readOracle(metadata.oracle);
   if (metadata.search !== undefined) spec.search = readSearch(metadata.search);
+  if (metadata.workload !== undefined) {
+    const workload = parseWorkload(metadata.workload);
+    if (!workload) {
+      throw wrong(
+        'workload',
+        'an object of chatsPerDay, inputTokens, outputTokens and days, each a number from 0',
+        metadata.workload,
+      );
+    }
+    spec.workload = workload;
+  }
   return spec;
 };

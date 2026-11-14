@@ -34,3 +34,11 @@ export const answered = (output: unknown): Success | undefined => {
   const run = asSuccess(output);
   return run && !isBlank(run) ? run : undefined;
 };
+
+const LISTED = 5;
+
+/** Slugs for a message: the first few, and how many more. */
+export const listed = (slugs: string[]): string =>
+  slugs.length <= LISTED
+    ? slugs.join(', ')
+    : `${slugs.slice(0, LISTED).join(', ')} and ${slugs.length - LISTED} more`;

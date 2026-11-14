@@ -1,18 +1,11 @@
 import { isObject, parseJson } from '../json.js';
-import { currentSnapshot } from '../oracle/catalog.js';
-import { runQuery } from '../oracle/queries.js';
 import { type Oracle, readCase, type SearchRequirements } from './caseSpec.js';
+import { acceptableSlugs } from './oracleSlugs.js';
 import { type Success, successfulCalls } from './run.js';
 import { slugTokens } from './slugs.js';
-import { type Check, fail, judgeable, pass } from './verdict.js';
+import { type Check, fail, judgeable, listed, pass } from './verdict.js';
 
 export const SEARCH_TOOL = 'search_models';
-const LISTED = 5;
-
-const listed = (slugs: string[]): string =>
-  slugs.length <= LISTED
-    ? slugs.join(', ')
-    : `${slugs.slice(0, LISTED).join(', ')} and ${slugs.length - LISTED} more`;
 
 const describeRequirement = (
   name: string,
@@ -68,12 +61,6 @@ interface Assessment {
   sound: boolean;
   reason: string;
 }
-
-/** The slugs, in lower case, that the oracle query of a case accepts on the snapshot of the run. */
-export const acceptableSlugs = (oracle: Oracle): string[] =>
-  runQuery(oracle.query, currentSnapshot().models, oracle.params).map((slug) =>
-    slug.toLowerCase(),
-  );
 
 /** What the run's lookups say against what the snapshot accepts. */
 const assess = (

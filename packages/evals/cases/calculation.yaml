@@ -17,3 +17,51 @@
     - type: javascript
       metric: wrong-value
       value: file://src/checks/assertions.ts:statedCost
+
+- description: Works out the monthly cost of one model for a chatbot workload from the prices the tool returned
+  vars:
+    question: What does it cost per month to run openai/gpt-oss-20b for a support chatbot that handles 2,000 chats a day, with 1,500 input and 400 output tokens per chat, 30 days a month?
+  metadata:
+    id: calculation/monthly-workload
+    set: full
+    needsLookup: true
+    needsArithmetic: true
+    workload:
+      chatsPerDay: 2000
+      inputTokens: 1500
+      outputTokens: 400
+      days: 30
+  assert:
+    - type: javascript
+      metric: wrong-search
+      value: file://src/checks/assertions.ts:modelsRead
+    - type: javascript
+      metric: wrong-value
+      value: file://src/checks/assertions.ts:workloadCost
+    - type: javascript
+      metric: arithmetic-in-head
+      value: file://src/checks/assertions.ts:arithmeticInHead
+
+- description: Compares the monthly cost of two models for the same workload, and how many times dearer one is
+  vars:
+    question: A support chatbot handles 2,000 chats a day, with 1,500 input and 400 output tokens per chat, 30 days a month. Compare the monthly cost of openai/gpt-oss-20b and anthropic/claude-haiku-5.5, and say how many times more the dearer one costs.
+  metadata:
+    id: calculation/two-model-ratio
+    set: full
+    needsLookup: true
+    needsArithmetic: true
+    workload:
+      chatsPerDay: 2000
+      inputTokens: 1500
+      outputTokens: 400
+      days: 30
+  assert:
+    - type: javascript
+      metric: wrong-search
+      value: file://src/checks/assertions.ts:modelsRead
+    - type: javascript
+      metric: wrong-value
+      value: file://src/checks/assertions.ts:workloadCost
+    - type: javascript
+      metric: arithmetic-in-head
+      value: file://src/checks/assertions.ts:arithmeticInHead

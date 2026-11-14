@@ -24,6 +24,15 @@ const filesUnder = (dir: string): string[] =>
 
 let catalogUrl = '';
 
+/** The bytes of a file, or nothing when it vanished or cannot be read. */
+const readOrNothing = (file: string): Buffer | undefined => {
+  try {
+    return fs.readFileSync(file);
+  } catch {
+    return undefined;
+  }
+};
+
 const runEval = (
   args: string[],
   env: Record<string, string> = {},
@@ -101,7 +110,10 @@ describe('the eval harness, end to end, with a stub CLI', () => {
     ];
     expect(written.length).toBeGreaterThan(0);
     for (const file of written) {
-      expect(fs.readFileSync(file).includes(DUMMY_KEY), file).toBe(false);
+      // Other test files run promptfoo at the same time in the shared state
+      // directory, and it rotates files there: one may be gone by now.
+      const content = readOrNothing(file);
+      if (content) expect(content.includes(DUMMY_KEY), file).toBe(false);
     }
     expect(run.stdout).not.toContain(DUMMY_KEY);
     expect(run.stderr).not.toContain(DUMMY_KEY);

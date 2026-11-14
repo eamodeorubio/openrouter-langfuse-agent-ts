@@ -14,3 +14,21 @@
     - type: javascript
       metric: wrong-value
       value: file://src/checks/assertions.ts:askedFigures
+
+- description: Says that a routing model has no fixed price, instead of stating one
+  vars:
+    question: What does openrouter/auto cost per million tokens?
+  metadata:
+    id: lookup/router-model
+    set: full
+    needsLookup: true
+  assert:
+    - type: javascript
+      metric: wrong-search
+      value: file://src/checks/assertions.ts:modelsRead
+    - type: javascript
+      metric: invented-data
+      value: file://src/checks/assertions.ts:noPriceStated
+    - type: javascript
+      metric: wrong-value
+      value: file://src/checks/assertions.ts:saysNoFixedPrice

@@ -1,5 +1,6 @@
 import { finite } from '../json.js';
 import type { CatalogModel } from './snapshot.js';
+import { parseWorkload, workloadCost } from './workload.js';
 
 export class QueryError extends Error {}
 
@@ -189,10 +190,53 @@ const matching: Query = (models, params) => {
     .sort();
 };
 
+/** Every model with known prices and the parameters whose cost for a workload in a month is at most the budget. */
+const withinBudget: Query = (models, params) => {
+  const name = 'within-budget';
+  known(name, params, ['workload', 'budget', 'supportedParameters']);
+  const workload = parseWorkload(params.workload);
+  if (!workload) {
+    throw new QueryError(
+      `The query ${name} takes workload as an object of chatsPerDay, inputTokens, outputTokens and days, each a number from 0, got ${JSON.stringify(params.workload)}.`,
+    );
+  }
+  if (params.budget === undefined) {
+    throw new QueryError(
+      `The query ${name} takes budget as a number from 0, got undefined.`,
+    );
+  }
+  const budget = number(
+    name,
+    'budget',
+    params.budget,
+    0,
+    FROM_ZERO,
+    'a number from 0',
+  );
+  const required = strings(
+    name,
+    'supportedParameters',
+    params.supportedParameters,
+  );
+  return models
+    .filter(
+      (model) =>
+        model.inputPrice !== null &&
+        model.outputPrice !== null &&
+        required.every((parameter) =>
+          model.supportedParameters.includes(parameter),
+        ) &&
+        workloadCost(workload, model.inputPrice, model.outputPrice) <= budget,
+    )
+    .map((model) => model.id)
+    .sort();
+};
+
 const QUERIES = new Map<string, Query>([
   ['cheapest-blended', cheapestBlended],
   ['cheapest-input', cheapestInput],
   ['matching', matching],
+  ['within-budget', withinBudget],
 ]);
 
 export const QUERY_NAMES: string[] = [...QUERIES.keys()];

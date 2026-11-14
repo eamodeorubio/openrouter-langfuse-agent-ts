@@ -2,8 +2,8 @@ interface Figure {
   value: number;
   /** Digits after the decimal point, as written. */
   decimals: number;
-  /** The suffix: `k` or `m` for thousands and millions, `money` for `USD` or `dollars`. */
-  unit?: 'k' | 'm' | 'money';
+  /** The suffix: `k` or `m` for thousands and millions, `money` for `USD` or `dollars`, `times` for `x` or `×`. */
+  unit?: 'k' | 'm' | 'money' | 'times';
   /** Written with a leading `$`. */
   dollar: boolean;
 }
@@ -11,7 +11,7 @@ interface Figure {
 // An optional `$`, a number with thousands separators or not, and an optional
 // unit. The number may not start or end inside a word, so `gpt-oss-20b` holds none.
 const FIGURE =
-  /(?<![\w.])(\$)?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(?:([km])|\s(usd|dollars?))?(?![\w])/gi;
+  /(?<![\w.])(\$)?(\d{1,3}(?:,\d{3})+|\d+)(?:\.(\d+))?(?:([km])|\s(usd|dollars?)|([x×]))?(?![\w])/gi;
 
 // A count grouped in threes by a space, a no-break space, a narrow no-break
 // space or a thin space: `131 072`.
@@ -41,11 +41,14 @@ const scan = (text: string): Figure[] =>
     const fraction = match[3];
     const scale = match[4];
     const money = match[5];
+    const times = match[6];
     const unit = scale
       ? (scale.toLowerCase() as 'k' | 'm')
       : money
         ? ('money' as const)
-        : undefined;
+        : times
+          ? ('times' as const)
+          : undefined;
     return {
       value: Number(
         `${whole.replace(/,/g, '')}${fraction ? `.${fraction}` : ''}`,
@@ -76,7 +79,7 @@ const SCALES = { k: [1000, 1024], m: [1_000_000, 1_048_576] } as const;
 /** A token count: the digits, or a `k` or `m` form at the stated precision, decimal or binary. */
 export const matchesCount = (answer: string, expected: number): boolean =>
   figuresIn(answer).some((figure) => {
-    if (figure.unit === 'money') return false;
+    if (figure.unit === 'money' || figure.unit === 'times') return false;
     if (figure.unit === undefined) return close(figure.value, expected);
     if (figure.value === 0) return false;
     return SCALES[figure.unit].some((scale) =>
@@ -99,3 +102,24 @@ export const matchesCost = (
       Math.abs(figure.value - expected) <=
         tolerance * Math.abs(expected) + 1e-12,
   );
+
+/** A ratio: a number, with or without a times sign, within `tolerance` of the expected one. Money and counts of thousands are not ratios. */
+export const matchesRatio = (
+  answer: string,
+  expected: number,
+  tolerance = 0.01,
+): boolean =>
+  figuresIn(answer).some(
+    (figure) =>
+      !figure.dollar &&
+      (figure.unit === undefined || figure.unit === 'times') &&
+      Math.abs(figure.value - expected) <= tolerance * Math.abs(expected),
+  );
+
+const PER_MILLION =
+  /\d\s*(?:usd\s*)?(?:per|\/)\s*(?:1\s*m\b|1\s*million|million|m\b)/i;
+
+/** Whether the text states a price: an amount marked `$` or `USD`, or a number per million tokens. */
+export const statesPrice = (text: string): boolean =>
+  figuresIn(text).some((figure) => figure.dollar || figure.unit === 'money') ||
+  PER_MILLION.test(text);

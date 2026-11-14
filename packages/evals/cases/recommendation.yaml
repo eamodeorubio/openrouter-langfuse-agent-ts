@@ -1,0 +1,25 @@
+- description: Recommends a model that fits a monthly budget for a chatbot workload and supports tool calling
+  vars:
+    question: I am building a support chatbot that needs tool calling. It handles 2,000 chats a day, with 1,500 input and 400 output tokens per chat, 30 days a month. My budget is 300 USD a month. Which model should I use?
+  metadata:
+    id: recommendation/budget-chatbot
+    set: core
+    needsLookup: true
+    needsArithmetic: true
+    oracle:
+      query: within-budget
+      params:
+        workload:
+          chatsPerDay: 2000
+          inputTokens: 1500
+          outputTokens: 400
+          days: 30
+        budget: 300
+        supportedParameters: [tools]
+  assert:
+    - type: javascript
+      metric: bad-recommendation
+      value: file://src/checks/assertions.ts:withinBudget
+    - type: javascript
+      metric: arithmetic-in-head
+      value: file://src/checks/assertions.ts:arithmeticInHead

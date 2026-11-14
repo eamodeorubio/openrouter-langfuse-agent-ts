@@ -7,6 +7,8 @@
  * the families, so that the config names one place.
  */
 export { askedFigures, askedModelFound } from './lookup.js';
+export { modelsRead, noPriceStated, saysNoFixedPrice } from './modelPrices.js';
+export { withinBudget } from './recommendation.js';
 export { wrongAnswer, wrongSearch } from './search.js';
 export {
   countStated,
@@ -18,3 +20,4 @@ export {
 export { arithmeticInHead, needlessLookup, statedCost } from './toolUse.js';
 export { inventedModels, memoryAnswer, runFailed } from './universal.js';
 export type { CheckContext, GradingResult } from './verdict.js';
+export { workloadCost } from './workloadChecks.js';

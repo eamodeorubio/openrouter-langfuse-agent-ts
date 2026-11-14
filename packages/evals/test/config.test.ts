@@ -68,7 +68,7 @@ describe('the files of cases', () => {
     expect(cases.length).toBeGreaterThan(0);
   });
 
-  it('give every case a set, and the core set is the three cases of the core', () => {
+  it('give every case a set, and the core set holds a case for every error class', () => {
     for (const test of cases) {
       expect(['core', 'full'], test.metadata.id).toContain(test.metadata.set);
     }
@@ -79,8 +79,26 @@ describe('the files of cases', () => {
     ).toEqual([
       'calculation/given-prices',
       'lookup/known-model',
+      'recommendation/budget-chatbot',
       'search/cheapest-blended',
+      'search/none-exists',
+      'search/single-search',
     ]);
+  });
+
+  it('provoke every error class of the whole set with a case of the core set', () => {
+    const classes = (selected: typeof cases) =>
+      new Set(
+        selected.flatMap((test) => [
+          'run-failed',
+          ...(test.metadata.needsLookup
+            ? ['memory-answer', 'invented-data']
+            : []),
+          ...(test.assert ?? []).map((check) => check.metric),
+        ]),
+      );
+    const core = classes(cases.filter((test) => test.metadata.set === 'core'));
+    expect([...classes(cases)].filter((name) => !core.has(name))).toEqual([]);
   });
 });
 
@@ -89,16 +107,17 @@ describe('the search cases of the full set', () => {
   const metrics = (id: string) =>
     (byId(id)?.assert ?? []).map((a) => a.metric).sort();
 
-  it('are in cases/search.yaml, tagged full, and read by the case contract', () => {
-    for (const id of [
-      'search/cheapest-input',
-      'search/image-input',
-      'search/none-exists',
-      'search/count',
-      'search/single-search',
-    ]) {
+  it('are in cases/search.yaml, tagged as their purpose asks, and read by the case contract', () => {
+    const sets: Record<string, string> = {
+      'search/cheapest-input': 'full',
+      'search/image-input': 'full',
+      'search/none-exists': 'core',
+      'search/count': 'full',
+      'search/single-search': 'core',
+    };
+    for (const [id, set] of Object.entries(sets)) {
       expect(byId(id)?.family, id).toBe('search');
-      expect(readCase({ test: byId(id) }).set, id).toBe('full');
+      expect(readCase({ test: byId(id) }).set, id).toBe(set);
       expect(readCase({ test: byId(id) }).needsLookup, id).toBe(true);
     }
   });
@@ -196,11 +215,111 @@ describe('the search cases of the full set', () => {
   });
 });
 
+describe('the recommendation and cost cases of the full set', () => {
+  const byId = (id: string) => cases.find((test) => test.metadata.id === id);
+  const metrics = (id: string) =>
+    (byId(id)?.assert ?? []).map((a) => a.metric).sort();
+  const CHATBOT = {
+    chatsPerDay: 2000,
+    inputTokens: 1500,
+    outputTokens: 400,
+    days: 30,
+  };
+
+  it('are tagged as their purpose asks and read by the case contract', () => {
+    for (const id of [
+      'recommendation/budget-chatbot',
+      'calculation/monthly-workload',
+      'calculation/two-model-ratio',
+      'lookup/router-model',
+    ]) {
+      expect(readCase({ test: byId(id) }).set, id).toBe(
+        id === 'recommendation/budget-chatbot' ? 'core' : 'full',
+      );
+      expect(readCase({ test: byId(id) }).needsLookup, id).toBe(true);
+    }
+  });
+
+  it('recommendation/budget-chatbot asks for a model within 300 USD a month with tools', () => {
+    const spec = readCase({ test: byId('recommendation/budget-chatbot') });
+    expect(byId('recommendation/budget-chatbot')?.vars.question).toBe(
+      'I am building a support chatbot that needs tool calling. It handles 2,000 chats a day, with 1,500 input and 400 output tokens per chat, 30 days a month. My budget is 300 USD a month. Which model should I use?',
+    );
+    expect(spec.oracle).toEqual({
+      query: 'within-budget',
+      params: {
+        workload: CHATBOT,
+        budget: 300,
+        supportedParameters: ['tools'],
+      },
+    });
+    expect(spec.needsArithmetic).toBe(true);
+    expect(metrics('recommendation/budget-chatbot')).toEqual([
+      'arithmetic-in-head',
+      'bad-recommendation',
+    ]);
+  });
+
+  it('calculation/monthly-workload asks for the monthly cost of one model', () => {
+    const spec = readCase({ test: byId('calculation/monthly-workload') });
+    expect(byId('calculation/monthly-workload')?.vars.question).toBe(
+      'What does it cost per month to run openai/gpt-oss-20b for a support chatbot that handles 2,000 chats a day, with 1,500 input and 400 output tokens per chat, 30 days a month?',
+    );
+    expect(spec.workload).toEqual(CHATBOT);
+    expect(spec.needsArithmetic).toBe(true);
+    expect(metrics('calculation/monthly-workload')).toEqual([
+      'arithmetic-in-head',
+      'wrong-search',
+      'wrong-value',
+    ]);
+  });
+
+  it('calculation/two-model-ratio asks for the costs of two models and how many times dearer one is', () => {
+    const spec = readCase({ test: byId('calculation/two-model-ratio') });
+    expect(byId('calculation/two-model-ratio')?.vars.question).toBe(
+      'A support chatbot handles 2,000 chats a day, with 1,500 input and 400 output tokens per chat, 30 days a month. Compare the monthly cost of openai/gpt-oss-20b and anthropic/claude-haiku-5.5, and say how many times more the dearer one costs.',
+    );
+    expect(spec.workload).toEqual(CHATBOT);
+    expect(metrics('calculation/two-model-ratio')).toEqual([
+      'arithmetic-in-head',
+      'wrong-search',
+      'wrong-value',
+    ]);
+  });
+
+  it('lookup/router-model asks the price of a model that has none, and expects no price in the answer', () => {
+    expect(byId('lookup/router-model')?.vars.question).toBe(
+      'What does openrouter/auto cost per million tokens?',
+    );
+    expect(metrics('lookup/router-model')).toEqual([
+      'invented-data',
+      'wrong-search',
+      'wrong-value',
+    ]);
+  });
+
+  it('use the same workload in the question as in the declaration, where the question gives one', () => {
+    for (const id of [
+      'recommendation/budget-chatbot',
+      'calculation/monthly-workload',
+      'calculation/two-model-ratio',
+    ]) {
+      expect(byId(id)?.vars.question, id).toMatch(
+        /2,000 chats a day, with 1,500 input and 400 output tokens per chat, 30 days a month/,
+      );
+    }
+  });
+});
+
 describe('the core set', () => {
   it('holds the cases of the files, in the order of the files and then of each file', () => {
     expect(cases.map((test) => test.metadata.id)).toEqual([
       'calculation/given-prices',
+      'calculation/monthly-workload',
+      'calculation/two-model-ratio',
       'lookup/known-model',
+      'lookup/router-model',
+      'recommendation/budget-chatbot',
       'search/cheapest-blended',
       'search/cheapest-input',
       'search/image-input',
@@ -390,12 +509,12 @@ describe('the config, run for real against a stub CLI', () => {
     await catalog.close();
   });
 
-  it('loads every check, and each of the two models runs each of the three cases twice', () => {
+  it('loads every check, and each of the two models runs each of the six cases twice', () => {
     expect(result.status, String(result.stderr)).toBe(0);
     const saved = JSON.parse(
       fs.readFileSync(path.join(out, 'results.json'), 'utf8'),
     );
-    expect(saved.results.results).toHaveLength(12);
+    expect(saved.results.results).toHaveLength(24);
     const errors = saved.results.results.filter(
       (r: { failureReason: number }) => r.failureReason === 2,
     );

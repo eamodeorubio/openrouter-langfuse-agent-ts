@@ -1,13 +1,8 @@
 import { finite, isObject, parseJson } from '../json.js';
 import { readCase } from './caseSpec.js';
 import { matchesCount } from './figures.js';
-import {
-  acceptableSlugs,
-  carries,
-  droppedFilters,
-  searchCalls,
-  sentFilters,
-} from './search.js';
+import { acceptableSlugs } from './oracleSlugs.js';
+import { carries, droppedFilters, searchCalls, sentFilters } from './search.js';
 import { slugTokens } from './slugs.js';
 import { type Check, fail, judgeable, pass } from './verdict.js';
 

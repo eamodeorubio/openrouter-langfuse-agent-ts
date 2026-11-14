@@ -21,6 +21,12 @@ describe('what a case declares', () => {
   it('is read, typed, from the metadata', () => {
     const oracle = { query: 'cheapest-blended', params: { minContext: 1 } };
     const search = { min_context_length: 1, supported_parameters: ['tools'] };
+    const workload = {
+      chatsPerDay: 1,
+      inputTokens: 2,
+      outputTokens: 3,
+      days: 4,
+    };
     expect(
       readCase(
         declare({
@@ -33,6 +39,7 @@ describe('what a case declares', () => {
           askedFigures: ['inputPrice', 'outputPrice', 'contextLength'],
           oracle,
           search,
+          workload,
         }),
       ),
     ).toEqual({
@@ -45,6 +52,7 @@ describe('what a case declares', () => {
       askedFigures: ['inputPrice', 'outputPrice', 'contextLength'],
       oracle,
       search,
+      workload,
     });
   });
 
@@ -70,6 +78,7 @@ describe('what a case declares', () => {
       'oracle',
       'search',
       'set',
+      'workload',
     ]);
   });
 });
@@ -78,7 +87,7 @@ describe('a declaration that is not known', () => {
   it('fails loudly, with the name and the known ones, so that a typo cannot turn a check into a pass', () => {
     expect(() => readCase(declare({ needsLookp: true }))).toThrow(CaseError);
     expect(() => readCase(declare({ needsLookp: true }))).toThrow(
-      'Unknown declaration "needsLookp" in the metadata of a case. The known ones are: id, set, needsLookup, needsArithmetic, expectedCost, askedModel, askedFigures, oracle, search.',
+      'Unknown declaration "needsLookp" in the metadata of a case. The known ones are: id, set, needsLookup, needsArithmetic, expectedCost, askedModel, askedFigures, oracle, search, workload.',
     );
   });
 
@@ -208,6 +217,37 @@ describe('the search of a case', () => {
   ])('refuses a requirement that is %s', (_, value) => {
     expect(() => readCase(search({ min_context_length: value }))).toThrow(
       'The search requirement min_context_length of a case must be a number, text or a list of text.',
+    );
+  });
+});
+
+describe('the workload of a case', () => {
+  const CHATBOT = {
+    chatsPerDay: 2000,
+    inputTokens: 1500,
+    outputTokens: 400,
+    days: 30,
+  };
+  const workload = (value: unknown) => declare({ workload: value });
+
+  it('is read as four counts', () => {
+    expect(readCase(workload(CHATBOT)).workload).toEqual(CHATBOT);
+  });
+
+  it.each([
+    ['text', 'big'],
+    ['null', null],
+    [
+      'a count that is missing',
+      { chatsPerDay: 1, inputTokens: 1, outputTokens: 1 },
+    ],
+    ['a count below 0', { ...CHATBOT, days: -1 }],
+    ['a count that is text', { ...CHATBOT, days: '30' }],
+    ['a count that is not known', { ...CHATBOT, hours: 1 }],
+  ])('is refused when it holds %s', (_, value) => {
+    expect(() => readCase(workload(value))).toThrow(CaseError);
+    expect(() => readCase(workload(value))).toThrow(
+      `The declaration workload of a case must be an object of chatsPerDay, inputTokens, outputTokens and days, each a number from 0, got ${JSON.stringify(value)}.`,
     );
   });
 });

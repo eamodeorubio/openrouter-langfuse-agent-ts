@@ -71,7 +71,7 @@
     question: Find a model with at least 2 million tokens of context that can output images and costs less than 0.01 USD per million input tokens.
   metadata:
     id: search/none-exists
-    set: full
+    set: core
     needsLookup: true
     oracle:
       query: matching
@@ -118,7 +118,7 @@
     question: Which is the cheapest model with at least 200,000 tokens of context that supports tools?
   metadata:
     id: search/single-search
-    set: full
+    set: core
     needsLookup: true
     search:
       min_context_length: 200000
