@@ -79,3 +79,4 @@ Run offline with promptfoo 0.125.1, a stub CLI and a loopback server standing in
 - **TypeScript.** Promptfoo loads `.ts` providers and `file://path.ts:name` assertions directly, with no build step.
 - **Case declarations.** A check reads what its case declares from `context.test.metadata`.
 - **Pnpm.** `pnpm run <script> --flag` passes the flags through. A `--` before them reaches the script as a literal argument.
+- **Variables.** A `file://` variable is stored as a path and runs no function, a `{{...}}` inside another variable or in the `metadata` of a case is not rendered, and a test generator is the one place promptfoo runs code for a test. The placeholders of a question that need the snapshot (`flagship_model`, `free_model`, `fake_key`) are therefore resolved by the provider, which already runs for each call, and the checks read the question the CLI reports in its `--json` object, which holds the resolved text. Slice 6 builds it.

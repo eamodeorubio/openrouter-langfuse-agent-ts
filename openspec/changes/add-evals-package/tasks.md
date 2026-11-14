@@ -56,10 +56,25 @@ Commit type `test:`. PR title stays `test: add the evals package`. Bump: none. B
 - [x] 3.10 Run `reviewer-code-high`, `reviewer-code-low` and `reviewer-docs`. Fix every must-fix finding.
 - [x] 3.11 Write the full report, with a live run of the core set if the user asks for it. Wait for user approval, which also approves the commit. Commit.
 
-## 4. Archive
+## 4. Recommendation and monthly cost (product slice 4)
 
-- [ ] 4.1 After the last slice, verify the change with `/opsx:verify` and fix what it finds.
-- [ ] 4.2 Once the user approves, archive it as `chore: archive add-evals-package`, as the last commit before merge.
+Commit type `test:`. PR title stays `test: add the evals package`. Bump: none. Branch `evals`. Slice 4 adds four cases: `recommendation/budget-chatbot`, `calculation/monthly-workload`, `calculation/two-model-ratio` and `lookup/router-model`. The cases that need a value chosen from the snapshot (`recommendation/flagship-affordability`, `lookup/free-variant`) move to slice 6, with the fake key of `hostile/key-in-question`: a spike showed that promptfoo stores a `file://` variable as a path, runs no function for it, and renders no `{{...}}` inside another variable or in the metadata of a case, so the placeholders need a mechanism of their own, which slice 6 designs. The models of a case are found in its question: a model of the snapshot named there is the model the case asks about.
+
+- [x] 4.1 Add the query `within-budget` and the workload cost it uses. Write the failing tests in `test/queries.workload.test.ts` first: the cost of the chatbot (186 USD for a model at 1.0 and 4.0), a bound that is inclusive, models with no price left out, the parameters it refuses, and the invariants as properties. Covers Models within a budget. Verify the tests pass.
+- [x] 4.2 Add the `workload` declaration to the case contract, with the tests first in `test/caseSpec.test.ts`. Covers Cases and sets. Verify the tests pass.
+- [x] 4.3 Add the checks `withinBudget` (`bad-recommendation`), `modelsRead` (`wrong-search`), `workloadCost` (`wrong-value`, with the ratio of two models, in either orientation), `noPriceStated` (`invented-data`) and `saysNoFixedPrice` (`wrong-value`). Write the failing tests in `test/workloadChecks.test.ts` first, one scenario of the spec each, with the precedence. Covers Recommendations within a need, Affordability, A model that does not exist. Verify the tests pass.
+- [x] 4.4 Add the four cases, with the config tests first: ids, descriptions, declarations, assertions, and the run of the full set against the stub CLI and the catalog fixture. Covers Cases and sets. Verify the config tests pass.
+- [x] 4.5 Extend the docs page and the README with the class `bad-recommendation`, the new rows of `invented-data` and `wrong-value`, and the four cases. The test that keeps the taxonomy table in step with the case files must pass. Use the `beautiful-prose` skill with the settings of `AGENTS.md`. Verify `pnpm docs:build` passes.
+- [x] 4.6 Run `pnpm mutation:evals`. The score stays at or above the `break` threshold. Read every survivor, kill it or justify it.
+- [x] 4.7 Refactor only where `QUALITY_RUBRIC.md` calls for it, at most 3 passes. Name the criterion for each.
+- [x] 4.8 Run `pnpm check`, `pnpm typecheck` and `pnpm test`. Verify all pass.
+- [x] 4.9 Run `reviewer-code-high`, `reviewer-code-low` and `reviewer-docs`. Fix every must-fix finding.
+- [ ] 4.10 Write the full report, with a live run if the user asks for it. Wait for user approval, which also approves the commit. Commit.
+
+## 5. Archive
+
+- [ ] 5.1 After the last slice, verify the change with `/opsx:verify` and fix what it finds.
+- [ ] 5.2 Once the user approves, archive it as `chore: archive add-evals-package`, as the last commit before merge.
 
 ## Workflow follow-up
 
@@ -67,7 +82,7 @@ Commit type `test:`. PR title stays `test: add the evals package`. Bump: none. B
   - Slice 3, search and count: cases `search/cheapest-input` to `search/single-search`. **New code:** the modalities in the snapshot, the queries `cheapest-input` and `matching`, string requirements (`sort`) in the search check, and the checks for `phantom-match`, `wasteful-search`, counts and the top of a search.
   - Slice 4, recommendation and affordability: cases `recommendation/budget-chatbot` and `recommendation/flagship-affordability`, with `lookup/free-variant`, `lookup/router-model`, `calculation/monthly-workload` and `calculation/two-model-ratio` of the first plan. **New code:** the query `within-budget`, the variables `flagshipModel` and `freeModel`, the workload cost, and the checks for `bad-recommendation`, the cost of a workload and the price of a free or routing model.
   - Slice 5, lookup discipline: cases `discipline/parallel-lookups` to `discipline/unknown-model`. **New code:** checks over the order and the rounds of the calls, for `serial-lookups` and `no-recovery`, and the price check of a model that does not exist.
-  - Slice 6, ambiguity and hostile input: cases `ambiguity/cheapest-for-chatbot`, `ambiguity/cheap-claude`, `hostile/prompt-injection` and `hostile/key-in-question`. **New code:** the phrase checks for `unstated-assumption`, the instructions of the built CLI as a source for `prompt-leak`, the generated key variable and the check for `secret-echo`.
+  - Slice 6, ambiguity and hostile input: cases `ambiguity/cheapest-for-chatbot`, `ambiguity/cheap-claude`, `hostile/prompt-injection` and `hostile/key-in-question`. **New code:** the phrase checks for `unstated-assumption`, the instructions of the built CLI as a source for `prompt-leak`, the placeholders of a question, resolved by the provider from the snapshot (`flagship_model`, `free_model`, `fake_key`), and the check for `secret-echo`.
   - Slice 7, a published version: `--cli-version`, its validation, the start through `pnpm dlx`, the warm-up and the target in the report. **New code:** all of it. Docs: how to run against an npm version.
   - Slice 8, the judge rubrics at weight 0.
 - Push the branch and open the pull request only with the user's permission, asked every time. Never merge.

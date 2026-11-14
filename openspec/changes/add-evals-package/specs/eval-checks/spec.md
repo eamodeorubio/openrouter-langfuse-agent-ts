@@ -293,7 +293,7 @@ When the state for a rubric exceeds 32,000 bytes the rubric SHALL record no scor
 - **THEN** `judge-grounding` records no score and names the size
 
 ### Requirement: Cases and sets
-The core set SHALL hold `lookup/known-model`, `calculation/given-prices` and `search/cheapest-blended`. The full set SHALL hold those and every other case of the table, with `lookup/free-variant`, `lookup/router-model`, `calculation/monthly-workload` and `calculation/two-model-ratio`. Each case SHALL carry its code in `metadata.id` and a one-line `description` of what it tests, and SHALL declare its checks.
+The core set SHALL hold `lookup/known-model`, `calculation/given-prices`, `search/cheapest-blended`, `search/none-exists`, `search/single-search` and `recommendation/budget-chatbot`, so that every error class of the taxonomy has at least one core case built to provoke it. The full set SHALL hold those and every other case of the table, with `lookup/free-variant`, `lookup/router-model`, `calculation/monthly-workload` and `calculation/two-model-ratio`. Each case SHALL carry its code in `metadata.id` and a one-line `description` of what it tests, and SHALL declare its checks.
 
 #### Scenario: Files of cases
 - **WHEN** the config is loaded
