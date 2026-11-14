@@ -1,8 +1,10 @@
 import { type SpawnSyncOptions, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
+import { parse } from 'yaml';
 import { resolveCli } from './cliPath.js';
 import type { Io } from './io.js';
+import { isObject } from './json.js';
 import { CATALOG_ENV } from './oracle/catalog.js';
 import {
   CATALOG_URL,
@@ -106,6 +108,20 @@ export const promptfooArgs = (options: RunOptions): string[] => [
   path.join(options.out, RESULTS_FILE),
 ];
 
+/** The models of the matrix of a config, which the provider must not pick as the free model. None when the config does not say, and promptfoo complains about it later. */
+export const modelsUnderTest = (config: string): string[] => {
+  try {
+    const parsed: unknown = parse(fs.readFileSync(config, 'utf8'));
+    const defaults = isObject(parsed) ? parsed.defaultTest : undefined;
+    const vars = isObject(defaults) ? defaults.vars : undefined;
+    const model = isObject(vars) ? vars.model : undefined;
+    const list = Array.isArray(model) ? model : [model];
+    return list.filter((id): id is string => typeof id === 'string');
+  } catch {
+    return [];
+  }
+};
+
 /** What `run` does besides compute: fetch the catalog and start a process. Tests replace it. */
 export interface Deps {
   snapshot: () => Promise<Snapshot>;
@@ -161,6 +177,8 @@ export const run = async (
       ...process.env,
       // Where the checks find the snapshot of this run.
       [CATALOG_ENV]: catalog,
+      // The models of the matrix, so that no repeat picks one as the free model.
+      EVAL_MODELS: modelsUnderTest(options.config).join(','),
       PROMPTFOO_DISABLE_TELEMETRY: '1',
       PROMPTFOO_DISABLE_UPDATE: '1',
       // A failed or errored run is data, not a reason to skip the report.

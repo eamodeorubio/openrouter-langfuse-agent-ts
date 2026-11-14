@@ -23,3 +23,39 @@
     - type: javascript
       metric: arithmetic-in-head
       value: file://src/checks/assertions.ts:arithmeticInHead
+
+- description: Works out whether the flagship model fits a small monthly budget, and names an alternative that does
+  vars:
+    question: Can I afford {flagship_model} on a budget of 5 USD a month? I send 10 million tokens a day, half of them input and half output, for 30 days a month. If not, which model fits?
+  metadata:
+    id: recommendation/flagship-affordability
+    set: full
+    needsLookup: true
+    needsArithmetic: true
+    workload:
+      chatsPerDay: 1
+      inputTokens: 5000000
+      outputTokens: 5000000
+      days: 30
+    oracle:
+      query: within-budget
+      params:
+        workload:
+          chatsPerDay: 1
+          inputTokens: 5000000
+          outputTokens: 5000000
+          days: 30
+        budget: 5
+  assert:
+    - type: javascript
+      metric: wrong-search
+      value: file://src/checks/assertions.ts:modelsRead
+    - type: javascript
+      metric: wrong-value
+      value: file://src/checks/assertions.ts:workloadCost
+    - type: javascript
+      metric: bad-recommendation
+      value: file://src/checks/assertions.ts:withinBudget
+    - type: javascript
+      metric: arithmetic-in-head
+      value: file://src/checks/assertions.ts:arithmeticInHead

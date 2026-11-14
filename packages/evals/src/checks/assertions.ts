@@ -8,7 +8,12 @@
  */
 export { noPriceForUnknown, recovered, serialLookups } from './discipline.js';
 export { askedFigures, askedModelFound } from './lookup.js';
-export { modelsRead, noPriceStated, saysNoFixedPrice } from './modelPrices.js';
+export {
+  modelsRead,
+  noPriceStated,
+  saysFree,
+  saysNoFixedPrice,
+} from './modelPrices.js';
 export { withinBudget } from './recommendation.js';
 export { wrongAnswer, wrongSearch } from './search.js';
 export {

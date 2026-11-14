@@ -1,6 +1,8 @@
 import { type ExecException, execFile } from 'node:child_process';
 import { resolveCli } from '../cliPath.js';
 import { finite, isObject, parseJson } from '../json.js';
+import { optionalSnapshot } from '../oracle/catalog.js';
+import { resolvePlaceholders } from './placeholders.js';
 
 const DEFAULT_TIMEOUT_MS = 300_000;
 const MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
@@ -100,9 +102,21 @@ export default class CliProvider {
       };
     }
 
+    let question: string;
+    try {
+      question = resolvePlaceholders(
+        prompt,
+        optionalSnapshot(),
+        (process.env.EVAL_MODELS ?? '').split(',').filter((id) => id !== ''),
+      );
+    } catch (error) {
+      // A pick that has no model, or a snapshot that cannot be read: both end the call.
+      return { error: (error as Error).message };
+    }
+
     const { stdout, stderr, failure } = await startCli(
       this.cli,
-      ['--json', '--model', model, '-q', prompt],
+      ['--json', '--model', model, '-q', question],
       this.timeoutMs,
     );
 

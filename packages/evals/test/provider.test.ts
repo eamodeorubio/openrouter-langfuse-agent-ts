@@ -4,6 +4,7 @@ import path from 'node:path';
 import fc from 'fast-check';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import CliProvider from '../src/provider/cli.js';
+import { catalogModel, snapshotFile } from './oracleFixture.js';
 
 const stub = path.join(import.meta.dirname, 'fixtures/stub-cli.mjs');
 
@@ -17,6 +18,72 @@ const call = (
 ) => provider(config).callApi(question, { vars });
 
 afterEach(() => vi.unstubAllEnvs());
+
+describe('the placeholders of a question', () => {
+  const catalog = () => {
+    const file = snapshotFile([
+      catalogModel('a/x', 1000, true, 1, 3),
+      catalogModel('b/y', 1000, true, 100, 110),
+      catalogModel('f/one:free', 1000, true, 0, 0),
+    ]);
+    vi.stubEnv('EVAL_CATALOG', file);
+  };
+
+  it('are replaced from the snapshot of the run before the CLI starts, and the models under test are skipped', async () => {
+    catalog();
+    vi.stubEnv('EVAL_MODELS', 'f/one:free,m/one');
+    const result = await call('echo {flagship_model} {free_model}', {
+      model: 'm/one',
+    });
+    expect(result.error).toBe(
+      'The snapshot holds no free model besides the models under test (f/one:free, m/one).',
+    );
+    vi.stubEnv('EVAL_MODELS', 'm/one');
+    const resolved = await call('echo {flagship_model} {free_model}');
+    const argv = JSON.parse((resolved.output as { answer: string }).answer);
+    expect(argv[4]).toBe('echo b/y f/one:free');
+  });
+
+  it('name the models under test as they were given, without the empty ones, or none when none were', async () => {
+    catalog();
+    vi.stubEnv('EVAL_MODELS', 'f/one:free,,m/one,');
+    expect((await call('echo {free_model}')).error).toBe(
+      'The snapshot holds no free model besides the models under test (f/one:free, m/one).',
+    );
+    vi.stubEnv('EVAL_MODELS', '');
+    expect((await call('echo {free_model}')).error).toBeUndefined();
+    vi.stubEnv(
+      'EVAL_CATALOG',
+      snapshotFile([catalogModel('a/x', 1, true, 1, 1)]),
+    );
+    vi.stubEnv('EVAL_MODELS', undefined as never);
+    expect((await call('echo {free_model}')).error).toBe(
+      'The snapshot holds no free model besides the models under test ().',
+    );
+  });
+
+  it('end the call with an error when the snapshot cannot be read', async () => {
+    vi.stubEnv('EVAL_CATALOG', '/nonexistent/catalog.json');
+    const result = await call('echo {free_model}');
+    expect(result.output).toBeUndefined();
+    expect(result.error).toMatch(/catalog\.json|snapshot/i);
+  });
+
+  it('leave a prompt with another {name} alone', async () => {
+    const result = await call('echo {other}');
+    const argv = JSON.parse((result.output as { answer: string }).answer);
+    expect(argv[4]).toBe('echo {other}');
+  });
+
+  it('end the call with an error that names the snapshot when the run has none', async () => {
+    vi.stubEnv('EVAL_CATALOG', '');
+    const result = await call('echo {free_model}');
+    expect(result.output).toBeUndefined();
+    expect(result.error).toBe(
+      'The prompt holds the placeholder {free_model}, and the run has no snapshot: EVAL_CATALOG names none.',
+    );
+  });
+});
 
 describe('a successful run', () => {
   it('returns the success object the CLI wrote as the output', async () => {

@@ -1,5 +1,5 @@
 import { CaseError } from './caseSpec.js';
-import { statesPrice } from './figures.js';
+import { statesNonZeroPrice, statesPrice } from './figures.js';
 import { type ModelRecord, modelRecord } from './outputs.js';
 import { questionModels } from './questionModels.js';
 import { type Check, fail, judgeable, pass } from './verdict.js';
@@ -88,5 +88,57 @@ export const saysNoFixedPrice: Check = (output) => {
     ? pass('The answer says that the model has no fixed price.')
     : fail(
         `The tools returned no price for ${slug}, and the answer does not say that it has none.`,
+      );
+};
+
+/** Phrases that say that a model is free, matched in any case. */
+const FREE = [
+  /(?<!\bfeel )\bfree\b/,
+  /\bno cost\b/,
+  /\bzero (?:cost|price|usd|dollars)\b/,
+  /\b(?:price|cost)s? (?:is|are) zero\b/,
+  /\bcosts? zero\b/,
+  /\b0(?:\.0+)?\s*usd\b/,
+  /\$\s?0(?:\.0+)?(?![\d.])/,
+];
+
+/** A negation takes the word back, and "feel free" is an invitation: neither says that a model is free. */
+const NOT_FREE = /\b(?:not|never|isn't|aren't|n't)\s+(?:\w+\s+)?free\b/;
+
+const escapeRegExp = (text: string): string =>
+  text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+const isFree = (record: ModelRecord): boolean =>
+  record.promptPrice === 0 && record.completionPrice === 0;
+
+/** wrong-value: a model the tools returned with prices of 0, and the answer does not say it is free, or states a price above 0. */
+export const saysFree: Check = (output) => {
+  const run = judgeable(output);
+  if (!run) return pass('Left to an earlier class.');
+  const { read, unread } = readModels(run.question, run.toolCalls);
+  if (unread.length > 0) return pass('Left to wrong-search.');
+  const free = read.filter(([, record]) => isFree(record));
+  if (free.length === 0) return pass('The case does not apply.');
+  const [slug] = free[0] as [string, ModelRecord];
+  if (statesNonZeroPrice(run.answer)) {
+    return fail(
+      `The tools returned prices of 0 for ${slug}, and the answer states a price that is not zero.`,
+    );
+  }
+  // A slug is not a word: `a/b:free` does not say that a model is free.
+  const slugs = new RegExp(
+    questionModels(run.question).map(escapeRegExp).join('|'),
+    'gi',
+  );
+  const words = run.answer.replace(slugs, ' ').toLowerCase();
+  if (NOT_FREE.test(words)) {
+    return fail(
+      `The tools returned prices of 0 for ${slug}, and the answer does not say that it is free.`,
+    );
+  }
+  return FREE.some((phrase) => phrase.test(words))
+    ? pass('The answer says that the model is free.')
+    : fail(
+        `The tools returned prices of 0 for ${slug}, and the answer does not say that it is free.`,
       );
 };

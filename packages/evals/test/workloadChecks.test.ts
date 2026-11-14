@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import {
   modelsRead,
   noPriceStated,
+  saysFree,
   saysNoFixedPrice,
   withinBudget,
   workloadCost,
@@ -11,6 +12,7 @@ import { CaseError } from '../src/checks/caseSpec.js';
 import {
   matchesCount,
   matchesRatio,
+  statesNonZeroPrice,
   statesPrice,
 } from '../src/checks/figures.js';
 import { catalogModel, snapshotFile } from './oracleFixture.js';
@@ -488,7 +490,193 @@ describe('saysNoFixedPrice, for wrong-value', () => {
   });
 });
 
+describe('saysFree, for wrong-value', () => {
+  const ask = 'What does f/one:free cost per million tokens?';
+  const calls = [read('f/one:free', 0, 0)];
+  const withFree = () =>
+    vi.stubEnv(
+      'EVAL_CATALOG',
+      snapshotFile([
+        catalogModel('f/one:free', 1000, true, 0, 0),
+        catalogModel('a/b', 1000, true, 1, 4),
+      ]),
+    );
+
+  it.each([
+    'It is free.',
+    'It costs nothing: no cost at all.',
+    'The price is zero.',
+    'It costs 0 USD per million tokens.',
+    'It costs $0 and $0.00 per million tokens.',
+    'f/one:free is free to use, at $0 per million tokens.',
+    'It costs $0/1M tokens.',
+    'The price is zero.',
+    'It costs zero.',
+    'The cost is zero for both.',
+    'Zero cost, input and output. Feel free to use f/one:free.',
+  ])('passes an answer that says it is free: %s', (answer) => {
+    withFree();
+    const result = saysFree(success(answer, calls, ask), meta({}));
+    expect(result.pass, answer).toBe(true);
+    expect(result.reason).toBe('The answer says that the model is free.');
+  });
+
+  it.each([
+    'It costs $0.20 per million tokens.',
+    'It is free, but the output costs 0.3 USD.',
+    'Free input, then 2 per million tokens of output.',
+  ])('fails an answer that holds a price that is not zero: %s', (answer) => {
+    withFree();
+    const result = saysFree(success(answer, calls, ask), meta({}));
+    expect(result.pass, answer).toBe(false);
+    expect(result.reason).toBe(
+      'The tools returned prices of 0 for f/one:free, and the answer states a price that is not zero.',
+    );
+  });
+
+  it('does not read a slug as the word, whichever characters, case or company it has', () => {
+    vi.stubEnv(
+      'EVAL_CATALOG',
+      snapshotFile([
+        catalogModel('f/x.free', 1000, true, 0, 0),
+        catalogModel('f/two:free', 1000, true, 0, 0),
+        catalogModel('f/one:free', 1000, true, 0, 0),
+      ]),
+    );
+    const bad = (answer: string, question: string, slugs: string[]) =>
+      saysFree(
+        success(
+          answer,
+          slugs.map((id) => read(id, 0, 0)),
+          question,
+        ),
+        meta({}),
+      ).pass;
+    expect(bad('f/x.free is a good model.', 'f/x.free?', ['f/x.free'])).toBe(
+      false,
+    );
+    // A dot in a slug is a dot, and no stand-in for a space: the word after it stays.
+    expect(bad('Use f/x free of charge.', 'f/x.free?', ['f/x.free'])).toBe(
+      true,
+    );
+    expect(
+      bad('f/one:free and f/two:free are good.', 'f/one:free and f/two:free?', [
+        'f/one:free',
+        'f/two:free',
+      ]),
+    ).toBe(false);
+    expect(bad('F/ONE:FREE is good.', 'f/one:free?', ['f/one:free'])).toBe(
+      false,
+    );
+    expect(bad('frf/one:freeee', 'f/one:free?', ['f/one:free'])).toBe(false);
+  });
+
+  it('gives the reason when a negation takes the word back', () => {
+    withFree();
+    expect(
+      saysFree(success('It is not free.', calls, ask), meta({})).reason,
+    ).toBe(
+      'The tools returned prices of 0 for f/one:free, and the answer does not say that it is free.',
+    );
+  });
+
+  it.each([
+    'It is not free.',
+    "It isn't really free.",
+    'It is never free.',
+    'Feel free to ask me more, f/one:free is a good model.',
+    'It supports zero-shot prompts.',
+  ])(
+    'fails an answer whose free is a negation, an invitation or another word: %s',
+    (answer) => {
+      withFree();
+      expect(saysFree(success(answer, calls, ask), meta({})).pass, answer).toBe(
+        false,
+      );
+    },
+  );
+
+  it('fails an answer that does not say the model is free, and does not take the slug for the word', () => {
+    withFree();
+    const result = saysFree(
+      success('f/one:free is a good model.', calls, ask),
+      meta({}),
+    );
+    expect(result.pass).toBe(false);
+    expect(result.reason).toBe(
+      'The tools returned prices of 0 for f/one:free, and the answer does not say that it is free.',
+    );
+  });
+
+  it('does not apply to a model with a price, and leaves unread models and runs with no lookup to earlier classes', () => {
+    withFree();
+    expect(
+      saysFree(
+        success('x', [read('a/b', 1, 4)], 'What does a/b cost?'),
+        meta({}),
+      ).reason,
+    ).toBe('The case does not apply.');
+    expect(
+      saysFree(success('x', [read('a/b', 1, 4)], ask), meta({})).reason,
+    ).toBe('Left to wrong-search.');
+    expect(saysFree(success('x', [], ask), meta({})).reason).toBe(
+      'Left to an earlier class.',
+    );
+    expect(() =>
+      saysFree(success('x', calls, 'No model here.'), meta({})),
+    ).toThrow(CaseError);
+  });
+
+  it('counts a model with one price of 0 and the other above 0 as not free', () => {
+    withFree();
+    for (const [input, output] of [
+      [0, 4],
+      [3, 0],
+    ] as const) {
+      expect(
+        saysFree(
+          success('x', [read('f/one:free', input, output)], ask),
+          meta({}),
+        ).reason,
+      ).toBe('The case does not apply.');
+    }
+  });
+
+  it('counts a model with one price of 0 and one missing as not free', () => {
+    withFree();
+    expect(
+      saysFree(success('x', [read('f/one:free', 0, null)], ask), meta({}))
+        .reason,
+    ).toBe('The case does not apply.');
+  });
+});
+
 describe('the figures of a ratio and of a price', () => {
+  it('statesNonZeroPrice reads an amount above zero, marked or per million', () => {
+    for (const text of [
+      '$0.20',
+      '0.3 USD',
+      '2 per million tokens',
+      '$5',
+      '1 USD per 1M',
+      '1,000 per million tokens',
+      '3 PER MILLION TOKENS',
+    ]) {
+      expect(statesNonZeroPrice(text), text).toBe(true);
+    }
+    for (const text of [
+      'free',
+      '$0',
+      '$0.00',
+      '0 USD',
+      '0.0 per million tokens',
+      'version 5',
+      '3 million tokens',
+    ]) {
+      expect(statesNonZeroPrice(text), text).toBe(false);
+    }
+  });
+
   it('matchesRatio reads a number, with or without a times sign, within one percent', () => {
     expect(matchesRatio('about 2.7x as much', 2.6957)).toBe(true);
     expect(matchesRatio('about 2.7 times as much', 2.6957)).toBe(true);
@@ -508,6 +696,7 @@ describe('the figures of a ratio and of a price', () => {
       '5 USD',
       '0.5 dollars',
       '3 per million tokens',
+      '3 PER MILLION TOKENS',
       '3 USD per 1M',
       '2.5 per 1 million',
     ]) {
@@ -544,6 +733,7 @@ describe('the workload checks, for any output and any case', () => {
           workloadCost,
           noPriceStated,
           saysNoFixedPrice,
+          saysFree,
         ]) {
           try {
             const result = check(output, context as never);

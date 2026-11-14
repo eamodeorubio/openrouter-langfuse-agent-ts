@@ -7,6 +7,7 @@ import { type Snapshot, SnapshotError } from '../src/oracle/snapshot.js';
 import {
   DEFAULT_REPEAT,
   type Deps,
+  modelsUnderTest,
   parseRunArgs,
   promptfooArgs,
   run,
@@ -254,6 +255,9 @@ describe('a run', () => {
       }),
     );
     expect(call?.env).toMatchObject({
+      // The models under test, so that the provider picks no free model among them.
+      EVAL_MODELS:
+        'nvidia/nemotron-3-ultra-550b-a55b:free,anthropic/claude-haiku-5.5',
       PROMPTFOO_DISABLE_TELEMETRY: '1',
       PROMPTFOO_DISABLE_UPDATE: '1',
       PROMPTFOO_FAILED_TEST_EXIT_CODE: '0',
@@ -432,5 +436,39 @@ describe('a run', () => {
     await expect(
       run(['--out', out, '--repeat', '5'], io, deps),
     ).rejects.toThrow('a bug');
+  });
+});
+
+describe('the models under test', () => {
+  const config = (text: string) => {
+    const file = path.join(
+      fs.mkdtempSync(path.join(os.tmpdir(), 'evals-matrix-')),
+      'c.yaml',
+    );
+    fs.writeFileSync(file, text);
+    return file;
+  };
+
+  it('are the models of the matrix of the config', () => {
+    expect(
+      modelsUnderTest(config('defaultTest:\n  vars:\n    model: [a/b, c/d]\n')),
+    ).toEqual(['a/b', 'c/d']);
+    expect(
+      modelsUnderTest(config('defaultTest:\n  vars:\n    model: a/b\n')),
+    ).toEqual(['a/b']);
+  });
+
+  it.each([
+    ['no matrix', 'prompts: [x]\n'],
+    ['a matrix of numbers', 'defaultTest:\n  vars:\n    model: [1, 2]\n'],
+    ['a matrix of nothing', 'defaultTest:\n  vars:\n    model: []\n'],
+    ['text that is not a config', ':\n - [\n'],
+    ['a list', '- a\n- b\n'],
+  ])('are none for %s, so that promptfoo is the one to complain', (_, text) => {
+    expect(modelsUnderTest(config(text))).toEqual([]);
+  });
+
+  it('are none for a file that is not there', () => {
+    expect(modelsUnderTest('/nonexistent/evals-config.yaml')).toEqual([]);
   });
 });

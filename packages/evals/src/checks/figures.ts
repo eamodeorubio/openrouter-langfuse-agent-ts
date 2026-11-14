@@ -116,10 +116,19 @@ export const matchesRatio = (
       Math.abs(figure.value - expected) <= tolerance * Math.abs(expected),
   );
 
-const PER_MILLION =
-  /\d\s*(?:usd\s*)?(?:per|\/)\s*(?:1\s*m\b|1\s*million|million|m\b)/i;
+const PER_MILLION_AMOUNT =
+  /(\d[\d,]*(?:\.\d+)?)\s*(?:usd\s*)?(?:per|\/)\s*(?:1\s*m\b|1\s*million|million|m\b)/gi;
 
 /** Whether the text states a price: an amount marked `$` or `USD`, or a number per million tokens. */
 export const statesPrice = (text: string): boolean =>
   figuresIn(text).some((figure) => figure.dollar || figure.unit === 'money') ||
-  PER_MILLION.test(text);
+  new RegExp(PER_MILLION_AMOUNT.source, 'i').test(text);
+
+/** Whether the text states a price above zero: an amount marked `$` or `USD`, or a number per million tokens. */
+export const statesNonZeroPrice = (text: string): boolean =>
+  figuresIn(text).some(
+    (figure) => (figure.dollar || figure.unit === 'money') && figure.value > 0,
+  ) ||
+  [...text.matchAll(PER_MILLION_AMOUNT)].some(
+    (match) => Number((match[1] as string).replace(/,/g, '')) > 0,
+  );

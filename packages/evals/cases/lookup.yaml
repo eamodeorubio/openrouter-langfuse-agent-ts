@@ -32,3 +32,18 @@
     - type: javascript
       metric: wrong-value
       value: file://src/checks/assertions.ts:saysNoFixedPrice
+
+- description: Says that a free model is free, instead of stating a price for it
+  vars:
+    question: What does {free_model} cost per million tokens?
+  metadata:
+    id: lookup/free-variant
+    set: full
+    needsLookup: true
+  assert:
+    - type: javascript
+      metric: wrong-search
+      value: file://src/checks/assertions.ts:modelsRead
+    - type: javascript
+      metric: wrong-value
+      value: file://src/checks/assertions.ts:saysFree

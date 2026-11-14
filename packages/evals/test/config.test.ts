@@ -372,6 +372,59 @@ describe('the lookup discipline cases', () => {
   });
 });
 
+describe('the cases that name a model of the snapshot by a placeholder', () => {
+  const byId = (id: string) => cases.find((test) => test.metadata.id === id);
+  const metrics = (id: string) =>
+    (byId(id)?.assert ?? []).map((a) => a.metric).sort();
+  const WORKLOAD = {
+    chatsPerDay: 1,
+    inputTokens: 5_000_000,
+    outputTokens: 5_000_000,
+    days: 30,
+  };
+
+  it('are tagged full and need a lookup', () => {
+    for (const id of [
+      'recommendation/flagship-affordability',
+      'lookup/free-variant',
+    ]) {
+      expect(readCase({ test: byId(id) }).set, id).toBe('full');
+      expect(readCase({ test: byId(id) }).needsLookup, id).toBe(true);
+    }
+  });
+
+  it('recommendation/flagship-affordability asks whether the flagship fits 5 USD a month, and declares the workload and the budget', () => {
+    const spec = readCase({
+      test: byId('recommendation/flagship-affordability'),
+    });
+    expect(byId('recommendation/flagship-affordability')?.vars.question).toBe(
+      'Can I afford {flagship_model} on a budget of 5 USD a month? I send 10 million tokens a day, half of them input and half output, for 30 days a month. If not, which model fits?',
+    );
+    expect(spec.workload).toEqual(WORKLOAD);
+    expect(spec.oracle).toEqual({
+      query: 'within-budget',
+      params: { workload: WORKLOAD, budget: 5 },
+    });
+    expect(spec.needsArithmetic).toBe(true);
+    expect(metrics('recommendation/flagship-affordability')).toEqual([
+      'arithmetic-in-head',
+      'bad-recommendation',
+      'wrong-search',
+      'wrong-value',
+    ]);
+  });
+
+  it('lookup/free-variant asks the price of the free model, and expects the answer to say it is free', () => {
+    expect(byId('lookup/free-variant')?.vars.question).toBe(
+      'What does {free_model} cost per million tokens?',
+    );
+    expect(metrics('lookup/free-variant')).toEqual([
+      'wrong-search',
+      'wrong-value',
+    ]);
+  });
+});
+
 describe('the core set', () => {
   it('holds the cases of the files, in the order of the files and then of each file', () => {
     expect(cases.map((test) => test.metadata.id)).toEqual([
@@ -383,7 +436,9 @@ describe('the core set', () => {
       'discipline/unknown-model',
       'lookup/known-model',
       'lookup/router-model',
+      'lookup/free-variant',
       'recommendation/budget-chatbot',
+      'recommendation/flagship-affordability',
       'search/cheapest-blended',
       'search/cheapest-input',
       'search/image-input',
@@ -685,5 +740,10 @@ describe('the full set, run for real against a stub CLI', () => {
       'no-recovery=1 wrong-search=1',
     );
     expect(failed('discipline/unknown-model')).toBeUndefined();
+    // The stub reads only a/b, so it never reads the models its placeholders name.
+    expect(failed('lookup/free-variant')).toBe('wrong-search=1');
+    expect(failed('recommendation/flagship-affordability')).toBe(
+      'arithmetic-in-head=1 bad-recommendation=1 wrong-search=1',
+    );
   });
 });
