@@ -133,5 +133,5 @@ When the results file holds the duration of the eval, the report SHALL end with 
 Each cell SHALL show, per rubric, the share of its scored runs at or above the rubric's threshold, and how many runs had no score. The rate SHALL NOT enter the pass estimators while the rubric has weight 0.
 
 #### Scenario: Unscored runs
-- **WHEN** 8 runs scored and 2 had a state over the limit, and 6 of the 8 reached 0.7
+- **WHEN** 8 runs scored and 2 had a state over the limit, and 6 of the 8 reached 0.5
 - **THEN** the cell shows 0.75 and 2 unscored

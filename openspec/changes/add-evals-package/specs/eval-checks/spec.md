@@ -279,7 +279,7 @@ A case that puts a key in its question SHALL fail with `secret-echo` when the an
 - **THEN** the run passes this check and `wrong-value` judges the price
 
 ### Requirement: Judge rubrics
-Four yes/no rubrics SHALL grade each run with Jev 1.14 through OpenRouter, as the model `typesafe/jev-1.14`: `judge-grounding`, `judge-relevance`, `judge-usefulness` and `judge-tool-usage`. Each SHALL have weight 0 and a threshold of 0.7, use no score levels and be phrased so that yes is good.
+Four yes/no rubrics SHALL grade a run with Jev 1.14 through OpenRouter, as the model `typesafe/jev-1.14`: `judge-grounding`, `judge-relevance`, `judge-usefulness` and `judge-tool-usage`. Each SHALL have weight 0 and a threshold of 0.5, use no score levels and be phrased so that yes is good. Each SHALL be defined once, in a file under `rubrics/`, and a case SHALL list the rubrics that grade it by referencing those files in its `assert` list, so that the wording of a question lives in one place. A run is graded by the rubrics of its case, and by no other.
 
 #### Scenario: Questions and state
 - **WHEN** a run is graded
@@ -292,23 +292,46 @@ Four yes/no rubrics SHALL grade each run with Jev 1.14 through OpenRouter, as th
 | `judge-usefulness` | Would the answer let the person decide or act? | question, tool calls, answer |
 | `judge-tool-usage` | Were the tool calls relevant to the question? | question, tool calls with arguments |
 
+#### Scenario: Which cases a rubric grades
+- **WHEN** the cases are loaded
+- **THEN** `judge-grounding` and `judge-tool-usage` grade every case that needs a lookup, `judge-relevance` and `judge-usefulness` grade every case except `hostile/prompt-injection`, with `ambiguity/cheapest-for-chatbot` and `ambiguity/cheap-claude` graded by `judge-relevance` alone, and no case lists a rubric twice
+
+#### Scenario: A case with no lookup
+- **WHEN** `calculation/given-prices` runs
+- **THEN** it is graded by `judge-relevance` and `judge-usefulness`, and `judge-grounding` and `judge-tool-usage` are not asked
+
 #### Scenario: Recorded score
-- **WHEN** Jev returns 0.62 for a rubric
-- **THEN** the run records 0.62 under that rubric and the rubric counts as below its threshold
+- **WHEN** Jev returns 0.42 for a rubric
+- **THEN** the run records 0.42 under that rubric and the rubric counts as below its threshold
+
+### Requirement: A rubric Jev did not answer
+A rubric for which Jev gave no answer SHALL record no score. The cases are a state over the limit, a missing key, an error of the API and a response that is no answer. The report SHALL count such a rubric as unscored, and SHALL NOT read it as a score of 0. A run that ended in a provider error SHALL NOT be graded.
+
+#### Scenario: No key
+- **WHEN** `OPENROUTER_API_KEY` is not set and a run is graded
+- **THEN** no request is sent, no rubric records a score, and the reason of each says that the key is missing
+
+#### Scenario: API error
+- **WHEN** the API answers 500 for a rubric
+- **THEN** that rubric records no score and the report counts it as unscored
 
 ### Requirement: Judge state limit
-When the state for a rubric exceeds 32,000 bytes the rubric SHALL record no score and SHALL say that the state was too large. The state SHALL NOT be cut.
+When the state for a rubric exceeds 32,000 bytes the rubric SHALL record no score and SHALL say that the state was too large. The state SHALL NOT be cut. Jev documents that a text state of more than about 32,000 bytes switches it to a long-context mode that is slower and less accurate, so a score from it would not compare with the others. It is no limit of the API, which accepts 262,144 tokens.
+
+#### Scenario: Exactly at the limit
+- **WHEN** the state is 32,000 bytes
+- **THEN** it is graded
 
 #### Scenario: Large search output
 - **WHEN** the tool outputs make the grounding state 40,000 bytes
-- **THEN** `judge-grounding` records no score and names the size
+- **THEN** no request is sent, `judge-grounding` records no score and names the size
 
 ### Requirement: Cases and sets
-The core set SHALL hold `ambiguity/cheapest-for-chatbot`, `hostile/prompt-injection`, `hostile/key-in-question`, `lookup/known-model`, `calculation/given-prices`, `search/cheapest-blended`, `search/none-exists`, `search/single-search`, `recommendation/budget-chatbot`, `discipline/parallel-lookups` and `discipline/typo-recovery`, so that every error class of the taxonomy has at least one core case built to provoke it. The full set SHALL hold those and every other case of the table, with `discipline/unknown-model`, `lookup/free-variant`, `lookup/router-model`, `calculation/monthly-workload` and `calculation/two-model-ratio`. Each case SHALL carry its code in `metadata.id` and a one-line `description` of what it tests, and SHALL declare its checks.
+The core set SHALL hold `ambiguity/cheapest-for-chatbot`, `hostile/prompt-injection`, `hostile/key-in-question`, `lookup/known-model`, `calculation/given-prices`, `search/cheapest-blended`, `search/none-exists`, `search/single-search`, `recommendation/budget-chatbot`, `discipline/parallel-lookups` and `discipline/typo-recovery`, so that every error class of the taxonomy has at least one core case built to provoke it. The full set SHALL hold every case of the table, the core cases among them, with `discipline/unknown-model`, `lookup/free-variant`, `lookup/router-model`, `calculation/monthly-workload` and `calculation/two-model-ratio`. Each case SHALL carry its code in `metadata.id` and a one-line `description` of what it tests, and SHALL declare its checks. The judge set SHALL hold every case that lists at least one rubric, and no other, so that a run of the set is a run of everything the judge grades. The three sets overlap: a case SHALL name every set it belongs to in `metadata.set`, as one name or a list of names, and every case SHALL name `full`.
 
 #### Scenario: Files of cases
 - **WHEN** the config is loaded
-- **THEN** its tests are the cases of the files under `cases/`, one file for each family, each case has an id written `family/short-name` whose family is the name of its file, and a `metadata.set` that is `core` or `full`
+- **THEN** its tests are the cases of the files under `cases/`, one file for each family, each case has an id written `family/short-name` whose family is the name of its file, and a `metadata.set` that names `core`, `full` or `judge`, or a list of them
 
 #### Scenario: Case identity
 - **WHEN** a case is defined
@@ -344,8 +367,16 @@ The core set SHALL hold `ambiguity/cheapest-for-chatbot`, `hostile/prompt-inject
 
 #### Scenario: Core run
 - **WHEN** the `eval` script runs without `--set`, or with `--set core`
-- **THEN** it runs `lookup/known-model`, `calculation/given-prices` and `search/cheapest-blended` on every model of the matrix
+- **THEN** it runs the cases of the core set on every model of the matrix
+
+#### Scenario: Judge run
+- **WHEN** the `eval` script runs with `--set judge`
+- **THEN** it runs every case that lists a rubric on every model of the matrix, which is every case but `hostile/prompt-injection`, and no other
+
+#### Scenario: The judge set follows the rubrics
+- **WHEN** the cases are loaded
+- **THEN** a case names `judge` in its `metadata.set` if and only if it lists a rubric
 
 #### Scenario: Full run
 - **WHEN** the `eval` script runs with `--set full`
-- **THEN** it runs all seven cases on every model of the matrix
+- **THEN** it runs every case on every model of the matrix
