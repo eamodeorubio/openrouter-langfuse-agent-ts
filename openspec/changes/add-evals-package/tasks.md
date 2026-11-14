@@ -87,10 +87,25 @@ Commit type `test:`. PR title stays `test: add the evals package`. Bump: none. B
 - [x] 5.10 Run `reviewer-code-high`, `reviewer-code-low` and `reviewer-docs`. Fix every must-fix finding.
 - [ ] 5.11 Write the full report. No live run until the user asks for one. Wait for user approval, which also approves the commit. Commit.
 
-## 6. Archive
+## 6. Cases chosen from the snapshot (product slice 6)
 
-- [ ] 6.1 After the last slice, verify the change with `/opsx:verify` and fix what it finds.
-- [ ] 6.2 Once the user approves, archive it as `chore: archive add-evals-package`, as the last commit before merge.
+Commit type `test:`. PR title stays `test: add the evals package`. Bump: none. Branch `evals`. The plan for slice 6 was one slice for ambiguity, hostile input and the snapshot-chosen values. That is three mechanisms and three classes, more than a person reviews well, so it splits: this slice (6) builds the placeholders and the two cases that need them, and slice 7 (ambiguity and hostile input) follows. This slice adds the placeholders `{flagship_model}` and `{free_model}` in a question, resolved by the provider from the snapshot of the run, and two cases: `recommendation/flagship-affordability` and `lookup/free-variant`. Single braces, because promptfoo renders `{{...}}` in a prompt and leaves `{...}` alone. The picks follow the oracle spec: the flagship is the paid model with the highest sum of input and output prices (the lowest slug on a tie), and the free model is the first free slug in ascending order that is not a model under test. The runner tells the provider which models are under test (`EVAL_MODELS`, read from the matrix of the config), so every repeat of every case gets the same pick in one run. The CLI reports the resolved question, so the checks read the model from it, as in slice 4. No new class: `recommendation/flagship-affordability` reuses `wrong-value` (the monthly cost) and `bad-recommendation` (an alternative within the budget), and `lookup/free-variant` adds one check for `wrong-value`, `saysFree`. Both cases are `full`.
+
+- [x] 6.1 Add the picks `flagshipModel` and `freeModel` to the oracle, with the tests first in `test/picks.test.ts`: the scenarios of the oracle spec (the tie, the models under test, none available), models with no price left out, and properties (the pick is a member of the snapshot, the pick does not depend on the order of the models). Covers A flagship model for a case, A free model for a case. Verify the tests pass.
+- [x] 6.2 Add the placeholder resolution to the provider, with the tests first in `test/placeholders.test.ts` and `test/provider.test.ts`: both names are replaced everywhere in the prompt, an unknown `{name}` is left alone, a placeholder with no snapshot is a provider error that says so, and so is a snapshot with no free model. The runner sets `EVAL_MODELS` from the matrix, tested in `test/runner.test.ts`. Covers Placeholders in a question. Verify the tests pass.
+- [x] 6.3 Add the check `saysFree` (`wrong-value`), with the tests first: the tool says both prices are 0 and the answer says it is free, a non-zero price in the answer fails, a model that has a price is not judged. Covers A free model. Verify the tests pass.
+- [x] 6.4 Add the two cases, with the config tests first: ids, descriptions, declarations, assertions, sets, and the run against the stub CLI and a catalog fixture that holds a free model besides the matrix. Covers Cases and sets. Verify the config tests pass.
+- [x] 6.5 Extend the docs page and the README with the two cases and the placeholders. The docs test must pass. Use the `beautiful-prose` skill with the settings of `AGENTS.md`. Verify `pnpm docs:build` passes.
+- [x] 6.6 Run `pnpm mutation:evals`. The score stays at or above the `break` threshold. Read every survivor, kill it or justify it.
+- [x] 6.7 Refactor only where `QUALITY_RUBRIC.md` calls for it, at most 3 passes. Name the criterion for each.
+- [x] 6.8 Run `pnpm check`, `pnpm typecheck` and `pnpm test`. Verify all pass.
+- [x] 6.9 Run `reviewer-code-high`, `reviewer-code-low` and `reviewer-docs`. Fix every must-fix finding.
+- [ ] 6.10 Write the full report. No live run until the user asks for one. Wait for user approval, which also approves the commit. Commit.
+
+## 7. Archive
+
+- [ ] 7.1 After the last slice, verify the change with `/opsx:verify` and fix what it finds.
+- [ ] 7.2 Once the user approves, archive it as `chore: archive add-evals-package`, as the last commit before merge.
 
 ## Workflow follow-up
 
@@ -98,7 +113,7 @@ Commit type `test:`. PR title stays `test: add the evals package`. Bump: none. B
   - Slice 3, search and count: cases `search/cheapest-input` to `search/single-search`. **New code:** the modalities in the snapshot, the queries `cheapest-input` and `matching`, string requirements (`sort`) in the search check, and the checks for `phantom-match`, `wasteful-search`, counts and the top of a search.
   - Slice 4, recommendation and affordability: cases `recommendation/budget-chatbot` and `recommendation/flagship-affordability`, with `lookup/free-variant`, `lookup/router-model`, `calculation/monthly-workload` and `calculation/two-model-ratio` of the first plan. **New code:** the query `within-budget`, the variables `flagshipModel` and `freeModel`, the workload cost, and the checks for `bad-recommendation`, the cost of a workload and the price of a free or routing model.
   - Slice 5, lookup discipline: cases `discipline/parallel-lookups` to `discipline/unknown-model`. **New code:** checks over the order and the rounds of the calls, for `serial-lookups` and `no-recovery`, and the price check of a model that does not exist.
-  - Slice 6, ambiguity and hostile input: cases `ambiguity/cheapest-for-chatbot`, `ambiguity/cheap-claude`, `hostile/prompt-injection` and `hostile/key-in-question`. **New code:** the phrase checks for `unstated-assumption`, the instructions of the built CLI as a source for `prompt-leak`, the placeholders of a question, resolved by the provider from the snapshot (`flagship_model`, `free_model`, `fake_key`), and the check for `secret-echo`.
-  - Slice 7, a published version: `--cli-version`, its validation, the start through `pnpm dlx`, the warm-up and the target in the report. **New code:** all of it. Docs: how to run against an npm version.
-  - Slice 8, the judge rubrics at weight 0.
+  - Slice 7, ambiguity and hostile input (slice 6 of the first plan, split): cases `ambiguity/cheapest-for-chatbot`, `ambiguity/cheap-claude`, `hostile/prompt-injection` and `hostile/key-in-question`. **New code:** the phrase checks for `unstated-assumption`, the instructions of the built CLI as a source for `prompt-leak`, the placeholder `fake_key`, resolved by the provider as slice 6 resolves the others, and the check for `secret-echo`.
+  - Slice 8, a published version: `--cli-version`, its validation, the start through `pnpm dlx`, the warm-up and the target in the report. **New code:** all of it. Docs: how to run against an npm version.
+  - Slice 9, the judge rubrics at weight 0.
 - Push the branch and open the pull request only with the user's permission, asked every time. Never merge.

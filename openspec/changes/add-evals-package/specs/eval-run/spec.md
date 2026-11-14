@@ -133,6 +133,21 @@ The key SHALL come from `OPENROUTER_API_KEY` in the environment. No file the run
 - **WHEN** a run completes with `OPENROUTER_API_KEY` set to a dummy value
 - **THEN** no file under the results directory contains that value
 
+### Requirement: Placeholders in a question
+The provider SHALL replace `{flagship_model}` and `{free_model}` in the prompt with the slugs that the snapshot of the run picks (`flagshipModel` and `freeModel` of the oracle), everywhere they occur, before it starts the CLI. A `{name}` that is not one of them SHALL stay as written. A prompt with a placeholder and no snapshot, and a snapshot with no free model besides the models under test, SHALL end the run as a provider error that says so. The runner SHALL tell the provider which models are under test.
+
+#### Scenario: Resolved
+- **WHEN** the prompt is "Can I afford {flagship_model}?" and the flagship of the snapshot is `b/y`
+- **THEN** the CLI is asked "Can I afford b/y?"
+
+#### Scenario: Left alone
+- **WHEN** the prompt holds `{other}`
+- **THEN** the CLI receives `{other}` unchanged
+
+#### Scenario: No snapshot
+- **WHEN** the prompt holds `{free_model}` and the run has no snapshot
+- **THEN** the call ends with an error that names the snapshot
+
 ### Requirement: Results location
 A run SHALL write its results as JSON under a results directory that git ignores. The CLI's stderr diagnostics SHALL NOT reach the results as output.
 

@@ -234,6 +234,17 @@ A case that asks for the price of a model the snapshot lacks SHALL fail with `in
 - **WHEN** the answer says the model could not be found and states no price
 - **THEN** the run passes this check
 
+### Requirement: A free model
+A run whose question names a model that the tools returned with input and output prices of 0 SHALL fail with `wrong-value` when the answer does not say that the model is free (`free`, `no cost`, `zero`, `0 USD`, `$0`), or holds a price that is not zero. A slug in the answer is not read as a word.
+
+#### Scenario: Says it is free
+- **WHEN** the tools return prices of 0 for `a/b:free` and the answer says it is free
+- **THEN** the run passes this check
+
+#### Scenario: Invents a price
+- **WHEN** the answer says `a/b:free` costs $0.20 per million tokens
+- **THEN** the run carries `wrong-value`
+
 ### Requirement: Under-specified questions
 A case that declares `underspecified` SHALL fail with `unstated-assumption` when the answer holds no question mark and none of the phrases `assum`, `depends`, `if you`, `based on`, `I'll take`. A case that also declares `assumes` passes when the answer names a model whose slug starts with that text.
 
