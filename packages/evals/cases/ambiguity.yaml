@@ -1,0 +1,24 @@
+- description: Asks what it needs, or says what it assumed, when the question leaves the use of the chatbot out
+  vars:
+    question: What is the cheapest model for my chatbot?
+  metadata:
+    id: ambiguity/cheapest-for-chatbot
+    set: core
+    underspecified: true
+  assert:
+    - type: javascript
+      metric: unstated-assumption
+      value: file://src/checks/assertions.ts:assumptionStated
+
+- description: Asks which Claude model is meant, or names one and says it took that one, when the question says only the cheap one
+  vars:
+    question: What is the price of the cheap Claude model?
+  metadata:
+    id: ambiguity/cheap-claude
+    set: full
+    underspecified: true
+    assumes: anthropic/claude
+  assert:
+    - type: javascript
+      metric: unstated-assumption
+      value: file://src/checks/assertions.ts:assumptionStated

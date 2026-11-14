@@ -71,6 +71,7 @@ describe('what a case declares', () => {
     expect([...KNOWN_DECLARATIONS].sort()).toEqual([
       'askedFigures',
       'askedModel',
+      'assumes',
       'expectedCost',
       'id',
       'needsArithmetic',
@@ -80,6 +81,7 @@ describe('what a case declares', () => {
       'recovery',
       'search',
       'set',
+      'underspecified',
       'unknownModel',
       'workload',
     ]);
@@ -90,7 +92,7 @@ describe('a declaration that is not known', () => {
   it('fails loudly, with the name and the known ones, so that a typo cannot turn a check into a pass', () => {
     expect(() => readCase(declare({ needsLookp: true }))).toThrow(CaseError);
     expect(() => readCase(declare({ needsLookp: true }))).toThrow(
-      'Unknown declaration "needsLookp" in the metadata of a case. The known ones are: id, set, needsLookup, needsArithmetic, expectedCost, askedModel, askedFigures, oracle, search, workload, parallelLookups, recovery, unknownModel.',
+      'Unknown declaration "needsLookp" in the metadata of a case. The known ones are: id, set, needsLookup, needsArithmetic, expectedCost, askedModel, askedFigures, oracle, search, workload, parallelLookups, recovery, unknownModel, underspecified, assumes.',
     );
   });
 
@@ -308,6 +310,52 @@ describe('the discipline declarations of a case', () => {
     expect(() =>
       readCase(declare({ recovery: { misspelled: 'A/B', correction: 'a/b' } })),
     ).toThrow(CaseError);
+  });
+});
+
+describe('the ambiguity declarations of a case', () => {
+  it('are read: an under-specified question, and the model it may assume', () => {
+    expect(
+      readCase(declare({ underspecified: true, assumes: 'anthropic/claude' })),
+    ).toEqual({ underspecified: true, assumes: 'anthropic/claude' });
+    expect(readCase(declare({ underspecified: true }))).toEqual({
+      underspecified: true,
+    });
+    expect(readCase(declare({ underspecified: false }))).toEqual({
+      underspecified: false,
+    });
+  });
+
+  it.each([
+    ['underspecified', 'yes', 'true or false'],
+    ['underspecified', 1, 'true or false'],
+  ])('refuse %s as %j', (name, value, rule) => {
+    expect(() => readCase(declare({ [name]: value }))).toThrow(
+      `The declaration ${name} of a case must be ${rule}, got ${JSON.stringify(value)}.`,
+    );
+  });
+
+  it.each([
+    ['', 'text'],
+    [3, 'text'],
+  ])('refuse assumes as %j', (value, rule) => {
+    expect(() =>
+      readCase(declare({ underspecified: true, assumes: value })),
+    ).toThrow(
+      `The declaration assumes of a case must be ${rule}, got ${JSON.stringify(value)}.`,
+    );
+  });
+
+  it('refuse assumes without an under-specified question', () => {
+    for (const metadata of [
+      { assumes: 'a/b' },
+      { underspecified: false, assumes: 'a/b' },
+    ]) {
+      expect(() => readCase(declare(metadata))).toThrow(CaseError);
+      expect(() => readCase(declare(metadata))).toThrow(
+        'The declaration assumes of a case needs underspecified to be true.',
+      );
+    }
   });
 });
 

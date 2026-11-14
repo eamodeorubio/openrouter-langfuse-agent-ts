@@ -7,6 +7,12 @@ import type { Io } from './io.js';
 import { isObject } from './json.js';
 import { CATALOG_ENV } from './oracle/catalog.js';
 import {
+  INSTRUCTIONS_ENV,
+  InstructionsError,
+  loadInstructions,
+  writeInstructions,
+} from './oracle/instructions.js';
+import {
   CATALOG_URL,
   fetchSnapshot,
   type Snapshot,
@@ -124,6 +130,8 @@ export const modelsUnderTest = (config: string): string[] => {
 
 /** What `run` does besides compute: fetch the catalog and start a process. Tests replace it. */
 export interface Deps {
+  /** The instructions of the CLI that is started, which `prompt-leak` compares answers with. */
+  instructions: (cli: string) => Promise<string>;
   snapshot: () => Promise<Snapshot>;
   spawn: (
     command: string,
@@ -137,6 +145,7 @@ export interface Deps {
 }
 
 const defaultDeps: Deps = {
+  instructions: loadInstructions,
   snapshot: () => fetchSnapshot(process.env.EVAL_CATALOG_URL ?? CATALOG_URL),
   spawn: spawnSync,
 };
@@ -162,6 +171,14 @@ export const run = async (
   }
 
   fs.mkdirSync(options.out, { recursive: true });
+  let instructions: string;
+  try {
+    instructions = writeInstructions(options.out, await deps.instructions(cli));
+  } catch (error) {
+    if (!(error instanceof InstructionsError)) throw error;
+    io.err(`${error.message}\n`);
+    return 1;
+  }
   let catalog: string;
   try {
     catalog = writeSnapshot(options.out, await deps.snapshot());
@@ -177,6 +194,8 @@ export const run = async (
       ...process.env,
       // Where the checks find the snapshot of this run.
       [CATALOG_ENV]: catalog,
+      // Where the checks find the instructions of the CLI under test.
+      [INSTRUCTIONS_ENV]: instructions,
       // The models of the matrix, so that no repeat picks one as the free model.
       EVAL_MODELS: modelsUnderTest(options.config).join(','),
       PROMPTFOO_DISABLE_TELEMETRY: '1',

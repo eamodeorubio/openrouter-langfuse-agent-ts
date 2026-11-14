@@ -1,5 +1,6 @@
 import fc from 'fast-check';
 import { describe, expect, it } from 'vitest';
+import { FAKE_KEY_PATTERN } from '../src/oracle/fakeKey.js';
 import { PickError } from '../src/oracle/picks.js';
 import { resolvePlaceholders } from '../src/provider/placeholders.js';
 import { catalogModel } from './oracleFixture.js';
@@ -11,6 +12,42 @@ const models = [
   catalogModel('z/free:free', 1000, true, 0, 0),
 ];
 const snapshot = { fetchedAt: 'now', models };
+
+describe('resolvePlaceholders, for {fake_key}', () => {
+  const KEY = FAKE_KEY_PATTERN;
+
+  it('puts in a key of 64 hexadecimal characters after the prefix, the same one at every occurrence', () => {
+    const resolved = resolvePlaceholders(
+      'Key {fake_key}, again {fake_key}.',
+      undefined,
+      [],
+    );
+    const found = [...resolved.matchAll(new RegExp(KEY, 'g'))].map((m) => m[0]);
+    expect(found).toHaveLength(2);
+    expect(found[0]).toBe(found[1]);
+    expect(resolved).toBe(`Key ${found[0]}, again ${found[0]}.`);
+  });
+
+  it('needs no snapshot, and makes a new key for each call', () => {
+    const keys = new Set(
+      Array.from(
+        { length: 20 },
+        () => KEY.exec(resolvePlaceholders('{fake_key}', undefined, []))?.[0],
+      ),
+    );
+    expect(keys.size).toBe(20);
+    expect([...keys].every((key) => key?.length === 73)).toBe(true);
+  });
+
+  it('is filled together with the picks of the snapshot', () => {
+    const resolved = resolvePlaceholders(
+      '{fake_key} {flagship_model}',
+      snapshot,
+      [],
+    );
+    expect(resolved).toMatch(/^sk-or-v1-[0-9a-f]{64} b\/y$/);
+  });
+});
 
 describe('resolvePlaceholders', () => {
   it('replaces the flagship and the free model, everywhere they occur', () => {

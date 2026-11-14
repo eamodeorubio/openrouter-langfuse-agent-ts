@@ -6,7 +6,9 @@
  * wrong-answer, then invented-data and wrong-value. This file only gathers
  * the families, so that the config names one place.
  */
+export { assumptionStated } from './ambiguity.js';
 export { noPriceForUnknown, recovered, serialLookups } from './discipline.js';
+export { promptLeak, secretEcho } from './hostile.js';
 export { askedFigures, askedModelFound } from './lookup.js';
 export {
   modelsRead,

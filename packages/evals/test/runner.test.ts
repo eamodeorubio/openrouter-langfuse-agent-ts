@@ -3,6 +3,7 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BUILT_CLI } from '../src/cliPath.js';
+import { InstructionsError } from '../src/oracle/instructions.js';
 import { type Snapshot, SnapshotError } from '../src/oracle/snapshot.js';
 import {
   DEFAULT_REPEAT,
@@ -194,6 +195,10 @@ describe('a run', () => {
 
   /** A promptfoo that writes the results file of `runs` runs and exits with `status`. */
   const fakePromptfoo = (status: number | null, runs = 5): Deps => ({
+    instructions: async () => {
+      order.push('instructions');
+      return 'Be brief.';
+    },
     snapshot: async () => {
       order.push('snapshot');
       return SNAPSHOT;
@@ -401,12 +406,60 @@ describe('a run', () => {
   it('takes the snapshot before it starts promptfoo, saves it as catalog.json, and passes its path on', async () => {
     fs.mkdirSync(out, { recursive: true });
     await run(['--out', out, '--repeat', '5'], io, fakePromptfoo(0));
-    expect(order).toEqual(['snapshot', 'spawn']);
+    expect(order).toEqual(['instructions', 'snapshot', 'spawn']);
     const saved = JSON.parse(
       fs.readFileSync(path.join(out, 'catalog.json'), 'utf8'),
     );
     expect(saved).toEqual(SNAPSHOT);
     expect(spawned[0]?.env.EVAL_CATALOG).toBe(path.join(out, 'catalog.json'));
+  });
+
+  it('writes the instructions of the CLI beside the results, and tells the checks where, before any request', async () => {
+    const asked: string[] = [];
+    const deps: Deps = {
+      ...fakePromptfoo(0),
+      instructions: async (cli) => {
+        asked.push(cli);
+        order.push('instructions');
+        return 'Be brief.';
+      },
+    };
+    expect(await run(['--out', out, '--repeat', '5'], io, deps)).toBe(0);
+    expect(asked).toEqual([stub]);
+    expect(order).toEqual(['instructions', 'snapshot', 'spawn']);
+    const file = path.join(out, 'instructions.txt');
+    expect(fs.readFileSync(file, 'utf8')).toBe('Be brief.');
+    expect(spawned[0]?.env.EVAL_INSTRUCTIONS).toBe(file);
+  });
+
+  it('stops before any request when the CLI has no instructions, and names the file', async () => {
+    const deps: Deps = {
+      ...fakePromptfoo(0),
+      instructions: async () => {
+        throw new InstructionsError(
+          'The CLI has no readable instructions: /x/instructions.js could not be imported.',
+        );
+      },
+    };
+    expect(await run(['--out', out, '--repeat', '5'], io, deps)).toBe(1);
+    expect(stderr).toBe(
+      'The CLI has no readable instructions: /x/instructions.js could not be imported.\n',
+    );
+    expect(order).toEqual([]);
+    expect(spawned).toEqual([]);
+    expect(stdout).toBe('');
+  });
+
+  it('does not hide a failure that is not an instructions error', async () => {
+    const deps: Deps = {
+      ...fakePromptfoo(0),
+      instructions: async () => {
+        throw new TypeError('a bug');
+      },
+    };
+    await expect(
+      run(['--out', out, '--repeat', '5'], io, deps),
+    ).rejects.toThrow('a bug');
   });
 
   it('stops before any case when the snapshot cannot be taken, and says why', async () => {

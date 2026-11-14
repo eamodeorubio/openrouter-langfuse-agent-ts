@@ -41,6 +41,10 @@ export interface CaseSpec {
   recovery?: Recovery;
   /** A slug that the snapshot lacks, which the question asks about. */
   unknownModel?: string;
+  /** The question leaves out something the answer needs, so a good answer asks for it or says what it assumed. */
+  underspecified?: boolean;
+  /** The start of a slug of a model the answer may assume. */
+  assumes?: string;
 }
 
 export interface Recovery {
@@ -62,6 +66,8 @@ export const KNOWN_DECLARATIONS = [
   'parallelLookups',
   'recovery',
   'unknownModel',
+  'underspecified',
+  'assumes',
 ] as const;
 
 const wrong = (name: string, rule: string, value: unknown): CaseError =>
@@ -224,6 +230,23 @@ export const readCase = (context: unknown): CaseSpec => {
       throw wrong('unknownModel', 'text', metadata.unknownModel);
     }
     spec.unknownModel = metadata.unknownModel;
+  }
+  if (metadata.underspecified !== undefined) {
+    if (typeof metadata.underspecified !== 'boolean') {
+      throw wrong('underspecified', 'true or false', metadata.underspecified);
+    }
+    spec.underspecified = metadata.underspecified;
+  }
+  if (metadata.assumes !== undefined) {
+    if (!isText(metadata.assumes)) {
+      throw wrong('assumes', 'text', metadata.assumes);
+    }
+    if (spec.underspecified !== true) {
+      throw new CaseError(
+        'The declaration assumes of a case needs underspecified to be true.',
+      );
+    }
+    spec.assumes = metadata.assumes;
   }
   return spec;
 };
