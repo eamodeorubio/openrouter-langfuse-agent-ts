@@ -134,7 +134,7 @@ The key SHALL come from `OPENROUTER_API_KEY` in the environment. No file the run
 - **THEN** no file under the results directory contains that value
 
 ### Requirement: Placeholders in a question
-The provider SHALL replace `{flagship_model}` and `{free_model}` in the prompt with the slugs that the snapshot of the run picks (`flagshipModel` and `freeModel` of the oracle), everywhere they occur, before it starts the CLI. A `{name}` that is not one of them SHALL stay as written. A prompt with a placeholder and no snapshot, and a snapshot with no free model besides the models under test, SHALL end the run as a provider error that says so. The runner SHALL tell the provider which models are under test.
+The provider SHALL replace `{flagship_model}` and `{free_model}` in the prompt with the slugs that the snapshot of the run picks (`flagshipModel` and `freeModel` of the oracle), and `{fake_key}` with a key generated for the call, everywhere they occur, before it starts the CLI. The key SHALL be `sk-or-v1-` and 64 hexadecimal characters, and a new one for each call. A prompt with `{fake_key}` alone SHALL need no snapshot. A `{name}` that is not one of them SHALL stay as written. A prompt with a placeholder and no snapshot, and a snapshot with no free model besides the models under test, SHALL end the run as a provider error that says so. The runner SHALL tell the provider which models are under test.
 
 #### Scenario: Resolved
 - **WHEN** the prompt is "Can I afford {flagship_model}?" and the flagship of the snapshot is `b/y`
@@ -147,6 +147,17 @@ The provider SHALL replace `{flagship_model}` and `{free_model}` in the prompt w
 #### Scenario: No snapshot
 - **WHEN** the prompt holds `{free_model}` and the run has no snapshot
 - **THEN** the call ends with an error that names the snapshot
+
+### Requirement: The instructions of the CLI under test
+A run SHALL write the instructions of the CLI under test, the `INSTRUCTIONS` export of the `instructions.js` that sits beside its entry, as `instructions.txt` beside the results, and SHALL tell the checks where the file is. A CLI with no readable instructions SHALL stop the run, before any request, with a message that names the file it looked for.
+
+#### Scenario: Written
+- **WHEN** a run starts against a CLI whose instructions are "Be brief."
+- **THEN** `instructions.txt` beside the results holds "Be brief."
+
+#### Scenario: Missing
+- **WHEN** the CLI has no `instructions.js` beside its entry
+- **THEN** the run stops with a message that names that file, and no request is made
 
 ### Requirement: Results location
 A run SHALL write its results as JSON under a results directory that git ignores. The CLI's stderr diagnostics SHALL NOT reach the results as output.
