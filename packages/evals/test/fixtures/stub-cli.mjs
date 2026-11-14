@@ -27,7 +27,10 @@ const success = (extra = {}) => ({
       round: 1,
       name: 'get_model',
       arguments: '{"slug":"a/b"}',
-      output: '{"id":"a/b"}',
+      // A tool output of 40,000 bytes, for the runs that need a state over the limit of the judge.
+      output: process.env.STUB_BIG
+        ? JSON.stringify({ id: 'a/b', pad: 'x'.repeat(40_000) })
+        : '{"id":"a/b"}',
       failed: false,
     },
   ],

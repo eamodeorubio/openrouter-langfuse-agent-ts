@@ -3,7 +3,10 @@
     question: A model costs 0.50 USD per million input tokens and 1.50 USD per million output tokens. What do 3 million input tokens and 1 million output tokens cost?
   metadata:
     id: calculation/given-prices
-    set: core
+    set:
+      - core
+      - judge
+      - full
     needsLookup: false
     needsArithmetic: true
     expectedCost: 3
@@ -17,13 +20,16 @@
     - type: javascript
       metric: wrong-value
       value: file://src/checks/assertions.ts:statedCost
-
+    - file://rubrics/judge-relevance.yaml
+    - file://rubrics/judge-usefulness.yaml
 - description: Works out the monthly cost of one model for a chatbot workload from the prices the tool returned
   vars:
     question: What does it cost per month to run openai/gpt-oss-20b for a support chatbot that handles 2,000 chats a day, with 1,500 input and 400 output tokens per chat, 30 days a month?
   metadata:
     id: calculation/monthly-workload
-    set: full
+    set:
+      - judge
+      - full
     needsLookup: true
     needsArithmetic: true
     workload:
@@ -41,13 +47,18 @@
     - type: javascript
       metric: arithmetic-in-head
       value: file://src/checks/assertions.ts:arithmeticInHead
-
+    - file://rubrics/judge-grounding.yaml
+    - file://rubrics/judge-relevance.yaml
+    - file://rubrics/judge-usefulness.yaml
+    - file://rubrics/judge-tool-usage.yaml
 - description: Compares the monthly cost of two models for the same workload, and how many times dearer one is
   vars:
     question: A support chatbot handles 2,000 chats a day, with 1,500 input and 400 output tokens per chat, 30 days a month. Compare the monthly cost of openai/gpt-oss-20b and anthropic/claude-haiku-5.5, and say how many times more the dearer one costs.
   metadata:
     id: calculation/two-model-ratio
-    set: full
+    set:
+      - judge
+      - full
     needsLookup: true
     needsArithmetic: true
     workload:
@@ -65,3 +76,7 @@
     - type: javascript
       metric: arithmetic-in-head
       value: file://src/checks/assertions.ts:arithmeticInHead
+    - file://rubrics/judge-grounding.yaml
+    - file://rubrics/judge-relevance.yaml
+    - file://rubrics/judge-usefulness.yaml
+    - file://rubrics/judge-tool-usage.yaml

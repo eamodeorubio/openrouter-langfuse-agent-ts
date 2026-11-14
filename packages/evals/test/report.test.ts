@@ -167,6 +167,42 @@ describe('the judge pass rate', () => {
     });
   });
 
+  it('counts a rubric that Jev did not answer as unscored, and not as a score of 0', () => {
+    const cell = cellOf([
+      scored(0.9),
+      run({
+        unanswered: {
+          'judge-relevance':
+            'The state is 32001 bytes, over the limit of 32000.',
+        },
+      }),
+      run({
+        unanswered: { 'judge-relevance': 'OPENROUTER_API_KEY is not set.' },
+      }),
+    ]);
+    expect(cell.judges['judge-relevance']).toEqual({
+      rate: 1,
+      scored: 1,
+      unscored: 2,
+    });
+  });
+
+  it('shows a rubric that no run could score, with every run unscored', () => {
+    const cell = cellOf([
+      run({
+        unanswered: { 'judge-relevance': 'OPENROUTER_API_KEY is not set.' },
+      }),
+      run({
+        unanswered: { 'judge-relevance': 'OPENROUTER_API_KEY is not set.' },
+      }),
+    ]);
+    expect(cell.judges['judge-relevance']).toEqual({
+      rate: null,
+      scored: 0,
+      unscored: 2,
+    });
+  });
+
   it('reads the threshold of the run from the results file', () => {
     const [model] = summaryOf([scored(0.5), scored(0.8)], [1], 0.6);
     expect(model?.cells[0]?.judges['judge-relevance']?.rate).toBe(0.5);

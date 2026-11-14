@@ -10,8 +10,8 @@ const page = fs.readFileSync(
 );
 
 interface Case {
-  metadata: { id: string; needsLookup?: boolean };
-  assert?: { metric: string }[];
+  metadata: { id: string; needsLookup?: boolean; set?: string | string[] };
+  assert?: ({ metric: string } | string)[];
 }
 
 const cases: Case[] = fs
@@ -37,7 +37,9 @@ const provokers = (): Map<string, Set<string>> => {
   for (const test of cases) {
     const classes = [
       ...universal(test),
-      ...(test.assert ?? []).map((check) => check.metric),
+      ...(test.assert ?? []).flatMap((check) =>
+        typeof check === 'string' ? [] : [check.metric],
+      ),
     ];
     for (const name of classes) {
       byClass.set(name, (byClass.get(name) ?? new Set()).add(test.metadata.id));
@@ -46,10 +48,12 @@ const provokers = (): Map<string, Set<string>> => {
   return byClass;
 };
 
-/** The rows of the taxonomy table of the page: the code, and what its last column names. */
+/** The rows of the taxonomy table of the page, and of no other table: the code, and what its last column names. */
 const rows = (): Map<string, string> => {
   const found = new Map<string, string>();
-  for (const line of page.split('\n')) {
+  const start = page.indexOf('## The error taxonomy');
+  const end = page.indexOf('\n## ', start + 1);
+  for (const line of page.slice(start, end).split('\n')) {
     const code = /^\| `([a-z-]+)`\s+\|/.exec(line)?.[1];
     if (code) found.set(code, line.split('|').slice(-2)[0]?.trim() ?? '');
   }
@@ -86,6 +90,22 @@ describe('the tables of the docs page', () => {
   });
 });
 
+describe('the table of the cases of the docs page', () => {
+  it('names the sets of every case, as its file does', () => {
+    const start = page.indexOf('## The cases');
+    for (const test of cases) {
+      const row = page
+        .slice(start)
+        .split('\n')
+        .find((line) => line.startsWith(`| \`${test.metadata.id}\``));
+      const cell = row?.split('|')[2]?.trim();
+      expect(cell, test.metadata.id).toBe(
+        [test.metadata.set].flat().join(', '),
+      );
+    }
+  });
+});
+
 describe('the taxonomy table of the docs page', () => {
   it('has a row for every class the cases can provoke, and for no other', () => {
     expect([...rows().keys()].sort()).toEqual([...provokers().keys()].sort());
@@ -108,6 +128,24 @@ describe('the taxonomy table of the docs page', () => {
   it('lists every case in the table of the cases', () => {
     for (const test of cases) {
       expect(page, test.metadata.id).toContain(`\`${test.metadata.id}\``);
+    }
+  });
+});
+
+describe('the judge rubrics of the docs page', () => {
+  it('names every rubric file with its metric and its question', () => {
+    const dir = path.join(root, 'rubrics');
+    const files = fs.readdirSync(dir).filter((f) => f.endsWith('.yaml'));
+    expect(files).toHaveLength(4);
+    for (const file of files) {
+      const rubric = parse(fs.readFileSync(path.join(dir, file), 'utf8')) as {
+        type: string;
+        metric: string;
+        value: string;
+      };
+      expect(rubric.type, file).toBe('llm-rubric');
+      expect(page, rubric.metric).toContain(`\`${rubric.metric}\``);
+      expect(page, rubric.metric).toContain(rubric.value);
     }
   });
 });

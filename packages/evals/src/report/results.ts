@@ -17,11 +17,12 @@ export interface Run {
   latencyMs?: number;
   /** The highest round of a tool call, 0 without calls. Absent for a provider error. */
   rounds?: number;
-  /** Judge scores by metric. */
+  /** Judge scores by metric, for the rubrics that Jev answered. */
   judges: Record<string, number>;
+  /** Every rubric the run was asked, answered or not. */
+  rubrics: string[];
 }
 
-export const DEFAULT_JUDGE_THRESHOLD = 0.7;
 /** Promptfoo's `failureReason` of a run that ended in a provider error. */
 const PROVIDER_ERROR = 2;
 const JUDGE_PREFIX = 'judge-';
@@ -56,15 +57,43 @@ const judgedMetrics = (grading: unknown): string[] => {
   });
 };
 
-const judgeScores = (namedScores: unknown): Record<string, number> =>
-  isObject(namedScores)
-    ? Object.fromEntries(
-        Object.entries(namedScores).filter(
-          (entry): entry is [string, number] =>
-            entry[0].startsWith(JUDGE_PREFIX) && finite(entry[1]),
-        ),
-      )
-    : {};
+/**
+ * What promptfoo writes as the reason of a rubric that Jev answered. A rubric
+ * that Jev did not answer (a state over the limit, no key, an API error) has
+ * an error text as its reason, and promptfoo records a score of 0 for it,
+ * which says nothing about the run. The wording is promptfoo's, and the test of
+ * the judge provider (`judgeProvider.test.ts`) pins it against the real provider.
+ */
+const JEV_ANSWER = 'Jev Noul probability';
+
+/** Every judge metric a run has a result for, answered or not. */
+const rubricsOf = (grading: unknown): string[] => {
+  const components = pathOf(grading, 'componentResults');
+  if (!Array.isArray(components)) return [];
+  return components.flatMap((component) => {
+    const metric = text(pathOf(component, 'assertion', 'metric'));
+    return metric?.startsWith(JUDGE_PREFIX) ? [metric] : [];
+  });
+};
+
+/** The scores of the rubrics that Jev answered, by metric. */
+const judgeScores = (grading: unknown): Record<string, number> => {
+  const components = pathOf(grading, 'componentResults');
+  if (!Array.isArray(components)) return {};
+  return Object.fromEntries(
+    components.flatMap((component) => {
+      const metric = text(pathOf(component, 'assertion', 'metric'));
+      const score = pathOf(component, 'score');
+      const reason = pathOf(component, 'reason');
+      return metric?.startsWith(JUDGE_PREFIX) &&
+        finite(score) &&
+        typeof reason === 'string' &&
+        reason.startsWith(JEV_ANSWER)
+        ? [[metric, score] as const]
+        : [];
+    }),
+  );
+};
 
 /** The highest `round` among the tool calls of a success object, 0 when there are none. */
 const roundsOf = (output: unknown): number | undefined => {
@@ -107,7 +136,8 @@ const toRun = (entry: unknown): Run => {
     ...(!error && finite(reported) ? { cost: reported } : {}),
     ...(finite(entry.latencyMs) ? { latencyMs: entry.latencyMs } : {}),
     ...(rounds === undefined ? {} : { rounds }),
-    judges: error ? {} : judgeScores(entry.namedScores),
+    judges: error ? {} : judgeScores(entry.gradingResult),
+    rubrics: error ? [] : rubricsOf(entry.gradingResult),
   };
 };
 
@@ -124,7 +154,8 @@ const thresholdOf = (file: unknown): number => {
   );
   return finite(threshold) && threshold >= 0 && threshold <= 1
     ? threshold
-    : DEFAULT_JUDGE_THRESHOLD;
+    : // The config states it. This is the default of promptfoo's TypeSafe provider, for a file that does not.
+      0.5;
 };
 
 export interface ReadResults {

@@ -3,17 +3,22 @@
     question: Which is the cheapest paid model with at least 200,000 tokens of context and tool calling? Assume 3 input tokens for every output token.
   metadata:
     id: search/cheapest-blended
-    set: core
+    set:
+      - core
+      - judge
+      - full
     needsLookup: true
     oracle:
       query: cheapest-blended
       params:
         minContext: 200000
-        supportedParameters: [tools]
+        supportedParameters:
+          - tools
         mix: 3
     search:
       min_context_length: 200000
-      supported_parameters: [tools]
+      supported_parameters:
+        - tools
   assert:
     - type: javascript
       metric: wrong-search
@@ -21,22 +26,29 @@
     - type: javascript
       metric: wrong-answer
       value: file://src/checks/assertions.ts:wrongAnswer
-
+    - file://rubrics/judge-grounding.yaml
+    - file://rubrics/judge-relevance.yaml
+    - file://rubrics/judge-usefulness.yaml
+    - file://rubrics/judge-tool-usage.yaml
 - description: Finds the paid model with the lowest input price among those with a long context and tool calling
   vars:
     question: Which paid model on OpenRouter has the lowest input price among models with at least 200,000 tokens of context that support tool calling?
   metadata:
     id: search/cheapest-input
-    set: full
+    set:
+      - judge
+      - full
     needsLookup: true
     oracle:
       query: cheapest-input
       params:
         minContext: 200000
-        supportedParameters: [tools]
+        supportedParameters:
+          - tools
     search:
       min_context_length: 200000
-      supported_parameters: [tools]
+      supported_parameters:
+        - tools
   assert:
     - type: javascript
       metric: wrong-search
@@ -44,20 +56,27 @@
     - type: javascript
       metric: wrong-answer
       value: file://src/checks/assertions.ts:wrongAnswer
-
+    - file://rubrics/judge-grounding.yaml
+    - file://rubrics/judge-relevance.yaml
+    - file://rubrics/judge-usefulness.yaml
+    - file://rubrics/judge-tool-usage.yaml
 - description: Finds the paid model with the lowest input price among those that accept image input
   vars:
     question: Which paid model that accepts image input has the lowest input price?
   metadata:
     id: search/image-input
-    set: full
+    set:
+      - judge
+      - full
     needsLookup: true
     oracle:
       query: cheapest-input
       params:
-        inputModalities: [image]
+        inputModalities:
+          - image
     search:
-      input_modalities: [image]
+      input_modalities:
+        - image
   assert:
     - type: javascript
       metric: wrong-search
@@ -65,23 +84,31 @@
     - type: javascript
       metric: wrong-answer
       value: file://src/checks/assertions.ts:wrongAnswer
-
+    - file://rubrics/judge-grounding.yaml
+    - file://rubrics/judge-relevance.yaml
+    - file://rubrics/judge-usefulness.yaml
+    - file://rubrics/judge-tool-usage.yaml
 - description: Says that no model meets a request that none does, instead of recommending one
   vars:
     question: Find a model with at least 2 million tokens of context that can output images and costs less than 0.01 USD per million input tokens.
   metadata:
     id: search/none-exists
-    set: core
+    set:
+      - core
+      - judge
+      - full
     needsLookup: true
     oracle:
       query: matching
       params:
         minContext: 2000000
-        outputModalities: [image]
+        outputModalities:
+          - image
         maxInputPrice: 0.01
     search:
       min_context_length: 2000000
-      output_modalities: [image]
+      output_modalities:
+        - image
   assert:
     - type: javascript
       metric: wrong-search
@@ -89,22 +116,29 @@
     - type: javascript
       metric: phantom-match
       value: file://src/checks/assertions.ts:phantomMatch
-
+    - file://rubrics/judge-grounding.yaml
+    - file://rubrics/judge-relevance.yaml
+    - file://rubrics/judge-usefulness.yaml
+    - file://rubrics/judge-tool-usage.yaml
 - description: Counts the models that meet a request by filtering the search, and not by reading the first page
   vars:
     question: How many models on OpenRouter support tool calling and have a context window of at least 1 million tokens?
   metadata:
     id: search/count
-    set: full
+    set:
+      - judge
+      - full
     needsLookup: true
     oracle:
       query: matching
       params:
         minContext: 1000000
-        supportedParameters: [tools]
+        supportedParameters:
+          - tools
     search:
       min_context_length: 1000000
-      supported_parameters: [tools]
+      supported_parameters:
+        - tools
   assert:
     - type: javascript
       metric: wrong-search
@@ -112,17 +146,24 @@
     - type: javascript
       metric: wrong-value
       value: file://src/checks/assertions.ts:countStated
-
+    - file://rubrics/judge-grounding.yaml
+    - file://rubrics/judge-relevance.yaml
+    - file://rubrics/judge-usefulness.yaml
+    - file://rubrics/judge-tool-usage.yaml
 - description: Answers a cheapest-model question with one search that filters and sorts on the server
   vars:
     question: Which is the cheapest model with at least 200,000 tokens of context that supports tools?
   metadata:
     id: search/single-search
-    set: core
+    set:
+      - core
+      - judge
+      - full
     needsLookup: true
     search:
       min_context_length: 200000
-      supported_parameters: [tools]
+      supported_parameters:
+        - tools
       sort: pricing-low-to-high
   assert:
     - type: javascript
@@ -134,3 +175,7 @@
     - type: javascript
       metric: wrong-answer
       value: file://src/checks/assertions.ts:topOfSearch
+    - file://rubrics/judge-grounding.yaml
+    - file://rubrics/judge-relevance.yaml
+    - file://rubrics/judge-usefulness.yaml
+    - file://rubrics/judge-tool-usage.yaml

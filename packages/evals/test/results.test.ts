@@ -1,9 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  DEFAULT_JUDGE_THRESHOLD,
-  ResultsFormatError,
-  readRuns,
-} from '../src/report/results.js';
+import { ResultsFormatError, readRuns } from '../src/report/results.js';
 
 /** An entry of promptfoo's results, as a run that passed. `over` replaces its top-level fields. */
 const entry = (over: Record<string, unknown> = {}) => ({
@@ -257,27 +253,90 @@ describe('the tool rounds of a run', () => {
 });
 
 describe('the judge scores of a run', () => {
-  it('are the finite scores under judge- names', () => {
-    const run = first({
-      namedScores: {
-        'judge-relevance': 0.4,
-        'judge-grounding': 0,
-        'wrong-value': 1,
-        'judge-bad': 'high',
-        'judge-nan': Number.NaN,
-      },
-    });
+  const component = (metric: string, score: unknown, reason: unknown) => ({
+    pass: true,
+    score,
+    reason,
+    assertion: { type: 'llm-rubric', metric, weight: 0 },
+  });
+  const jev = (probability: number) =>
+    `Jev Noul probability ${probability} < threshold 0.5`;
+  const graded = (components: unknown[], over: Record<string, unknown> = {}) =>
+    first({ gradingResult: { componentResults: components }, ...over });
+
+  it('are the finite scores of the rubrics that Jev answered', () => {
+    const run = graded([
+      component('judge-relevance', 0.4, jev(0.4)),
+      component('judge-grounding', 0, jev(0)),
+      component(
+        'judge-usefulness',
+        1,
+        'Jev Noul probability 1 >= threshold 0.5',
+      ),
+    ]);
     expect(run.judges).toEqual({
       'judge-relevance': 0.4,
       'judge-grounding': 0,
+      'judge-usefulness': 1,
     });
   });
 
-  it('are empty without scores, and for a provider error', () => {
-    expect(first({ namedScores: undefined }).judges).toEqual({});
-    expect(first({ namedScores: 'x' }).judges).toEqual({});
+  it('leave out a rubric that Jev did not answer, although promptfoo records a score of 0 for it', () => {
+    const run = graded(
+      [
+        component('judge-relevance', 0.4, jev(0.4)),
+        component(
+          'judge-grounding',
+          0,
+          'The state is 40000 bytes, over the limit of 32000: not graded.',
+        ),
+        component('judge-usefulness', 0, 'OPENROUTER_API_KEY is not set.'),
+        component('judge-tool-usage', 0, 'TypeSafe API error: 500'),
+      ],
+      {
+        namedScores: {
+          'judge-relevance': 0.4,
+          'judge-grounding': 0,
+          'judge-usefulness': 0,
+          'judge-tool-usage': 0,
+        },
+      },
+    );
+    expect(run.judges).toEqual({ 'judge-relevance': 0.4 });
+  });
+
+  it('list every rubric that was asked, answered or not, and no other metric', () => {
+    const run = graded([
+      component('judge-relevance', 0.4, jev(0.4)),
+      component('judge-grounding', 0, 'OPENROUTER_API_KEY is not set.'),
+      component('wrong-value', 1, 'ok'),
+    ]);
+    expect(run.rubrics).toEqual(['judge-relevance', 'judge-grounding']);
+    expect(first({ gradingResult: undefined }).rubrics).toEqual([]);
     expect(
-      first({ failureReason: 2, namedScores: { 'judge-x': 1 } }).judges,
+      graded([component('judge-x', 1, jev(1))], { failureReason: 2 }).rubrics,
+    ).toEqual([]);
+  });
+
+  it('leave out what is not a finite score under a judge- name', () => {
+    const run = graded([
+      component('wrong-value', 1, jev(1)),
+      component('judge-bad', 'high', jev(0.5)),
+      component('judge-nan', Number.NaN, jev(0.5)),
+      component('judge-null', null, jev(0.5)),
+      component('judge-reasonless', 0.5, undefined),
+      component(undefined as never, 0.5, jev(0.5)),
+    ]);
+    expect(run.judges).toEqual({});
+  });
+
+  it('are empty without components, and for a provider error', () => {
+    expect(first({ gradingResult: undefined }).judges).toEqual({});
+    expect(first({ gradingResult: { componentResults: 'x' } }).judges).toEqual(
+      {},
+    );
+    expect(
+      graded([component('judge-x', 1, jev(1))], { failureReason: 2 }).judges,
     ).toEqual({});
   });
 });
@@ -297,13 +356,13 @@ describe('the judge threshold', () => {
   it.each([-0.01, 1.01, '0.5', Number.NaN, null, undefined])(
     'is %s, which is not a threshold, so the default holds',
     (value) => {
-      expect(withThreshold(value)).toBe(DEFAULT_JUDGE_THRESHOLD);
+      expect(withThreshold(value)).toBe(0.5);
     },
   );
 
   it('is the default without a config', () => {
-    expect(read([]).threshold).toBe(0.7);
-    expect(read([], { config: {} }).threshold).toBe(0.7);
+    expect(read([]).threshold).toBe(0.5);
+    expect(read([], { config: {} }).threshold).toBe(0.5);
   });
 });
 

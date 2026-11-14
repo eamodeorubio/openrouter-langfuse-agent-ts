@@ -4,19 +4,32 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { readCase } from '../src/checks/caseSpec.js';
+import { readRuns } from '../src/report/results.js';
 import { DEFAULT_REPEAT, parseRunArgs, promptfooArgs } from '../src/runner.js';
 import { serveCatalog } from './catalogServer.js';
+import { serveJev } from './jevServer.js';
 import { type Finished, runTsx } from './runTsx.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 const configFile = path.join(root, 'promptfooconfig.yaml');
 const stub = path.join(root, 'test/fixtures/stub-cli.mjs');
 
+interface RawCase {
+  description: string;
+  vars: { model?: string[]; question: string };
+  metadata: { id: string } & Record<string, unknown>;
+  /** The checks of the case, and the files of the rubrics that grade it. */
+  assert?: ({ metric: string; value: string } | string)[];
+}
+
+/** A case as the tests read it: its own checks, the rubric files it references, and the sets it is in. */
 interface Case {
   description: string;
   vars: { model?: string[]; question: string };
   metadata: { id: string } & Record<string, unknown>;
   assert?: { metric: string; value: string }[];
+  rubrics: string[];
+  sets: string[];
 }
 
 const config = parse(fs.readFileSync(configFile, 'utf8')) as {
@@ -35,8 +48,21 @@ const cases: (Case & { family: string })[] = fs
   .sort()
   .flatMap((file) =>
     (
-      parse(fs.readFileSync(path.join(root, 'cases', file), 'utf8')) as Case[]
-    ).map((test) => ({ ...test, family: file.replace(/\.yaml$/, '') })),
+      parse(
+        fs.readFileSync(path.join(root, 'cases', file), 'utf8'),
+      ) as RawCase[]
+    ).map((test) => ({
+      ...test,
+      assert: (test.assert ?? []).filter(
+        (entry): entry is { metric: string; value: string } =>
+          typeof entry !== 'string',
+      ),
+      rubrics: (test.assert ?? []).filter(
+        (entry): entry is string => typeof entry === 'string',
+      ),
+      sets: [test.metadata.set].flat() as string[],
+      family: file.replace(/\.yaml$/, ''),
+    })),
   );
 
 describe('the model matrix', () => {
@@ -68,13 +94,17 @@ describe('the files of cases', () => {
     expect(cases.length).toBeGreaterThan(0);
   });
 
-  it('give every case a set, and the core set holds a case for every error class', () => {
+  it('give every case its sets, the three of them overlap, and the core set holds a case for every error class', () => {
     for (const test of cases) {
-      expect(['core', 'full'], test.metadata.id).toContain(test.metadata.set);
+      expect(test.sets.length, test.metadata.id).toBeGreaterThan(0);
+      for (const name of test.sets) {
+        expect(['core', 'full', 'judge'], test.metadata.id).toContain(name);
+      }
+      expect(test.sets, test.metadata.id).toContain('full');
     }
     expect(
       cases
-        .filter((test) => test.metadata.set === 'core')
+        .filter((test) => test.sets.includes('core'))
         .map((test) => test.metadata.id),
     ).toEqual([
       'ambiguity/cheapest-for-chatbot',
@@ -102,7 +132,7 @@ describe('the files of cases', () => {
           ...(test.assert ?? []).map((check) => check.metric),
         ]),
       );
-    const core = classes(cases.filter((test) => test.metadata.set === 'core'));
+    const core = classes(cases.filter((test) => test.sets.includes('core')));
     expect([...classes(cases)].filter((name) => !core.has(name))).toEqual([]);
   });
 });
@@ -122,7 +152,9 @@ describe('the search cases of the full set', () => {
     };
     for (const [id, set] of Object.entries(sets)) {
       expect(byId(id)?.family, id).toBe('search');
-      expect(readCase({ test: byId(id) }).set, id).toBe(set);
+      expect(readCase({ test: byId(id) }).set?.includes('core'), id).toBe(
+        set === 'core',
+      );
       expect(readCase({ test: byId(id) }).needsLookup, id).toBe(true);
     }
   });
@@ -238,8 +270,8 @@ describe('the recommendation and cost cases of the full set', () => {
       'calculation/two-model-ratio',
       'lookup/router-model',
     ]) {
-      expect(readCase({ test: byId(id) }).set, id).toBe(
-        id === 'recommendation/budget-chatbot' ? 'core' : 'full',
+      expect(readCase({ test: byId(id) }).set?.includes('core'), id).toBe(
+        (id === 'recommendation/budget-chatbot' ? 'core' : 'full') === 'core',
       );
       expect(readCase({ test: byId(id) }).needsLookup, id).toBe(true);
     }
@@ -328,7 +360,9 @@ describe('the lookup discipline cases', () => {
       ['discipline/unknown-model', 'full'],
     ] as const) {
       expect(byId(id)?.family, id).toBe('discipline');
-      expect(readCase({ test: byId(id) }).set, id).toBe(set);
+      expect(readCase({ test: byId(id) }).set?.includes('core'), id).toBe(
+        set === 'core',
+      );
       expect(readCase({ test: byId(id) }).needsLookup, id).toBe(true);
     }
   });
@@ -391,7 +425,7 @@ describe('the cases that name a model of the snapshot by a placeholder', () => {
       'recommendation/flagship-affordability',
       'lookup/free-variant',
     ]) {
-      expect(readCase({ test: byId(id) }).set, id).toBe('full');
+      expect(readCase({ test: byId(id) }).set, id).toEqual(['judge', 'full']);
       expect(readCase({ test: byId(id) }).needsLookup, id).toBe(true);
     }
   });
@@ -441,7 +475,9 @@ describe('the ambiguity and hostile cases', () => {
       ['hostile/key-in-question', 'hostile', 'core'],
     ] as const) {
       expect(byId(id)?.family, id).toBe(family);
-      expect(readCase({ test: byId(id) }).set, id).toBe(set);
+      expect(readCase({ test: byId(id) }).set?.includes('core'), id).toBe(
+        set === 'core',
+      );
     }
   });
 
@@ -584,6 +620,157 @@ describe('the run', () => {
   });
 });
 
+const rubricDir = path.join(root, 'rubrics');
+const rubricNames = [
+  'judge-grounding',
+  'judge-relevance',
+  'judge-usefulness',
+  'judge-tool-usage',
+];
+
+/** The rubrics a case lists, by metric, from the files it references. */
+const rubricsOf = (test: Case): string[] =>
+  test.rubrics.map((ref) => path.basename(ref, '.yaml'));
+
+/** The rubrics the spec gives a case: a lookup is grounded and its tool calls judged, and every case but a prompt injection is judged for relevance, and for usefulness unless the right answer is a question. */
+const expectedRubrics = (test: Case): string[] => {
+  const id = test.metadata.id;
+  const wanted = new Set<string>();
+  if (test.metadata.needsLookup) {
+    wanted.add('judge-grounding');
+    wanted.add('judge-tool-usage');
+  }
+  if (id !== 'hostile/prompt-injection') {
+    wanted.add('judge-relevance');
+    if (!id.startsWith('ambiguity/')) wanted.add('judge-usefulness');
+  }
+  return rubricNames.filter((name) => wanted.has(name));
+};
+
+describe('the judge rubrics of the config', () => {
+  const config = parse(fs.readFileSync(configFile, 'utf8')) as {
+    defaultTest: {
+      options: { provider: { id: string; config: Record<string, unknown> } };
+      assert: { metric: string }[];
+    };
+  };
+  const file = (name: string) =>
+    parse(fs.readFileSync(path.join(rubricDir, `${name}.yaml`), 'utf8')) as {
+      type: string;
+      metric: string;
+      weight: number;
+      value: string;
+      transform: string;
+    };
+
+  it('are four files, one yes/no question each, at weight 0, with the state that the question needs', () => {
+    expect(fs.readdirSync(rubricDir).sort()).toEqual(
+      rubricNames.map((name) => `${name}.yaml`).sort(),
+    );
+    const expected: [string, string, string][] = [
+      [
+        'judge-grounding',
+        'Is every price, context size and capability in the answer given in the tool results?',
+        'grounding',
+      ],
+      [
+        'judge-relevance',
+        'Does the answer address the question that was asked?',
+        'relevance',
+      ],
+      [
+        'judge-usefulness',
+        'Would the answer let the person decide or act?',
+        'usefulness',
+      ],
+      [
+        'judge-tool-usage',
+        'Were the tool calls relevant to the question?',
+        'toolUsage',
+      ],
+    ];
+    for (const [name, question, builder] of expected) {
+      expect(file(name)).toEqual({
+        type: 'llm-rubric',
+        metric: name,
+        weight: 0,
+        value: question,
+        transform: `file://src/judge/state.ts:${builder}`,
+      });
+    }
+  });
+
+  it('are graded by the judge provider, with a threshold of 0.5 that the config states, and no levels', () => {
+    expect(config.defaultTest.options.provider).toEqual({
+      id: 'file://src/judge/provider.ts',
+      config: { threshold: 0.5 },
+    });
+  });
+
+  it('leave the checks that every case passes through as the only assertions of defaultTest', () => {
+    expect(config.defaultTest.assert.map((entry) => entry.metric)).toEqual([
+      'run-failed',
+      'memory-answer',
+      'invented-data',
+    ]);
+  });
+
+  it('are listed by each case that the spec says, by reference to a file that exists, once', () => {
+    for (const test of cases) {
+      expect(rubricsOf(test), test.metadata.id).toEqual(expectedRubrics(test));
+      for (const ref of test.rubrics) {
+        expect(ref, test.metadata.id).toMatch(
+          /^file:\/\/rubrics\/judge-[a-z-]+\.yaml$/,
+        );
+        expect(
+          fs.existsSync(path.join(root, ref.slice('file://'.length))),
+          ref,
+        ).toBe(true);
+      }
+    }
+  });
+
+  it('put a case in the judge set if and only if it lists a rubric', () => {
+    for (const test of cases) {
+      expect(test.sets.includes('judge'), test.metadata.id).toBe(
+        test.rubrics.length > 0,
+      );
+    }
+    expect(
+      cases
+        .filter((test) => !test.sets.includes('judge'))
+        .map((t) => t.metadata.id),
+    ).toEqual(['hostile/prompt-injection']);
+  });
+
+  it('give the cases that have no lookup no rubric about tools', () => {
+    const given = cases.find(
+      (t) => t.metadata.id === 'calculation/given-prices',
+    );
+    expect(given && rubricsOf(given)).toEqual([
+      'judge-relevance',
+      'judge-usefulness',
+    ]);
+    const ambiguity = cases.filter((t) => t.family === 'ambiguity');
+    expect(ambiguity.map(rubricsOf)).toEqual([
+      ['judge-relevance'],
+      ['judge-relevance'],
+    ]);
+  });
+
+  it('hold no key and no address of an API in the files', () => {
+    const texts = [
+      fs.readFileSync(configFile, 'utf8'),
+      ...rubricNames.map((n) =>
+        fs.readFileSync(path.join(rubricDir, `${n}.yaml`), 'utf8'),
+      ),
+    ];
+    for (const text of texts) {
+      expect(text).not.toMatch(/apiKey|apiBaseUrl|openrouter\.ai\/api/);
+    }
+  });
+});
+
 describe('the config', () => {
   it('holds no key and reads none from a file', () => {
     const text = fs.readFileSync(configFile, 'utf8');
@@ -598,7 +785,7 @@ describe('the config', () => {
     expect(a1?.vars.question).toMatch(/openai\/gpt-oss-20b/);
     expect(a1?.metadata).toEqual({
       id: 'lookup/known-model',
-      set: 'core',
+      set: ['core', 'judge', 'full'],
       needsLookup: true,
       askedModel: 'openai/gpt-oss-20b',
       askedFigures: ['inputPrice', 'outputPrice', 'contextLength'],
@@ -606,6 +793,12 @@ describe('the config', () => {
     expect(a1?.assert?.map((a) => a.metric).sort()).toEqual([
       'wrong-search',
       'wrong-value',
+    ]);
+    expect(a1 && rubricsOf(a1)).toEqual([
+      'judge-grounding',
+      'judge-relevance',
+      'judge-usefulness',
+      'judge-tool-usage',
     ]);
   });
 
@@ -625,7 +818,7 @@ describe('the config', () => {
     );
     expect(b7?.metadata).toEqual({
       id: 'calculation/given-prices',
-      set: 'core',
+      set: ['core', 'judge', 'full'],
       needsLookup: false,
       needsArithmetic: true,
       expectedCost: 3,
@@ -646,7 +839,7 @@ describe('the config', () => {
     expect(c1?.vars.question).toMatch(/3 input tokens for every output token/);
     expect(c1?.metadata).toEqual({
       id: 'search/cheapest-blended',
-      set: 'core',
+      set: ['core', 'judge', 'full'],
       needsLookup: true,
       oracle: {
         query: 'cheapest-blended',
@@ -746,6 +939,248 @@ describe('the config, run for real against a stub CLI', () => {
     expect(stdout).toContain('by error class');
     expect(stdout).toMatch(/wrong-search\s+judged=\d+\s+passed=0\s+failed=\d+/);
     expect(fs.existsSync(path.join(out, 'catalog.json'))).toBe(true);
+  });
+});
+
+describe('the rubrics, run for real against a stub CLI and a Jev on loopback', () => {
+  let out: string;
+  let result: Finished;
+  let jev: Awaited<ReturnType<typeof serveJev>>;
+  let catalog: Awaited<ReturnType<typeof serveCatalog>>;
+
+  beforeAll(async () => {
+    catalog = await serveCatalog();
+    jev = await serveJev({ noul: 0.42 });
+    out = fs.mkdtempSync(path.join(os.tmpdir(), 'evals-judge-'));
+    result = await runTsx(
+      [
+        path.join(root, 'src/run.ts'),
+        '--repeat',
+        '1',
+        '--k',
+        '1',
+        '--out',
+        out,
+      ],
+      {
+        EVAL_CLI: stub,
+        EVAL_CATALOG_URL: catalog.url,
+        EVAL_JUDGE_URL: jev.url,
+        OPENROUTER_API_KEY: 'dummy-key-123',
+      },
+    );
+  });
+
+  afterAll(async () => {
+    fs.rmSync(out, { recursive: true, force: true });
+    await jev.close();
+    await catalog.close();
+  });
+
+  it('record a score for each rubric that the case of a run lists, and no other, and send each its own state', () => {
+    expect(result.status, String(result.stderr)).toBe(0);
+    const saved = JSON.parse(
+      fs.readFileSync(path.join(out, 'results.json'), 'utf8'),
+    );
+    const runs = saved.results.results;
+    expect(runs).toHaveLength(22);
+    for (const run of runs) {
+      const test = cases.find(
+        (c) => c.metadata.id === run.testCase.metadata.id,
+      );
+      const listed = test ? rubricsOf(test) : [];
+      const judged = Object.keys(run.namedScores).filter((m) =>
+        m.startsWith('judge-'),
+      );
+      expect(judged.sort(), run.testCase.metadata.id).toEqual(
+        [...listed].sort(),
+      );
+      for (const metric of listed) expect(run.namedScores[metric]).toBe(0.42);
+    }
+    // The reporter reads the same scores, and the rubrics asked, from the real file.
+    const read = readRuns(saved).runs;
+    expect(read).toHaveLength(22);
+    runs.forEach(
+      (run: { testCase: { metadata: { id: string } } }, index: number) => {
+        const test = cases.find(
+          (c) => c.metadata.id === run.testCase.metadata.id,
+        );
+        const listed = test ? rubricsOf(test) : [];
+        expect(Object.keys(read[index]?.judges ?? {}).sort()).toEqual(
+          [...listed].sort(),
+        );
+        expect(
+          Object.values(read[index]?.judges ?? {}).every((s) => s === 0.42),
+        ).toBe(true);
+        expect([...(read[index]?.rubrics ?? [])].sort()).toEqual(
+          [...listed].sort(),
+        );
+      },
+    );
+    const core = cases.filter((c) => c.sets.includes('core'));
+    const expected = core.reduce((sum, c) => sum + rubricsOf(c).length, 0) * 2;
+    expect(expected).toBe(70);
+    expect(jev.requests).toHaveLength(expected);
+    expect(
+      jev.requests.every((r) => r.authorization === 'Bearer dummy-key-123'),
+    ).toBe(true);
+    const states = jev.requests.map((r) => r.body.state ?? '');
+    expect(states.some((s) => s.startsWith('Tool calls:'))).toBe(true);
+    expect(states.some((s) => s.startsWith('Question: '))).toBe(true);
+    expect(states.every((s) => s.length > 0)).toBe(true);
+  });
+
+  it('keep the key out of every file the run wrote', () => {
+    const files = fs
+      .readdirSync(out)
+      .map((name) => fs.readFileSync(path.join(out, name), 'utf8'));
+    expect(files.some((text) => text.includes('dummy-key-123'))).toBe(false);
+  });
+
+  it('never fail a run, whatever the score', () => {
+    const saved = JSON.parse(
+      fs.readFileSync(path.join(out, 'results.json'), 'utf8'),
+    );
+    const judgeFailures = saved.results.results.filter(
+      (r: {
+        gradingResult?: {
+          componentResults: { pass: boolean; assertion: { metric: string } }[];
+        };
+      }) =>
+        r.gradingResult?.componentResults.some(
+          (c) => c.assertion.metric.startsWith('judge-') && !c.pass,
+        ),
+    );
+    expect(judgeFailures).toHaveLength(0);
+  });
+});
+
+describe('the judge set, run for real against a stub CLI and a Jev on loopback', () => {
+  it('runs every case that lists a rubric, on each model, and sends one request for each rubric listed', async () => {
+    const catalog = await serveCatalog();
+    const jev = await serveJev({ noul: 0.9 });
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'evals-judgeset-'));
+    const result = await runTsx(
+      [
+        path.join(root, 'src/run.ts'),
+        '--set',
+        'judge',
+        '--repeat',
+        '1',
+        '--k',
+        '1',
+        '--out',
+        out,
+      ],
+      {
+        EVAL_CLI: stub,
+        EVAL_CATALOG_URL: catalog.url,
+        EVAL_JUDGE_URL: jev.url,
+        OPENROUTER_API_KEY: 'dummy-key-123',
+      },
+    );
+    const saved = JSON.parse(
+      fs.readFileSync(path.join(out, 'results.json'), 'utf8'),
+    );
+    fs.rmSync(out, { recursive: true, force: true });
+    await jev.close();
+    await catalog.close();
+    expect(result.status, String(result.stderr)).toBe(0);
+    const ids = new Set<string>(
+      saved.results.results.map(
+        (r: { testCase: { metadata: { id: string } } }) =>
+          r.testCase.metadata.id,
+      ),
+    );
+    const judged = cases.filter((c) => c.sets.includes('judge'));
+    expect([...ids].sort()).toEqual(judged.map((c) => c.metadata.id).sort());
+    expect(saved.results.results).toHaveLength(judged.length * 2);
+    expect(jev.requests).toHaveLength(
+      judged.reduce((sum, c) => sum + rubricsOf(c).length, 0) * 2,
+    );
+  });
+});
+
+describe('the rubrics that Jev did not answer, run for real', () => {
+  const runWith = async (
+    jevOptions: Parameters<typeof serveJev>[0],
+    env: Record<string, string>,
+  ) => {
+    const catalog = await serveCatalog();
+    const jev = await serveJev(jevOptions);
+    const out = fs.mkdtempSync(path.join(os.tmpdir(), 'evals-unscored-'));
+    const result = await runTsx(
+      [
+        path.join(root, 'src/run.ts'),
+        '--repeat',
+        '1',
+        '--k',
+        '1',
+        '--out',
+        out,
+      ],
+      {
+        EVAL_CLI: stub,
+        EVAL_CATALOG_URL: catalog.url,
+        EVAL_JUDGE_URL: jev.url,
+        ...env,
+      },
+    );
+    const read = readRuns(
+      JSON.parse(fs.readFileSync(path.join(out, 'results.json'), 'utf8')),
+    ).runs;
+    const judges = read.map((r) => r.judges);
+    const rubrics = read.map((r) => r.rubrics);
+    fs.rmSync(out, { recursive: true, force: true });
+    await jev.close();
+    await catalog.close();
+    return { result, judges, rubrics, requests: jev.requests };
+  };
+
+  it('leave every rubric unscored, never a score of 0, when the API fails', async () => {
+    const done = await runWith(
+      { status: 500 },
+      { OPENROUTER_API_KEY: 'dummy-key-123' },
+    );
+    expect(done.result.status, String(done.result.stderr)).toBe(0);
+    expect(done.judges).toHaveLength(22);
+    expect(
+      done.judges.every((judges) => Object.keys(judges).length === 0),
+    ).toBe(true);
+    expect(done.requests.length).toBeGreaterThan(0);
+    // The rubrics were asked, and the report knows it.
+    expect(done.rubrics.flat().length).toBeGreaterThan(0);
+  });
+
+  it('send no request and leave every rubric unscored when there is no key', async () => {
+    const done = await runWith({}, {});
+    expect(done.result.status, String(done.result.stderr)).toBe(0);
+    expect(
+      done.judges.every((judges) => Object.keys(judges).length === 0),
+    ).toBe(true);
+    expect(done.requests).toHaveLength(0);
+    expect(done.rubrics.flat().length).toBeGreaterThan(0);
+  });
+
+  it('leave the rubric that reads the tool outputs unscored when its state is over the limit, and score the others', async () => {
+    const done = await runWith(
+      { noul: 0.42 },
+      { OPENROUTER_API_KEY: 'dummy-key-123', STUB_BIG: '1' },
+    );
+    expect(done.result.status, String(done.result.stderr)).toBe(0);
+    const core = cases.filter((c) => c.sets.includes('core'));
+    const withoutGrounding = core.reduce(
+      (sum, c) =>
+        sum + rubricsOf(c).filter((name) => name !== 'judge-grounding').length,
+      0,
+    );
+    expect(done.requests).toHaveLength(withoutGrounding * 2);
+    for (const judges of done.judges) {
+      expect(Object.keys(judges)).not.toContain('judge-grounding');
+    }
+    expect(done.judges.some((judges) => 'judge-relevance' in judges)).toBe(
+      true,
+    );
   });
 });
 

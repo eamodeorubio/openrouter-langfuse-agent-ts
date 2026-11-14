@@ -22,6 +22,7 @@ import {
 import { PublishedError, publishedEntry, warmUp } from './published.js';
 import { report } from './report/cli.js';
 import { DEFAULT_KS, parseKs } from './report/ks.js';
+import { SET_NAMES, type SetName } from './sets.js';
 import { cliVersionProblem, TARGET_FILE } from './target.js';
 
 const packageRoot = path.resolve(import.meta.dirname, '..');
@@ -42,8 +43,8 @@ const describeTarget = (version: string | undefined, cli: string): string =>
 export interface RunOptions {
   config: string;
   repeat: number;
-  /** `core` runs the cases tagged core, `full` runs them all. */
-  set: 'core' | 'full';
+  /** The sets overlap: `core` is a case for each error class, `judge` the cases a rubric grades, and `full` every case. */
+  set: SetName;
   out: string;
   /** Passed to the reporter as `--k`. */
   k?: string;
@@ -51,8 +52,7 @@ export interface RunOptions {
   cliVersion?: string;
 }
 
-const USAGE =
-  'Usage: run [--set core|full] [--config <file>] [--repeat <n>] [--k 1,3,5] [--out <dir>] [--cli-version <x.y.z>]\n';
+const USAGE = `Usage: run [--set ${SET_NAMES.join('|')}] [--config <file>] [--repeat <n>] [--k 1,3,5] [--out <dir>] [--cli-version <x.y.z>]\n`;
 
 /** Reads the arguments of the eval script. Returns the options, or the message that explains the mistake. */
 export const parseRunArgs = (
@@ -78,10 +78,10 @@ export const parseRunArgs = (
       }
       i++;
     } else if (arg === '--set' && value !== undefined) {
-      if (value !== 'core' && value !== 'full') {
-        return `--set takes core or full, got ${value}.`;
+      if (!SET_NAMES.includes(value as SetName)) {
+        return `--set takes ${SET_NAMES.slice(0, -1).join(', ')} or ${SET_NAMES.at(-1)}, got ${value}.`;
       }
-      set = value;
+      set = value as SetName;
       i++;
     } else if (arg === '--out' && value !== undefined) {
       out = path.resolve(value);
@@ -127,7 +127,10 @@ export const promptfooArgs = (options: RunOptions): string[] => [
   '--no-cache',
   '--no-progress-bar',
   '--no-table',
-  ...(options.set === 'core' ? ['--filter-metadata', 'set=core'] : []),
+  // A case names its sets in its metadata, and promptfoo matches the name in the list.
+  ...(options.set === 'full'
+    ? []
+    : ['--filter-metadata', `set=${options.set}`]),
   '-o',
   path.join(options.out, RESULTS_FILE),
 ];

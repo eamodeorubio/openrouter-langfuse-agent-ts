@@ -230,7 +230,7 @@ export const summarize = (
   ks: number[],
   threshold: number,
 ): ModelSummary[] => {
-  const rubrics = [...new Set(runs.flatMap((run) => Object.keys(run.judges)))];
+  const rubrics = [...new Set(runs.flatMap((run) => run.rubrics))];
   const models = [...new Set(runs.map((run) => run.model))];
   return models.map((model) => {
     const ofModel = runs.filter((run) => run.model === model);

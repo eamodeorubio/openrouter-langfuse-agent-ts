@@ -133,15 +133,16 @@ describe('the k list against the repeats', () => {
 });
 
 describe('the set of cases', () => {
-  it('is the core set unless --set says full', () => {
+  it('is the core set unless --set says full or judge', () => {
     expect(parseRunArgs([])).toMatchObject({ set: 'core' });
     expect(parseRunArgs(['--set', 'core'])).toMatchObject({ set: 'core' });
     expect(parseRunArgs(['--set', 'full'])).toMatchObject({ set: 'full' });
+    expect(parseRunArgs(['--set', 'judge'])).toMatchObject({ set: 'judge' });
   });
 
   it.each(['all', '', 'Core', 'full '])('refuses --set %j', (value) => {
     expect(parseRunArgs(['--set', value])).toBe(
-      `--set takes core or full, got ${value}.`,
+      `--set takes core, judge or full, got ${value}.`,
     );
   });
 });
@@ -168,6 +169,12 @@ describe('the promptfoo command', () => {
       ...common,
       '--filter-metadata',
       'set=core',
+      ...saved,
+    ]);
+    expect(promptfooArgs({ ...options, set: 'judge' })).toEqual([
+      ...common,
+      '--filter-metadata',
+      'set=judge',
       ...saved,
     ]);
   });
@@ -331,7 +338,7 @@ describe('a run', () => {
   it('stops with a message and the usage on a bad argument, and runs nothing', async () => {
     expect(await run(['--bogus'], io, fakePromptfoo(0))).toBe(2);
     expect(stderr).toBe(
-      'Unexpected argument: --bogus\nUsage: run [--set core|full] [--config <file>] [--repeat <n>] [--k 1,3,5] [--out <dir>] [--cli-version <x.y.z>]\n',
+      'Unexpected argument: --bogus\nUsage: run [--set core|judge|full] [--config <file>] [--repeat <n>] [--k 1,3,5] [--out <dir>] [--cli-version <x.y.z>]\n',
     );
     expect(spawned).toEqual([]);
   });

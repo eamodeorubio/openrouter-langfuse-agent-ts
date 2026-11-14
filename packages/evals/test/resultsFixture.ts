@@ -17,6 +17,8 @@ export interface RunSpec {
   rounds?: number[];
   /** Judge scores by metric, such as `judge-relevance`. */
   judge?: Record<string, number>;
+  /** Rubrics Jev did not answer, by metric, with the reason promptfoo recorded. Promptfoo records a score of 0 for them. */
+  unanswered?: Record<string, string>;
 }
 
 export const run = (spec: RunSpec = {}) => {
@@ -30,6 +32,7 @@ export const run = (spec: RunSpec = {}) => {
     latencyMs = 100,
     rounds = [],
     judge = {},
+    unanswered = {},
   } = spec;
   const passed = !error && failed.length === 0;
   const components = [
@@ -47,6 +50,13 @@ export const run = (spec: RunSpec = {}) => {
       // Promptfoo records a weight-0 assertion as passed, whatever its score.
       pass: true,
       score,
+      reason: `Jev Noul probability ${score} ${score >= 0.5 ? '>=' : '<'} threshold 0.5`,
+      assertion: { type: 'llm-rubric', metric, weight: 0 },
+    })),
+    ...Object.entries(unanswered).map(([metric, reason]) => ({
+      pass: true,
+      score: 0,
+      reason,
       assertion: { type: 'llm-rubric', metric, weight: 0 },
     })),
   ];
@@ -59,7 +69,11 @@ export const run = (spec: RunSpec = {}) => {
     success: passed,
     score: passed ? 1 : 0,
     ...(latencyMs === null ? {} : { latencyMs }),
-    namedScores: { ...Object.fromEntries(failed.map((m) => [m, 0])), ...judge },
+    namedScores: {
+      ...Object.fromEntries(failed.map((m) => [m, 0])),
+      ...judge,
+      ...Object.fromEntries(Object.keys(unanswered).map((m) => [m, 0])),
+    },
     // Promptfoo: failureReason 0 passed, 1 a check failed, 2 a provider error.
     // The `error` text of a failed check is the reason of that check.
     failureReason: error ? 2 : passed ? 0 : 1,

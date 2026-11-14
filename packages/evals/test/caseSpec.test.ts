@@ -44,7 +44,7 @@ describe('what a case declares', () => {
       ),
     ).toEqual({
       id: 'lookup/known-model',
-      set: 'core',
+      set: ['core'],
       needsLookup: true,
       needsArithmetic: false,
       expectedCost: 3,
@@ -56,9 +56,14 @@ describe('what a case declares', () => {
     });
   });
 
-  it('accepts both sets', () => {
-    expect(readCase(declare({ set: 'core' }))).toEqual({ set: 'core' });
-    expect(readCase(declare({ set: 'full' }))).toEqual({ set: 'full' });
+  it('reads a set as a name or a list of names, and keeps a list of one name', () => {
+    expect(readCase(declare({ set: 'core' }))).toEqual({ set: ['core'] });
+    expect(readCase(declare({ set: 'full' }))).toEqual({ set: ['full'] });
+    expect(readCase(declare({ set: 'judge' }))).toEqual({ set: ['judge'] });
+    expect(readCase(declare({ set: ['core', 'judge'] }))).toEqual({
+      set: ['core', 'judge'],
+    });
+    expect(readCase(declare({ set: ['judge'] }))).toEqual({ set: ['judge'] });
   });
 
   it('keeps nothing it was not given', () => {
@@ -101,12 +106,19 @@ describe('a declaration that is not known', () => {
   });
 });
 
+const SET_RULE = "'core', 'judge' or 'full', or a list of them";
+
 describe('a declaration of the wrong kind', () => {
   it.each([
     ['id', '', 'text'],
     ['id', 3, 'text'],
-    ['set', 'all', "'core' or 'full'"],
-    ['set', 3, "'core' or 'full'"],
+    ['set', 'all', SET_RULE],
+    ['set', 3, SET_RULE],
+    ['set', [], SET_RULE],
+    ['set', ['core', 'core'], SET_RULE],
+    ['set', ['core', 'all'], SET_RULE],
+    ['set', ['core', 3], SET_RULE],
+    ['set', null, SET_RULE],
     ['needsLookup', 'yes', 'true or false'],
     ['needsLookup', 1, 'true or false'],
     ['needsArithmetic', null, 'true or false'],

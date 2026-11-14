@@ -1,0 +1,8 @@
+# One judge rubric: Jev answers this yes/no question about a state built from the run.
+# Weight 0 records the score under its metric and leaves the pass of the run alone,
+# until the threshold of the provider in promptfooconfig.yaml is calibrated.
+type: llm-rubric
+metric: judge-grounding
+weight: 0
+value: Is every price, context size and capability in the answer given in the tool results?
+transform: file://src/judge/state.ts:grounding

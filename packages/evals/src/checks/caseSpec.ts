@@ -1,5 +1,6 @@
 import { finite, isObject } from '../json.js';
 import { parseWorkload, type Workload } from '../oracle/workload.js';
+import { SET_NAMES, type SetName } from '../sets.js';
 
 /** A case declared something the checks cannot read. Raised before the check judges anything. */
 export class CaseError extends Error {}
@@ -24,8 +25,8 @@ export type SearchRequirements = Record<string, number | string | string[]>;
 /** What a case declares in its `metadata`, and the checks read. */
 export interface CaseSpec {
   id?: string;
-  /** The set the case belongs to: the core run asks the core cases, the full run asks them all. */
-  set?: 'core' | 'full';
+  /** The sets the case belongs to: the core run asks the core cases, the judge run the cases a rubric grades, the full run asks them all. */
+  set?: SetName[];
   needsLookup?: boolean;
   needsArithmetic?: boolean;
   expectedCost?: number;
@@ -69,6 +70,8 @@ export const KNOWN_DECLARATIONS = [
   'underspecified',
   'assumes',
 ] as const;
+
+const SET_RULE = `'${SET_NAMES.slice(0, -1).join("', '")}' or '${SET_NAMES.at(-1)}', or a list of them`;
 
 const wrong = (name: string, rule: string, value: unknown): CaseError =>
   new CaseError(
@@ -166,10 +169,15 @@ export const readCase = (context: unknown): CaseSpec => {
     spec.id = id;
   }
   if (metadata.set !== undefined) {
-    if (metadata.set !== 'core' && metadata.set !== 'full') {
-      throw wrong('set', "'core' or 'full'", metadata.set);
+    const names = Array.isArray(metadata.set) ? metadata.set : [metadata.set];
+    if (
+      names.length === 0 ||
+      !names.every((name) => SET_NAMES.includes(name as SetName)) ||
+      new Set(names).size !== names.length
+    ) {
+      throw wrong('set', SET_RULE, metadata.set);
     }
-    spec.set = metadata.set;
+    spec.set = names as SetName[];
   }
   if (needsLookup !== undefined) {
     if (typeof needsLookup !== 'boolean') {

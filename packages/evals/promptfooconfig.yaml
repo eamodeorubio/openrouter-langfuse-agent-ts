@@ -16,6 +16,16 @@ providers:
 # order is the order of the precedence: a later check does not judge a run an
 # earlier class already failed.
 defaultTest:
+  options:
+    # The grader of the rubrics that cases list (see rubrics/): Jev 1.14 through OpenRouter, behind a
+    # check of the size of the state. It reads OPENROUTER_API_KEY from the
+    # environment when it grades, so no key is written here. A rubric scores
+    # the probability of yes, and passes at or above the threshold. The
+    # threshold is stated, not left to a default, until it is calibrated.
+    provider:
+      id: file://src/judge/provider.ts
+      config:
+        threshold: 0.5
   vars:
     # The matrix: promptfoo runs every case once per model.
     model:
