@@ -35,6 +35,17 @@ export interface CaseSpec {
   search?: SearchRequirements;
   /** What the case asks a chatbot to do in a month, for the cost of it. */
   workload?: Workload;
+  /** The models of the question are independent, and a good run reads them in one round. */
+  parallelLookups?: boolean;
+  /** A slug the question holds that is not a model, and the model it was meant to name. */
+  recovery?: Recovery;
+  /** A slug that the snapshot lacks, which the question asks about. */
+  unknownModel?: string;
+}
+
+export interface Recovery {
+  misspelled: string;
+  correction: string;
 }
 
 export const KNOWN_DECLARATIONS = [
@@ -48,6 +59,9 @@ export const KNOWN_DECLARATIONS = [
   'oracle',
   'search',
   'workload',
+  'parallelLookups',
+  'recovery',
+  'unknownModel',
 ] as const;
 
 const wrong = (name: string, rule: string, value: unknown): CaseError =>
@@ -61,6 +75,22 @@ const isText = (value: unknown): value is string =>
 const isFigureList = (value: unknown): value is FigureName[] =>
   Array.isArray(value) &&
   value.every((name) => FIGURE_NAMES.includes(name as FigureName));
+
+const RECOVERY_RULE =
+  'an object of misspelled and correction, two different slugs';
+
+const readRecovery = (value: unknown): Recovery => {
+  if (
+    !isObject(value) ||
+    Object.keys(value).length !== 2 ||
+    !isText(value.misspelled) ||
+    !isText(value.correction) ||
+    value.misspelled.toLowerCase() === value.correction.toLowerCase()
+  ) {
+    throw wrong('recovery', RECOVERY_RULE, value);
+  }
+  return { misspelled: value.misspelled, correction: value.correction };
+};
 
 const ORACLE_KEYS = ['query', 'params'];
 
@@ -179,6 +209,21 @@ export const readCase = (context: unknown): CaseSpec => {
       );
     }
     spec.workload = workload;
+  }
+  if (metadata.parallelLookups !== undefined) {
+    if (typeof metadata.parallelLookups !== 'boolean') {
+      throw wrong('parallelLookups', 'true or false', metadata.parallelLookups);
+    }
+    spec.parallelLookups = metadata.parallelLookups;
+  }
+  if (metadata.recovery !== undefined) {
+    spec.recovery = readRecovery(metadata.recovery);
+  }
+  if (metadata.unknownModel !== undefined) {
+    if (!isText(metadata.unknownModel)) {
+      throw wrong('unknownModel', 'text', metadata.unknownModel);
+    }
+    spec.unknownModel = metadata.unknownModel;
   }
   return spec;
 };

@@ -76,8 +76,11 @@ describe('what a case declares', () => {
       'needsArithmetic',
       'needsLookup',
       'oracle',
+      'parallelLookups',
+      'recovery',
       'search',
       'set',
+      'unknownModel',
       'workload',
     ]);
   });
@@ -87,7 +90,7 @@ describe('a declaration that is not known', () => {
   it('fails loudly, with the name and the known ones, so that a typo cannot turn a check into a pass', () => {
     expect(() => readCase(declare({ needsLookp: true }))).toThrow(CaseError);
     expect(() => readCase(declare({ needsLookp: true }))).toThrow(
-      'Unknown declaration "needsLookp" in the metadata of a case. The known ones are: id, set, needsLookup, needsArithmetic, expectedCost, askedModel, askedFigures, oracle, search, workload.',
+      'Unknown declaration "needsLookp" in the metadata of a case. The known ones are: id, set, needsLookup, needsArithmetic, expectedCost, askedModel, askedFigures, oracle, search, workload, parallelLookups, recovery, unknownModel.',
     );
   });
 
@@ -249,6 +252,62 @@ describe('the workload of a case', () => {
     expect(() => readCase(workload(value))).toThrow(
       `The declaration workload of a case must be an object of chatsPerDay, inputTokens, outputTokens and days, each a number from 0, got ${JSON.stringify(value)}.`,
     );
+  });
+});
+
+describe('the discipline declarations of a case', () => {
+  it('are read: parallel lookups, a recovery and an unknown model', () => {
+    const recovery = { misspelled: 'a/bb', correction: 'a/b' };
+    expect(
+      readCase(
+        declare({ parallelLookups: true, recovery, unknownModel: 'x/y' }),
+      ),
+    ).toEqual({ parallelLookups: true, recovery, unknownModel: 'x/y' });
+    expect(readCase(declare({ parallelLookups: false }))).toEqual({
+      parallelLookups: false,
+    });
+  });
+
+  it.each([
+    ['parallelLookups', 'yes', 'true or false'],
+    ['unknownModel', '', 'text'],
+    ['unknownModel', 3, 'text'],
+    [
+      'recovery',
+      'a/b',
+      'an object of misspelled and correction, two different slugs',
+    ],
+    [
+      'recovery',
+      { misspelled: 'a/b' },
+      'an object of misspelled and correction, two different slugs',
+    ],
+    [
+      'recovery',
+      { misspelled: 'a/b', correction: 'a/b' },
+      'an object of misspelled and correction, two different slugs',
+    ],
+    [
+      'recovery',
+      { misspelled: 'a/bb', correction: 'a/b', extra: 1 },
+      'an object of misspelled and correction, two different slugs',
+    ],
+    [
+      'recovery',
+      null,
+      'an object of misspelled and correction, two different slugs',
+    ],
+  ])('refuse %s as %j', (name, value, rule) => {
+    expect(() => readCase(declare({ [name]: value }))).toThrow(CaseError);
+    expect(() => readCase(declare({ [name]: value }))).toThrow(
+      `The declaration ${name} of a case must be ${rule}, got ${JSON.stringify(value)}.`,
+    );
+  });
+
+  it('compare the slugs of a recovery without regard to case', () => {
+    expect(() =>
+      readCase(declare({ recovery: { misspelled: 'A/B', correction: 'a/b' } })),
+    ).toThrow(CaseError);
   });
 });
 

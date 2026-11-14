@@ -78,6 +78,8 @@ describe('the files of cases', () => {
         .map((test) => test.metadata.id),
     ).toEqual([
       'calculation/given-prices',
+      'discipline/parallel-lookups',
+      'discipline/typo-recovery',
       'lookup/known-model',
       'recommendation/budget-chatbot',
       'search/cheapest-blended',
@@ -311,12 +313,74 @@ describe('the recommendation and cost cases of the full set', () => {
   });
 });
 
+describe('the lookup discipline cases', () => {
+  const byId = (id: string) => cases.find((test) => test.metadata.id === id);
+  const metrics = (id: string) =>
+    (byId(id)?.assert ?? []).map((a) => a.metric).sort();
+
+  it('are tagged as their purpose asks and read by the case contract', () => {
+    for (const [id, set] of [
+      ['discipline/parallel-lookups', 'core'],
+      ['discipline/typo-recovery', 'core'],
+      ['discipline/unknown-model', 'full'],
+    ] as const) {
+      expect(byId(id)?.family, id).toBe('discipline');
+      expect(readCase({ test: byId(id) }).set, id).toBe(set);
+      expect(readCase({ test: byId(id) }).needsLookup, id).toBe(true);
+    }
+  });
+
+  it('discipline/parallel-lookups asks to compare two models, and declares them independent', () => {
+    expect(byId('discipline/parallel-lookups')?.vars.question).toBe(
+      'Compare the prices per million tokens of openai/gpt-oss-20b and anthropic/claude-haiku-5.5.',
+    );
+    expect(
+      readCase({ test: byId('discipline/parallel-lookups') }).parallelLookups,
+    ).toBe(true);
+    expect(metrics('discipline/parallel-lookups')).toEqual([
+      'serial-lookups',
+      'wrong-search',
+    ]);
+  });
+
+  it('discipline/typo-recovery asks about a misspelled model and declares its correction and figures', () => {
+    const spec = readCase({ test: byId('discipline/typo-recovery') });
+    expect(byId('discipline/typo-recovery')?.vars.question).toBe(
+      'What does openai/gpt4o-mini cost per million tokens?',
+    );
+    expect(spec.recovery).toEqual({
+      misspelled: 'openai/gpt4o-mini',
+      correction: 'openai/gpt-4o-mini',
+    });
+    expect(spec.askedModel).toBe('openai/gpt-4o-mini');
+    expect(spec.askedFigures).toEqual(['inputPrice', 'outputPrice']);
+    expect(metrics('discipline/typo-recovery')).toEqual([
+      'no-recovery',
+      'wrong-search',
+      'wrong-value',
+    ]);
+  });
+
+  it('discipline/unknown-model asks the price of a model that does not exist', () => {
+    expect(byId('discipline/unknown-model')?.vars.question).toBe(
+      'What does openai/gpt-9 cost per million tokens?',
+    );
+    expect(
+      readCase({ test: byId('discipline/unknown-model') }).unknownModel,
+    ).toBe('openai/gpt-9');
+    expect(metrics('discipline/unknown-model')).toEqual(['invented-data']);
+  });
+});
+
 describe('the core set', () => {
   it('holds the cases of the files, in the order of the files and then of each file', () => {
     expect(cases.map((test) => test.metadata.id)).toEqual([
       'calculation/given-prices',
       'calculation/monthly-workload',
       'calculation/two-model-ratio',
+      'discipline/parallel-lookups',
+      'discipline/typo-recovery',
+      'discipline/unknown-model',
       'lookup/known-model',
       'lookup/router-model',
       'recommendation/budget-chatbot',
@@ -509,12 +573,12 @@ describe('the config, run for real against a stub CLI', () => {
     await catalog.close();
   });
 
-  it('loads every check, and each of the two models runs each of the six cases twice', () => {
+  it('loads every check, and each of the two models runs each of the eight cases twice', () => {
     expect(result.status, String(result.stderr)).toBe(0);
     const saved = JSON.parse(
       fs.readFileSync(path.join(out, 'results.json'), 'utf8'),
     );
-    expect(saved.results.results).toHaveLength(24);
+    expect(saved.results.results).toHaveLength(32);
     const errors = saved.results.results.filter(
       (r: { failureReason: number }) => r.failureReason === 2,
     );
@@ -608,5 +672,18 @@ describe('the full set, run for real against a stub CLI', () => {
     expect(failed('search/single-search')).toBe(
       'wasteful-search=1 wrong-search=1',
     );
+  });
+
+  it('names the class each discipline case fails when the stub reads only a/b', () => {
+    const stdout = String(result.stdout);
+    const failed = (id: string) =>
+      new RegExp(
+        `${id.replace('/', '\\/')}[^\\n]*\\n\\s+failed: ([^\\n]*)\\n`,
+      ).exec(stdout)?.[1];
+    expect(failed('discipline/parallel-lookups')).toBe('wrong-search=1');
+    expect(failed('discipline/typo-recovery')).toBe(
+      'no-recovery=1 wrong-search=1',
+    );
+    expect(failed('discipline/unknown-model')).toBeUndefined();
   });
 });

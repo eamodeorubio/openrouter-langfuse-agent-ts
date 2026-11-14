@@ -1,7 +1,9 @@
-# The core eval set. It runs the built CLI against real models, so it costs
-# money and needs OPENROUTER_API_KEY. Run it with `pnpm --filter
-# ask-openrouter-evals run eval`, and only when you mean to.
-description: ask-openrouter evals, core set
+# Every eval case, core and full. The runner (`src/run.ts`) keeps the core ones
+# by filtering on `metadata.set`, unless you pass `--set full`. It runs the
+# built CLI against real models, so it costs money and needs OPENROUTER_API_KEY.
+# Run it with `pnpm --filter ask-openrouter-evals run eval`, and only when you
+# mean to.
+description: ask-openrouter evals
 
 prompts:
   - '{{question}}'
@@ -10,7 +12,7 @@ providers:
   - id: file://src/provider/cli.ts
     label: ask-openrouter-cli
 
-# Every case passes through the checks of the first three error classes. The
+# Every case passes through the checks of the three universal error classes. The
 # order is the order of the precedence: a later check does not judge a run an
 # earlier class already failed.
 defaultTest:

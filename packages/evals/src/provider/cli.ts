@@ -1,4 +1,4 @@
-import { type ExecFileException, execFile } from 'node:child_process';
+import { type ExecException, execFile } from 'node:child_process';
 import { resolveCli } from '../cliPath.js';
 import { finite, isObject, parseJson } from '../json.js';
 
@@ -26,7 +26,7 @@ interface CallContext {
 interface Finished {
   stdout: string;
   stderr: string;
-  failure?: ExecFileException;
+  failure?: ExecException;
 }
 
 /** The tokens and the cost the CLI reported, in the fields promptfoo reports. */

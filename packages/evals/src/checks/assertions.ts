@@ -6,6 +6,7 @@
  * wrong-answer, then invented-data and wrong-value. This file only gathers
  * the families, so that the config names one place.
  */
+export { noPriceForUnknown, recovered, serialLookups } from './discipline.js';
 export { askedFigures, askedModelFound } from './lookup.js';
 export { modelsRead, noPriceStated, saysNoFixedPrice } from './modelPrices.js';
 export { withinBudget } from './recommendation.js';
