@@ -7,7 +7,7 @@ Defines how an eval run executes the built CLI against real services and what it
 ## ADDED Requirements
 
 ### Requirement: The target
-A run SHALL evaluate one CLI: the local build by default, or a published version when `--cli-version <x.y.z>` is given. The version SHALL be an exact version from 1.1.0, the first that lists tool calls in `--json`, and any other text SHALL be refused before any request. A published version SHALL start through `pnpm dlx ask-openrouter@<version>` with no shell. The results SHALL name the target, and the report SHALL show it.
+A run SHALL evaluate one CLI: the local build by default, or a published version when `--cli-version <x.y.z>` is given. The version SHALL be an exact version from 1.1.0, the first that lists tool calls in `--json`, and any other text SHALL be refused before any request. A published version SHALL start through `pnpm dlx ask-openrouter@<version>` with no shell. The results SHALL name the target in a file beside them, and the report SHALL start with a line that names it.
 
 #### Scenario: A published version
 - **WHEN** the script runs with `--cli-version 1.1.0`
@@ -20,6 +20,17 @@ A run SHALL evaluate one CLI: the local build by default, or a published version
 #### Scenario: The local build
 - **WHEN** no `--cli-version` is given
 - **THEN** the run uses `packages/cli/dist/index.js` and the report names it as the local build
+
+### Requirement: A published version is fetched first
+A run against a published version SHALL start that version once, before any case and before the catalog is fetched, with `pnpm dlx ask-openrouter@<version> --version`, so that its download is not part of the latency of any case. A run whose warm-up fails, or answers another version, SHALL stop with a message that names the version, and no request SHALL be sent. The instructions of that version SHALL be read from the package that `pnpm dlx` installed.
+
+#### Scenario: Warm-up fails
+- **WHEN** `pnpm dlx` cannot install the version
+- **THEN** the script exits non-zero with a message that names the version, and no request is sent
+
+#### Scenario: Another version answers
+- **WHEN** the warm-up prints `1.1.1` for `--cli-version 1.1.0`
+- **THEN** the script exits non-zero with a message that names both versions
 
 ### Requirement: Evals stay out of the offline suite
 The root `pnpm test` and CI SHALL NOT start an eval run or send a request to a real service. An eval run SHALL start only from the package's `eval` scripts. The package's own unit tests SHALL run offline.
