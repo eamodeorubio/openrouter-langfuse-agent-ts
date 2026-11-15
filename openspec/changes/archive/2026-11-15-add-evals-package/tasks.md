@@ -198,7 +198,7 @@ Commit type `refactor:`. PR title stays `test: add the evals package`. Bump: non
 ## 12. Archive
 
 - [x] 12.1 After the last slice, verify the change with `/opsx:verify` and fix what it finds.
-- [ ] 12.2 Once the user approves, archive it as `chore: archive add-evals-package`, as the last commit before merge.
+- [x] 12.2 Once the user approves, archive it as `chore: archive add-evals-package`, as the last commit before merge.
 
 ## Workflow follow-up
 
