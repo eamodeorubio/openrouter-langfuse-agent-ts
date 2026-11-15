@@ -169,12 +169,12 @@ Commit type `test:`. PR title stays `test: add the evals package`. Bump: none. B
 
 ## 10b. Calibrated rubrics (product slice 10b)
 
-- [ ] 10b.1 Write the failing tests: the grounding question has the new wording; `tools-swapped` borrows only from a case none of whose calls repeats a call of the record; each rubric file states a `threshold`; the provider config holds threshold 0; the reporter counts the share at or above each rubric's own threshold, read from the saved results. Verify they fail for the right reason.
-- [ ] 10b.2 Reword `judge-grounding`, make `tools-swapped` skip a borrowed case with a shared call, put `threshold` in the four rubric files, set the provider threshold to 0 in `promptfooconfig.yaml`, and make the reporter read each rubric's threshold from the results. Verify the tests pass.
+- [x] 10b.1 Write the failing tests: the grounding question has the new wording; `tools-swapped` borrows only from a case none of whose calls repeats a call of the record; each rubric file states a `threshold`; the provider config holds threshold 0; the reporter counts the share at or above each rubric's own threshold, read from the saved results. Verify they fail for the right reason.
+- [x] 10b.2 Reword `judge-grounding`, make `tools-swapped` skip a borrowed case with a shared call, put `threshold` in the four rubric files, set the provider threshold to 0 in `promptfooconfig.yaml`, and make the reporter read each rubric's threshold from the results. Verify the tests pass.
 - [ ] 10b.3 Calibrate again, on the user's say-so: re-ask Opus the grounding question in its new wording, one call for each record as before, in batches the plan allows; make the new `tools-swapped` controls, score them with Jev, and run `analyze`. Set the thresholds of the four rubric files from the figures, and report them. Verify `analyze` recommends no threshold for any rubric that the files do not state.
-- [ ] 10b.4 Update the docs, the README and the comments of the rubric files and the config. Use the `beautiful-prose` skill with the settings of `AGENTS.md`. Verify `pnpm docs:build` passes.
-- [ ] 10b.5 Run `pnpm mutation:evals`, `pnpm check`, `pnpm typecheck` and `pnpm test`. Verify all pass.
-- [ ] 10b.6 Run the three reviewers and fix every must-fix finding. Write the full report. Wait for user approval, which also approves the commit. Commit.
+- [x] 10b.4 Update the docs, the README and the comments of the rubric files and the config. Use the `beautiful-prose` skill with the settings of `AGENTS.md`. Verify `pnpm docs:build` passes.
+- [x] 10b.5 Run `pnpm mutation:evals`, `pnpm check`, `pnpm typecheck` and `pnpm test`. Verify all pass.
+- [x] 10b.6 Run the three reviewers and fix every must-fix finding. Write the full report. Wait for user approval, which also approves the commit. Commit.
 
 ## 11. Setup in promptfoo hooks (refactor slice 11)
 

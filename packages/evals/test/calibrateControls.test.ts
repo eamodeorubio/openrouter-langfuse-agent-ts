@@ -137,6 +137,36 @@ describe('makeControls', () => {
     ]);
   });
 
+  it('borrows no tool calls that would still ground the answer: a case that repeats a call of the record is passed over', () => {
+    const same = (id: string, name: string) =>
+      record(id, name, 'It costs $1.', [call('a/b', '{"id":"a/b"}')]);
+    const X = same('x::m/one::0', 'x/case');
+    const Y = same('y::m/one::0', 'y/case');
+    const Z = record('z::m/one::0', 'z/case', 'It costs $2.', [
+      call('q/r', '{"id":"q/r"}'),
+    ]);
+    const swapped = (records: CalibrationRecord[], id: string) =>
+      makeControls(records).find((r) => r.id === `${id}::tools-swapped`)
+        ?.transcript.toolCalls;
+    // Y repeats the call of X, so X borrows from Z, the next case that does not.
+    expect(swapped([X, Y, Z], X.id)).toEqual(Z.transcript.toolCalls);
+    expect(swapped([X, Y, Z], Y.id)).toEqual(Z.transcript.toolCalls);
+    expect(swapped([X, Y, Z], Z.id)).toEqual(X.transcript.toolCalls);
+    // One shared call among others is enough to pass the case over.
+    const V = record('xa::m/one::0', 'xa/case', 'It costs $4.', [
+      call('q/r', '{"id":"q/r"}'),
+      call('a/b', '{"id":"a/b"}'),
+    ]);
+    expect(swapped([X, V, Z], X.id)).toEqual(Z.transcript.toolCalls);
+    // With no case left that differs, there is no control.
+    expect(swapped([X, Y], X.id)).toBeUndefined();
+    // The same tool with other arguments is another call.
+    const W = record('w::m/one::0', 'w/case', 'It costs $3.', [
+      call('a/other', '{"id":"a/other"}'),
+    ]);
+    expect(swapped([X, W], X.id)).toEqual(W.transcript.toolCalls);
+  });
+
   it('makes no control it cannot make: no figure, no other case, no tool calls to swap in, no rubric to fail', () => {
     expect(controlsOf([C], 'figure-invented')).toEqual([]);
     expect(makeControls([A])).toEqual(

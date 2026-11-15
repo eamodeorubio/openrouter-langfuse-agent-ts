@@ -17,6 +17,8 @@ export interface RunSpec {
   rounds?: number[];
   /** Judge scores by metric, such as `judge-relevance`. */
   judge?: Record<string, number>;
+  /** The threshold of each judge rubric, as the assertion states it. 0.7 for a rubric left out. */
+  thresholds?: Record<string, number>;
   /** Rubrics Jev did not answer, by metric, with the reason promptfoo recorded. Promptfoo records a score of 0 for them. */
   unanswered?: Record<string, string>;
 }
@@ -32,6 +34,7 @@ export const run = (spec: RunSpec = {}) => {
     latencyMs = 100,
     rounds = [],
     judge = {},
+    thresholds = {},
     unanswered = {},
   } = spec;
   const passed = !error && failed.length === 0;
@@ -50,8 +53,13 @@ export const run = (spec: RunSpec = {}) => {
       // Promptfoo records a weight-0 assertion as passed, whatever its score.
       pass: true,
       score,
-      reason: `Jev Noul probability ${score} ${score >= 0.5 ? '>=' : '<'} threshold 0.5`,
-      assertion: { type: 'llm-rubric', metric, weight: 0 },
+      reason: `Jev Noul probability ${score} ${score >= 0 ? '>=' : '<'} threshold 0`,
+      assertion: {
+        type: 'llm-rubric',
+        metric,
+        weight: 0,
+        threshold: thresholds[metric] ?? 0.7,
+      },
     })),
     ...Object.entries(unanswered).map(([metric, reason]) => ({
       pass: true,
@@ -104,17 +112,10 @@ export const run = (spec: RunSpec = {}) => {
 
 export const resultsFile = (
   runs: ReturnType<typeof run>[],
-  threshold = 0.7,
   wall: { durationMs?: number; maxConcurrency?: number } = {},
 ) => ({
   evalId: 'eval-test',
-  config: {
-    defaultTest: {
-      options: {
-        provider: { id: 'typesafe:typesafe/jev-1.14', config: { threshold } },
-      },
-    },
-  },
+  config: {},
   runtimeOptions:
     wall.maxConcurrency === undefined
       ? {}

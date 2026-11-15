@@ -1,8 +1,9 @@
 # One judge rubric: Jev answers this yes/no question about a state built from the run.
 # Weight 0 records the score under its metric and leaves the pass of the run alone,
-# until the threshold of the provider in promptfooconfig.yaml is calibrated.
+# until the rubric is trusted to count. The threshold comes from a calibration against Claude Opus 5.5.
 type: llm-rubric
 metric: judge-usefulness
 weight: 0
+threshold: 0.7
 value: Would the answer let the person decide or act?
 transform: file://src/judge/state.ts:usefulness

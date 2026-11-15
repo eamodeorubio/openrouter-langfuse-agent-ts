@@ -49,7 +49,7 @@ export const report = (argv: string[], io: Io): number => {
     const read = readRuns(JSON.parse(raw));
     io.out(
       targetLine(file) +
-        formatReport(summarize(read.runs, ks, read.threshold), ks) +
+        formatReport(summarize(read.runs, ks, read.thresholds), ks) +
         wallTimeLine(read, read.runs.length),
     );
     return 0;

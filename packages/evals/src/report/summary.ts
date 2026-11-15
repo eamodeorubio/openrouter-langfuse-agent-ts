@@ -71,11 +71,14 @@ const countBy = (names: string[]): Record<string, number> => {
   return counts;
 };
 
+/** The threshold of a rubric whose results state none: where Jev puts its yes. */
+const DEFAULT_THRESHOLD = 0.5;
+
 /** Everything that depends on the runs alone, not on k. */
 const describe = (
   runs: Run[],
   rubrics: string[],
-  threshold: number,
+  thresholds: Record<string, number>,
 ): Omit<Stats, 'passAt' | 'passHat'> => {
   const passing = runs.filter((run) => run.passed);
   const costs = defined(runs.map((run) => run.cost));
@@ -95,6 +98,7 @@ const describe = (
     judges: Object.fromEntries(
       rubrics.map((rubric) => {
         const scores = defined(runs.map((run) => run.judges[rubric]));
+        const threshold = thresholds[rubric] ?? DEFAULT_THRESHOLD;
         return [
           rubric,
           {
@@ -228,7 +232,7 @@ const summarizeClass = (
 export const summarize = (
   runs: Run[],
   ks: number[],
-  threshold: number,
+  thresholds: Record<string, number>,
 ): ModelSummary[] => {
   const rubrics = [...new Set(runs.flatMap((run) => run.rubrics))];
   const models = [...new Set(runs.map((run) => run.model))];
@@ -237,7 +241,7 @@ export const summarize = (
     const cases = [...new Set(ofModel.map((run) => run.caseName))];
     const cells = cases.map((caseName): CellSummary => {
       const ofCell = ofModel.filter((run) => run.caseName === caseName);
-      const stats = describe(ofCell, rubrics, threshold);
+      const stats = describe(ofCell, rubrics, thresholds);
       return {
         case: caseName,
         ...stats,
@@ -251,7 +255,7 @@ export const summarize = (
         summarizeClass(name, ofModel, ks),
       ),
       row: {
-        ...describe(ofModel, rubrics, threshold),
+        ...describe(ofModel, rubrics, thresholds),
         passAt: meanOver(cells, ks, (cell) => cell.passAt),
         passHat: meanOver(cells, ks, (cell) => cell.passHat),
       },

@@ -58,6 +58,10 @@ const inventFigure = (answer: string): string | undefined => {
   );
 };
 
+/** What makes two tool calls the same call: the tool and its arguments, compared as the text the model wrote. */
+const callKey = (call: { name: string; arguments: string }): string =>
+  JSON.stringify([call.name, call.arguments]);
+
 /** Orders records by id. No two records have the same id. */
 const byId = (a: CalibrationRecord, b: CalibrationRecord): number =>
   // Stryker disable next-line EqualityOperator: equivalent because no two records have the same id
@@ -106,6 +110,7 @@ const control = (
       // Only the rubrics the control is built to fail are asked: the others add calls and say nothing about it.
       expectedFail.flatMap((rubric) => {
         const build = STATE_BUILDERS[rubric];
+        // Stryker disable next-line ArrayDeclaration: equivalent because every rubric a control is built to fail has a builder
         return build ? [[rubric, build(output, {})] as const] : [];
       }),
     ),
@@ -129,9 +134,15 @@ export const makeControls = (
   return runs.flatMap((record) => {
     const { toolCalls, answer } = record.transcript;
     const swappedAnswer = borrowFrom(record, runs);
+    const own = new Set(toolCalls.map(callKey));
+    // Tool calls that repeat a call of the record would still ground its answer: the control would not be bad.
     const swappedTools = borrowFrom(
       record,
-      runs.filter((other) => other.transcript.toolCalls.length > 0),
+      runs.filter(
+        ({ transcript }) =>
+          transcript.toolCalls.length > 0 &&
+          !transcript.toolCalls.some((call) => own.has(callKey(call))),
+      ),
     );
     const invented = inventFigure(answer);
     return [

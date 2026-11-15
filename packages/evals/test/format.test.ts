@@ -4,8 +4,10 @@ import { readRuns } from '../src/report/results.js';
 import { summarize } from '../src/report/summary.js';
 import { many, resultsFile, run } from './resultsFixture.js';
 
-const render = (runs: ReturnType<typeof run>[], ks: number[]) =>
-  formatReport(summarize(readRuns(resultsFile(runs)).runs, ks, 0.7), ks);
+const render = (runs: ReturnType<typeof run>[], ks: number[]) => {
+  const read = readRuns(resultsFile(runs));
+  return formatReport(summarize(read.runs, ks, read.thresholds), ks);
+};
 
 describe('the text of the report', () => {
   it('is a block per model, a line group per case, a mean row and the error classes', () => {

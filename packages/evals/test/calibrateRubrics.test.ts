@@ -8,7 +8,7 @@ describe('loadQuestions', () => {
   it('reads the question of each rubric of the package, by metric', () => {
     expect(loadQuestions()).toEqual({
       'judge-grounding':
-        'Is every price, context size and capability in the answer given in the tool results?',
+        'Is every price, context size and capability that the answer states about a model given in the tool results? Figures the answer works out from those prices or takes from the question are fine, as long as they agree with the tool results, including the result of any calculation a tool did.',
       'judge-relevance': 'Does the answer address the question that was asked?',
       'judge-usefulness': 'Would the answer let the person decide or act?',
       'judge-tool-usage': 'Were the tool calls relevant to the question?',

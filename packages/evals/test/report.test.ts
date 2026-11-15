@@ -8,8 +8,10 @@ import { readRuns } from '../src/report/results.js';
 import { summarize } from '../src/report/summary.js';
 import { many, type RunSpec, resultsFile, run } from './resultsFixture.js';
 
-const summaryOf = (runs: ReturnType<typeof run>[], ks = [1], threshold = 0.7) =>
-  summarize(readRuns(resultsFile(runs, threshold)).runs, ks, threshold);
+const summaryOf = (runs: ReturnType<typeof run>[], ks = [1]) => {
+  const read = readRuns(resultsFile(runs));
+  return summarize(read.runs, ks, read.thresholds);
+};
 
 const cellOf = (runs: ReturnType<typeof run>[], ks?: number[]) => {
   const [model] = summaryOf(runs, ks);
@@ -203,9 +205,22 @@ describe('the judge pass rate', () => {
     });
   });
 
-  it('reads the threshold of the run from the results file', () => {
-    const [model] = summaryOf([scored(0.5), scored(0.8)], [1], 0.6);
-    expect(model?.cells[0]?.judges['judge-relevance']?.rate).toBe(0.5);
+  it('reads the threshold of each rubric from the results file, and not one for all', () => {
+    const both = (score: number) =>
+      run({
+        judge: { 'judge-relevance': score, 'judge-usefulness': score },
+        thresholds: { 'judge-relevance': 0.5, 'judge-usefulness': 0.7 },
+      });
+    const [model] = summaryOf([both(0.6), both(0.8)], [1]);
+    const judges = model?.cells[0]?.judges;
+    expect(judges?.['judge-relevance']?.rate).toBe(1);
+    expect(judges?.['judge-usefulness']?.rate).toBe(0.5);
+  });
+
+  it('counts at 0.5 a rubric whose results state no threshold', () => {
+    const bare = run({ judge: { 'judge-relevance': 0.5 } });
+    const [model] = summarize(readRuns(resultsFile([bare])).runs, [1], {});
+    expect(model?.cells[0]?.judges['judge-relevance']?.rate).toBe(1);
   });
 
   it('does not move the pass estimators', () => {

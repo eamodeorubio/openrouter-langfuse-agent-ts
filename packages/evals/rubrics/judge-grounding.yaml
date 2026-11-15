@@ -1,8 +1,9 @@
 # One judge rubric: Jev answers this yes/no question about a state built from the run.
 # Weight 0 records the score under its metric and leaves the pass of the run alone,
-# until the threshold of the provider in promptfooconfig.yaml is calibrated.
+# until the rubric is trusted to count. The threshold of 0.5 is a placeholder: the calibration reported this rubric as suspect.
 type: llm-rubric
 metric: judge-grounding
 weight: 0
-value: Is every price, context size and capability in the answer given in the tool results?
+threshold: 0.5
+value: Is every price, context size and capability that the answer states about a model given in the tool results? Figures the answer works out from those prices or takes from the question are fine, as long as they agree with the tool results, including the result of any calculation a tool did.
 transform: file://src/judge/state.ts:grounding

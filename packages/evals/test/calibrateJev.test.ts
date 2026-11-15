@@ -81,7 +81,7 @@ describe('the jev command', () => {
       grade: {
         type: 'noul',
         instructions:
-          'Is every price, context size and capability in the answer given in the tool results?',
+          'Is every price, context size and capability that the answer states about a model given in the tool results? Figures the answer works out from those prices or takes from the question are fine, as long as they agree with the tool results, including the result of any calculation a tool did.',
       },
     });
     expect(seen.out).toBe('2 rubrics scored, 0 failed, in 1 controls.\n');

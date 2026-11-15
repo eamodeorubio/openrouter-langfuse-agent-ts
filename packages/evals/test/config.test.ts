@@ -659,6 +659,7 @@ describe('the judge rubrics of the config', () => {
       type: string;
       metric: string;
       weight: number;
+      threshold: number;
       value: string;
       transform: string;
     };
@@ -667,43 +668,48 @@ describe('the judge rubrics of the config', () => {
     expect(fs.readdirSync(rubricDir).sort()).toEqual(
       rubricNames.map((name) => `${name}.yaml`).sort(),
     );
-    const expected: [string, string, string][] = [
+    const expected: [string, string, string, number][] = [
       [
         'judge-grounding',
-        'Is every price, context size and capability in the answer given in the tool results?',
+        'Is every price, context size and capability that the answer states about a model given in the tool results? Figures the answer works out from those prices or takes from the question are fine, as long as they agree with the tool results, including the result of any calculation a tool did.',
         'grounding',
+        0.5,
       ],
       [
         'judge-relevance',
         'Does the answer address the question that was asked?',
         'relevance',
+        0.5,
       ],
       [
         'judge-usefulness',
         'Would the answer let the person decide or act?',
         'usefulness',
+        0.7,
       ],
       [
         'judge-tool-usage',
         'Were the tool calls relevant to the question?',
         'toolUsage',
+        0.73,
       ],
     ];
-    for (const [name, question, builder] of expected) {
+    for (const [name, question, builder, threshold] of expected) {
       expect(file(name)).toEqual({
         type: 'llm-rubric',
         metric: name,
         weight: 0,
+        threshold,
         value: question,
         transform: `file://src/judge/state.ts:${builder}`,
       });
     }
   });
 
-  it('are graded by the judge provider, with a threshold of 0.5 that the config states, and no levels', () => {
+  it('are graded by the judge provider, with a threshold of 0 so that the threshold of each rubric alone decides, and no levels', () => {
     expect(config.defaultTest.options.provider).toEqual({
       id: 'file://src/judge/provider.ts',
-      config: { threshold: 0.5 },
+      config: { threshold: 0 },
     });
   });
 
@@ -1028,6 +1034,18 @@ describe('the rubrics, run for real against a stub CLI and a Jev on loopback', (
     expect(states.some((s) => s.startsWith('Tool calls:'))).toBe(true);
     expect(states.some((s) => s.startsWith('Question: '))).toBe(true);
     expect(states.every((s) => s.length > 0)).toBe(true);
+  });
+
+  it('save the threshold of each rubric with its result, and the reporter reads it from there', () => {
+    const saved = JSON.parse(
+      fs.readFileSync(path.join(out, 'results.json'), 'utf8'),
+    );
+    expect(readRuns(saved).thresholds).toEqual({
+      'judge-grounding': 0.5,
+      'judge-relevance': 0.5,
+      'judge-usefulness': 0.7,
+      'judge-tool-usage': 0.73,
+    });
   });
 
   it('keep the key out of every file the run wrote', () => {

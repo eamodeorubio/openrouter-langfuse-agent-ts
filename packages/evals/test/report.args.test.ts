@@ -142,7 +142,8 @@ describe('the summary of the runs', () => {
       ...many(4, { model: 'm/two', caseName: 'A1' }),
       run({ model: 'm/one', caseName: 'A1', failed: ['y'] }),
     ];
-    return summarize(readRuns(resultsFile(runs)).runs, [1], 0.7);
+    const read = readRuns(resultsFile(runs));
+    return summarize(read.runs, [1], read.thresholds);
   };
 
   it('groups the runs by model, then by case, each cell with only its own runs', () => {
@@ -173,7 +174,7 @@ describe('the summary of the runs', () => {
         ]),
       ).runs,
       [1],
-      0.7,
+      {},
     );
     expect([first?.model, second?.model]).toEqual(['m/b', 'm/a']);
     expect(first?.cells.map((cell) => cell.case)).toEqual(['Z', 'X']);
@@ -198,7 +199,7 @@ describe('the wall time in the report', () => {
   it('is the last line, after the models', () => {
     const results = write(
       JSON.stringify(
-        resultsFile(many(6), 0.7, { durationMs: 12345, maxConcurrency: 4 }),
+        resultsFile(many(6), { durationMs: 12345, maxConcurrency: 4 }),
       ),
     );
     const { stdout } = exec([results]);

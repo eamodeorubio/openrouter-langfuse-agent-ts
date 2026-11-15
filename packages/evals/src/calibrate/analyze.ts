@@ -6,7 +6,7 @@ import type { CalibrationRecord } from './types.js';
 
 const USAGE = 'Usage: calibrate analyze [--file <file>]\n';
 
-/** The threshold of the config, and the line under which a threshold means Jev reads a rubric differently from Opus. */
+/** Where Jev puts its yes, and the line under which a threshold means Jev reads a rubric differently from Opus. */
 const NEUTRAL = 0.5;
 const MIN_AUC = 0.7;
 const WEIGHT_AUC = 0.9;

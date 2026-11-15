@@ -341,28 +341,59 @@ describe('the judge scores of a run', () => {
   });
 });
 
-describe('the judge threshold', () => {
-  const withThreshold = (threshold: unknown) =>
-    read([], {
-      config: {
-        defaultTest: { options: { provider: { config: { threshold } } } },
-      },
-    }).threshold;
+describe('the threshold of each judge rubric', () => {
+  const rubric = (metric: string, threshold: unknown, extra = {}) => ({
+    pass: true,
+    score: 0.6,
+    reason: 'Jev Noul probability 0.6 >= threshold 0',
+    assertion: { type: 'llm-rubric', metric, weight: 0, threshold, ...extra },
+  });
+  const thresholdsOf = (...components: unknown[]) =>
+    read([entry({ gradingResult: { componentResults: components } })])
+      .thresholds;
 
   it.each([0, 0.25, 0.7, 1])('is read when it is %s', (value) => {
-    expect(withThreshold(value)).toBe(value);
+    expect(thresholdsOf(rubric('judge-relevance', value))).toEqual({
+      'judge-relevance': value,
+    });
   });
 
   it.each([-0.01, 1.01, '0.5', Number.NaN, null, undefined])(
-    'is %s, which is not a threshold, so the default holds',
+    'is %s, which is not a threshold, so the rubric has none',
     (value) => {
-      expect(withThreshold(value)).toBe(0.5);
+      expect(thresholdsOf(rubric('judge-relevance', value))).toEqual({});
     },
   );
 
-  it('is the default without a config', () => {
-    expect(read([]).threshold).toBe(0.5);
-    expect(read([], { config: {} }).threshold).toBe(0.5);
+  it('is read for each rubric, and for no check that is not a rubric', () => {
+    expect(
+      thresholdsOf(
+        rubric('judge-relevance', 0.5),
+        rubric('judge-usefulness', 0.7),
+        rubric('judge-tool-usage', 0.73),
+        {
+          pass: true,
+          score: 1,
+          assertion: { metric: 'run-failed', threshold: 0.9 },
+        },
+      ),
+    ).toEqual({
+      'judge-relevance': 0.5,
+      'judge-usefulness': 0.7,
+      'judge-tool-usage': 0.73,
+    });
+  });
+
+  it('is collected over all the runs, and a run with no rubric adds none', () => {
+    const withRubric = entry({
+      gradingResult: {
+        componentResults: [rubric('judge-relevance', 0.5)],
+      },
+    });
+    expect(read([entry(), withRubric]).thresholds).toEqual({
+      'judge-relevance': 0.5,
+    });
+    expect(read([]).thresholds).toEqual({});
   });
 });
 

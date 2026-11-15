@@ -4,7 +4,8 @@ import { summarize } from '../src/report/summary.js';
 import { many, resultsFile, run } from './resultsFixture.js';
 
 const classesOf = (runs: ReturnType<typeof run>[], ks = [1, 3]) => {
-  const [model] = summarize(readRuns(resultsFile(runs)).runs, ks, 0.7);
+  const read = readRuns(resultsFile(runs));
+  const [model] = summarize(read.runs, ks, read.thresholds);
   return model?.classes ?? [];
 };
 

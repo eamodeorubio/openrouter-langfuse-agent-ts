@@ -141,26 +141,29 @@ const toRun = (entry: unknown): Run => {
   };
 };
 
-/** The judge threshold the run used, read from the provider config of the saved config. */
-const thresholdOf = (file: unknown): number => {
-  const threshold = pathOf(
-    file,
-    'config',
-    'defaultTest',
-    'options',
-    'provider',
-    'config',
-    'threshold',
+/** The threshold of each judge rubric, as the assertion of the saved results states it. A rubric whose results state none has none. The runs of one config state the same value, so the last one read stands. */
+const thresholdsOf = (entries: unknown[]): Record<string, number> =>
+  Object.fromEntries(
+    entries.flatMap((entry) => {
+      const components = pathOf(entry, 'gradingResult', 'componentResults');
+      if (!Array.isArray(components)) return [];
+      return components.flatMap((component) => {
+        const metric = text(pathOf(component, 'assertion', 'metric'));
+        const threshold = pathOf(component, 'assertion', 'threshold');
+        return metric?.startsWith(JUDGE_PREFIX) &&
+          finite(threshold) &&
+          threshold >= 0 &&
+          threshold <= 1
+          ? [[metric, threshold] as const]
+          : [];
+      });
+    }),
   );
-  return finite(threshold) && threshold >= 0 && threshold <= 1
-    ? threshold
-    : // The config states it. This is the default of promptfoo's TypeSafe provider, for a file that does not.
-      0.5;
-};
 
 export interface ReadResults {
   runs: Run[];
-  threshold: number;
+  /** The threshold of each judge rubric that the results state, by metric. */
+  thresholds: Record<string, number>;
   /** How long the eval took, as promptfoo measured it. */
   wallTimeMs?: number;
   /** How many runs promptfoo ran at once. */
@@ -179,7 +182,7 @@ export const readRuns = (file: unknown): ReadResults => {
   const concurrency = pathOf(file, 'runtimeOptions', 'maxConcurrency');
   return {
     runs: entries.map(toRun),
-    threshold: thresholdOf(file),
+    thresholds: thresholdsOf(entries),
     ...(finite(wallTimeMs) && wallTimeMs >= 0 ? { wallTimeMs } : {}),
     ...(Number.isInteger(concurrency) && (concurrency as number) >= 1
       ? { concurrency: concurrency as number }
