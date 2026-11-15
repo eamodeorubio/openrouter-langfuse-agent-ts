@@ -59,3 +59,14 @@ export const toolUsage = build((run, context) => [
   `Question: ${question(run, context)}`,
   calls(run, false),
 ]);
+
+/** The builder of the state of each rubric, by metric. */
+export const STATE_BUILDERS: Record<
+  string,
+  (output: unknown, context: unknown) => string
+> = {
+  'judge-grounding': grounding,
+  'judge-relevance': relevance,
+  'judge-usefulness': usefulness,
+  'judge-tool-usage': toolUsage,
+};

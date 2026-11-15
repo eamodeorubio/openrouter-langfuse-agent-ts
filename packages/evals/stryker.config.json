@@ -2,7 +2,12 @@
   "$schema": "./node_modules/@stryker-mutator/core/schema/stryker-schema.json",
   "testRunner": "vitest",
   "plugins": ["@stryker-mutator/vitest-runner"],
-  "mutate": ["src/**/*.ts", "!src/run.ts", "!src/report/main.ts"],
+  "mutate": [
+    "src/**/*.ts",
+    "!src/run.ts",
+    "!src/report/main.ts",
+    "!src/calibrate/main.ts"
+  ],
   "ignorePatterns": ["tsconfig*.json", ".promptfoo", "results"],
   "tsconfigFile": "tsconfig.stryker-unused.json",
   "coverageAnalysis": "perTest",

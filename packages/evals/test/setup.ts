@@ -1,4 +1,7 @@
+import fs from 'node:fs';
 import net from 'node:net';
+import os from 'node:os';
+import path from 'node:path';
 
 // The unit tests of this package never reach the network. Two guards make that
 // true whatever the code under test does. The live eval run is the one place
@@ -11,6 +14,16 @@ for (const name of Object.keys(process.env)) {
     delete process.env[name];
   }
 }
+
+// `claude` is a child process, which the socket guard below cannot see. A test
+// that reaches for it without a stand-in of its own gets a command that does
+// not exist, and never the real one, which would spend money on Opus.
+process.env.EVAL_CLAUDE = '/nonexistent/claude-that-no-test-may-run';
+
+// A command that writes under the home directory writes in a directory of its
+// own here, so that a test, or a mutant of the code under test, can never leave
+// a file in the home of whoever runs the tests.
+process.env.HOME = fs.mkdtempSync(path.join(os.tmpdir(), 'evals-home-'));
 
 // 2. Sockets connect to the loopback interface only. HTTP, HTTPS and fetch all
 //    end at a socket, so a hard-coded URL is caught too.

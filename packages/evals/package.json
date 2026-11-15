@@ -17,7 +17,8 @@
     "eval": "tsx src/run.ts",
     "report": "tsx src/report/main.ts",
     "mutation": "stryker run",
-    "mutation:full": "stryker run --force"
+    "mutation:full": "stryker run --force",
+    "calibrate": "tsx src/calibrate/main.ts"
   },
   "devDependencies": {
     "@stryker-mutator/core": "^10.0.0",

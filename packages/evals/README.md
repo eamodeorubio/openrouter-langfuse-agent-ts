@@ -71,6 +71,18 @@ Four rubrics, `judge-grounding`, `judge-relevance`, `judge-usefulness` and `judg
 
 A rubric goes unscored when Jev did not answer it: a state of more than 32,000 bytes, a missing key, an API error or any other reply. That is not a score of 0. A graded run sends one request for each rubric its case lists, so the core set sends up to 70 for one repeat on two models. The judge reads `OPENROUTER_API_KEY` from the environment when it grades. `EVAL_JUDGE_URL` points it at another API, and exists for the tests of the package, which use a server on the loopback interface. The [docs page](https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/evals/) lists the four questions.
 
+## Calibrating the rubrics
+
+`pnpm --filter ask-openrouter-evals run calibrate <step>` checks the threshold and the weight of each judge rubric against Claude Opus 5.5. The five steps share one file, `~/jev-calibration-transcripts.json`, which every step can point elsewhere with `--file` (`collect` calls it `--out`):
+
+1. `collect` writes a record for each graded run of a judge-set run. It will not overwrite a file that exists without `--force`, and then keeps the old one as `.bak` (`.bak.2`, and so on).
+2. `controls` adds copies of the runs that are bad on purpose.
+3. `jev` scores the controls with Jev, using `OPENROUTER_API_KEY`. `--parallel <n>` sets how many requests run at once.
+4. `opus` asks Opus for the reference answer, yes, no or ambiguous, through the `claude` command, once for each rubric of each record. `--max-calls <n>` caps the calls, for a first pass.
+5. `analyze` prints the AUC, the best threshold and a recommended weight for each rubric.
+
+Each step that writes the file takes a `.lock` beside it, so two cannot run on one file; remove the lock by hand if a crash left it. `jev` and `opus` save as they go and exit 1 when a save fails. The judge-set run, `jev` and `opus` cost money. A rubric whose best thresholds all lie below 0.5 is reported as suspect, and one with an AUC under 0.7 as not worth a threshold. The command recommends and changes nothing, and it never runs from the tests or from `eval`. The [docs page](https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/evals/) walks through the steps.
+
 ## Reading the report
 
 The report goes to stdout, one block per model and one line group per case:

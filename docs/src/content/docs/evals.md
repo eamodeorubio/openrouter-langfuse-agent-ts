@@ -74,6 +74,37 @@ A run goes unscored on a rubric when Jev did not answer it, and the report keeps
 
 The judge uses the same `OPENROUTER_API_KEY` as the CLI, read from the environment when it grades and written nowhere. It costs requests: a graded run sends one for each rubric its case lists, between none and four. The core set sends up to 70 for one repeat on two models, and the judge set 144.
 
+## Calibrating the rubrics
+
+Every rubric starts at a threshold of 0.5 and a weight of 0, and neither has been tested. The calibration finds out how far Jev can be trusted, rubric by rubric, by comparing it with a judge that is stronger and slower: Claude Opus 5.5, asked the same question over the same text. It recommends a threshold and a weight for each rubric. It changes nothing: the files stay as they are until you decide.
+
+Five steps share one file, `~/jev-calibration-transcripts.json`, outside the repository. `analyze` only reads it. Run `controls`, `jev` or `opus` again and they skip what is already done, so no paid call is repeated.
+
+```sh
+pnpm --filter ask-openrouter-evals run eval --set judge --repeat 10 --out /tmp/judge-run
+pnpm --filter ask-openrouter-evals run calibrate collect /tmp/judge-run/results.json
+pnpm --filter ask-openrouter-evals run calibrate controls
+pnpm --filter ask-openrouter-evals run calibrate jev
+pnpm --filter ask-openrouter-evals run calibrate opus --max-calls 20
+pnpm --filter ask-openrouter-evals run calibrate analyze
+```
+
+Every step takes `--file <path>` to work on another file in place of the default, and `collect` calls it `--out`. `jev` and `opus` take `--parallel <n>` to set how many requests run at once, four and three by default. The first command is a normal paid eval run, and it scales with `--repeat`: the judge set at ten repeats is 400 runs and about 1,400 Jev requests, so a smaller `--repeat` makes a first pass cheaper.
+
+1. **Collect.** Every graded run becomes a record: the prompt, the transcript, the text each rubric sent to Jev, rebuilt exactly, and the scores Jev gave. A file that exists is not overwritten unless you say `--force`, because it comes to hold paid answers, and then the old file is kept beside it as `.bak`. Every write goes to a file beside it that is renamed over it, so a crash cannot leave half a file. A copy is never written over an earlier one (`.bak`, then `.bak.2`), and every command that writes the file takes a `.lock` beside it, so two of them cannot overwrite each other's answers. If a crash left a lock behind, remove it.
+2. **Controls.** Runs that went well teach little about what a rubric rejects, so the second step adds runs that are bad on purpose: the answer of another case, an invented price or context size in the answer, and the tool calls of another case. Each names the rubrics it should fail.
+3. **Jev.** The controls are new text, so Jev scores them too, by the same grader as a run.
+4. **Opus.** Opus answers each rubric of each record with yes, no or ambiguous, and one sentence of reason, through `claude -p` with high effort, no tools, no session kept, and an empty working directory so that no project instructions steer it. It sees the exact question of the rubric and the exact text Jev saw. This step needs the `claude` command on your path and logged in. `--max-calls` caps the calls, so that a first pass over a few records shows what the rest will cost, which the command prints when `claude` reports it.
+5. **Analyze.** For each rubric, on the runs where Opus said yes or no, the command works out the balanced agreement of Jev with Opus at each threshold from 0 to 1, which is the mean of the share of yes that Jev gets right and the share of no, so that a rubric that nearly always says yes cannot look good for it. It also works out the AUC and the best threshold. Ambiguous answers are counted and left out of the fit.
+
+The AUC is the chance that a run Opus calls yes scores above one it calls no. At 1 Jev ranks runs exactly as Opus does, and at 0.5 it is a coin flip. Under 0.7 the rubric is reported as not worth a threshold, because no threshold would make Jev's score mean much. The best threshold is the middle of the range of thresholds that agree within a point of the best, and the report says how far it moves when each case is left out in turn, so that one odd case cannot pick it.
+
+Jev puts its yes at 0.5 and above. A rubric whose best thresholds all lie below 0.5 therefore agrees with Opus only when Jev is made to say yes to runs it scores as probably no. The report calls such a rubric suspect, recommends no threshold, and sends you to its wording and to the text it is given.
+
+The report ends each rubric with a weight: `keep 0`, or `may count`. A rubric may count only when it has at least 20 answers of yes and 20 of no, its AUC is at least 0.9, its agreement with Opus on the cases left out, with the threshold fitted on the others, is at least 0.9, the threshold moves by no more than 0.1 when a case is left out, and both Opus and Jev reject at least 90% of the controls the rubric is expected to fail. When it says `keep 0`, it lists what fell short. A rubric that counts would fail runs, so it would need an error class of its own, and that is a decision for you.
+
+These commands reach services and spend money: the collection needs a judge-set run, the third step sends requests to Jev, and the fourth calls Opus once for each rubric of each record. They never run from `pnpm test`, from CI or from the `eval` script, only when you start them by name.
+
 ## The error taxonomy
 
 A run passes when no error class fires. Every failed check carries the code of its class, so that a failed run says what went wrong, as well as that it did. The report counts the classes of each question, on the line that starts with `failed:`.
