@@ -3,37 +3,19 @@ import os from 'node:os';
 import path from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BUILT_CLI } from '../src/cliPath.js';
-import { InstructionsError } from '../src/oracle/instructions.js';
-import { type Snapshot, SnapshotError } from '../src/oracle/snapshot.js';
-import { PublishedError } from '../src/published.js';
 import {
   DEFAULT_REPEAT,
   type Deps,
-  modelsUnderTest,
   parseRunArgs,
   promptfooArgs,
   run,
 } from '../src/runner.js';
 import { serveCatalog } from './catalogServer.js';
 import { many, resultsFile } from './resultsFixture.js';
+import { runTsx } from './runTsx.js';
 
 const root = path.resolve(import.meta.dirname, '..');
 const stub = path.join(root, 'test/fixtures/stub-cli.mjs');
-
-const SNAPSHOT: Snapshot = {
-  fetchedAt: '2026-11-13T22:00:00.000Z',
-  models: [
-    {
-      id: 'a/b',
-      contextLength: 8000,
-      supportedParameters: ['tools'],
-      inputModalities: ['text'],
-      outputModalities: ['text'],
-      inputPrice: 1,
-      outputPrice: 4,
-    },
-  ],
-};
 
 describe('the arguments of the eval script', () => {
   const options = (argv: string[]) => {
@@ -203,21 +185,6 @@ describe('a run', () => {
 
   /** A promptfoo that writes the results file of `runs` runs and exits with `status`. */
   const fakePromptfoo = (status: number | null, runs = 5): Deps => ({
-    warm: async (version) => {
-      order.push(`warm ${version}`);
-    },
-    publishedEntry: async (version) => {
-      order.push(`entry ${version}`);
-      return `/dlx/${version}/node_modules/ask-openrouter/dist/index.js`;
-    },
-    instructions: async () => {
-      order.push('instructions');
-      return 'Be brief.';
-    },
-    snapshot: async () => {
-      order.push('snapshot');
-      return SNAPSHOT;
-    },
     spawn: (command, args, options) => {
       order.push('spawn');
       spawned.push({
@@ -275,9 +242,6 @@ describe('a run', () => {
       }),
     );
     expect(call?.env).toMatchObject({
-      // The models under test, so that the provider picks no free model among them.
-      EVAL_MODELS:
-        'nvidia/nemotron-3-ultra-550b-a55b:free,anthropic/claude-haiku-5.5',
       PROMPTFOO_DISABLE_TELEMETRY: '1',
       PROMPTFOO_DISABLE_UPDATE: '1',
       PROMPTFOO_FAILED_TEST_EXIT_CODE: '0',
@@ -367,20 +331,56 @@ describe('a run', () => {
     }
   });
 
-  it('starts the real promptfoo when no spawn is given, and reports what the stub CLI answered', async () => {
+  it('starts the real promptfoo, whose hook sets the run up, and reports what the stub CLI answered', async () => {
+    // A process of its own, so that the catalog server of this test can answer the hook of promptfoo.
     const catalog = await serveCatalog();
-    vi.stubEnv('EVAL_CATALOG_URL', catalog.url);
-    const code = await run(['--repeat', '2', '--k', '1,2', '--out', out], io);
+    const result = await runTsx(
+      [
+        path.join(root, 'src/run.ts'),
+        '--repeat',
+        '2',
+        '--k',
+        '1,2',
+        '--out',
+        out,
+      ],
+      { EVAL_CLI: stub, EVAL_CATALOG_URL: catalog.url },
+    );
     await catalog.close();
-    expect(stderr).not.toContain('promptfoo stopped');
-    expect(code).toBe(0);
+    expect(result.status, result.stderr).toBe(0);
+    expect(result.stderr).not.toContain('promptfoo stopped');
     for (const model of [
       'nvidia/nemotron-3-ultra-550b-a55b:free',
       'anthropic/claude-haiku-5.5',
     ]) {
-      expect(stdout).toContain(model);
+      expect(result.stdout).toContain(model);
     }
-    expect(stdout).toMatch(/lookup\/known-model\s+n=2/);
+    expect(result.stdout).toMatch(/lookup\/known-model\s+n=2/);
+    for (const file of ['catalog.json', 'instructions.txt', 'target.txt']) {
+      expect(fs.existsSync(path.join(out, file)), file).toBe(true);
+    }
+  });
+
+  it('stops with the sentence of the hook and the code 3 when the catalog cannot be fetched, before any request', async () => {
+    const catalog = await serveCatalog(500);
+    const result = await runTsx(
+      [
+        path.join(root, 'src/run.ts'),
+        '--repeat',
+        '1',
+        '--k',
+        '1',
+        '--out',
+        out,
+      ],
+      { EVAL_CLI: stub, EVAL_CATALOG_URL: catalog.url },
+    );
+    await catalog.close();
+    expect(result.status).toBe(3);
+    expect(result.stderr).toContain('Could not fetch the model catalog from');
+    expect(result.stderr).not.toContain('promptfoo stopped');
+    expect(result.stdout).toBe('');
+    expect(fs.existsSync(path.join(out, 'results.json'))).toBe(false);
   });
 
   it('says why promptfoo did not start, and exits 1', async () => {
@@ -418,232 +418,34 @@ describe('a run', () => {
     expect(fs.existsSync(out)).toBe(false);
   });
 
-  it('takes the snapshot before it starts promptfoo, saves it as catalog.json, and passes its path on', async () => {
-    fs.mkdirSync(out, { recursive: true });
+  it('tells the hook where to write, and which version to start: none for the local build', async () => {
     await run(['--out', out, '--repeat', '5'], io, fakePromptfoo(0));
-    expect(order).toEqual(['instructions', 'snapshot', 'spawn']);
-    const saved = JSON.parse(
-      fs.readFileSync(path.join(out, 'catalog.json'), 'utf8'),
-    );
-    expect(saved).toEqual(SNAPSHOT);
-    expect(spawned[0]?.env.EVAL_CATALOG).toBe(path.join(out, 'catalog.json'));
-  });
-
-  it('runs a published version: warms it first, reads its instructions from the package, and needs no build', async () => {
-    vi.stubEnv('EVAL_CLI', '/nonexistent/dist/index.js');
-    const asked: string[] = [];
-    const deps: Deps = {
-      ...fakePromptfoo(0),
-      instructions: async (cli) => {
-        asked.push(cli);
-        order.push('instructions');
-        return 'Be brief.';
-      },
-    };
-    const code = await run(
-      ['--out', out, '--repeat', '5', '--cli-version', '1.1.0'],
-      io,
-      deps,
-    );
-    expect(code).toBe(0);
-    expect(order).toEqual([
-      'warm 1.1.0',
-      'entry 1.1.0',
-      'instructions',
-      'snapshot',
-      'spawn',
-    ]);
-    expect(asked).toEqual([
-      '/dlx/1.1.0/node_modules/ask-openrouter/dist/index.js',
-    ]);
-    expect(spawned[0]?.env.EVAL_CLI_VERSION).toBe('1.1.0');
-  });
-
-  it('tells the provider that the target is the local build, with an empty version', async () => {
-    await run(['--out', out, '--repeat', '5'], io, fakePromptfoo(0));
+    expect(spawned[0]?.env.EVAL_OUT).toBe(out);
     expect(spawned[0]?.env.EVAL_CLI_VERSION).toBe('');
-  });
-
-  it('stops before any request when the warm-up fails, and names the version', async () => {
-    const deps: Deps = {
-      ...fakePromptfoo(0),
-      warm: async () => {
-        throw new PublishedError(
-          'Could not start ask-openrouter@1.1.0 through pnpm dlx: no network',
-        );
-      },
-    };
-    expect(
-      await run(
-        ['--out', out, '--cli-version', '1.1.0', '--repeat', '5'],
-        io,
-        deps,
-      ),
-    ).toBe(1);
-    expect(stderr).toBe(
-      'Could not start ask-openrouter@1.1.0 through pnpm dlx: no network\n',
-    );
-    expect(order).toEqual([]);
-    expect(spawned).toEqual([]);
-    expect(stdout).toBe('');
-  });
-
-  it('stops before any request when the package cannot be found, and does not hide a bug', async () => {
-    const lost: Deps = {
-      ...fakePromptfoo(0),
-      publishedEntry: async () => {
-        throw new PublishedError(
-          'pnpm dlx installed ask-openrouter@1.1.0 but reported no ask-openrouter binary.',
-        );
-      },
-    };
-    expect(
-      await run(
-        ['--out', out, '--cli-version', '1.1.0', '--repeat', '5'],
-        io,
-        lost,
-      ),
-    ).toBe(1);
-    expect(stderr).toContain('reported no ask-openrouter binary');
-    expect(spawned).toEqual([]);
-    const bug: Deps = {
-      ...fakePromptfoo(0),
-      warm: async () => {
-        throw new TypeError('a bug');
-      },
-    };
-    await expect(
-      run(['--out', out, '--cli-version', '1.1.0', '--repeat', '5'], io, bug),
-    ).rejects.toThrow('a bug');
-  });
-
-  it('writes the target beside the results, and hands it to the report', async () => {
     await run(
       ['--out', out, '--repeat', '5', '--cli-version', '1.1.0'],
       io,
       fakePromptfoo(0),
     );
-    expect(fs.readFileSync(path.join(out, 'target.txt'), 'utf8')).toBe(
-      'ask-openrouter@1.1.0',
-    );
-    expect(stdout.split('\n')[0]).toBe('target: ask-openrouter@1.1.0');
+    expect(spawned[1]?.env.EVAL_CLI_VERSION).toBe('1.1.0');
   });
 
-  it('names the local build as the target, by the path of the entry it started', async () => {
-    await run(['--out', out, '--repeat', '5'], io, fakePromptfoo(0));
-    const target = fs.readFileSync(path.join(out, 'target.txt'), 'utf8');
-    expect(target).toMatch(/^local build \(.+\)$/);
-    expect(stdout.split('\n')[0]).toBe(`target: ${target}`);
-  });
-
-  it('writes the instructions of the CLI beside the results, and tells the checks where, before any request', async () => {
-    const asked: string[] = [];
-    const deps: Deps = {
-      ...fakePromptfoo(0),
-      instructions: async (cli) => {
-        asked.push(cli);
-        order.push('instructions');
-        return 'Be brief.';
-      },
-    };
-    expect(await run(['--out', out, '--repeat', '5'], io, deps)).toBe(0);
-    expect(asked).toEqual([stub]);
-    expect(order).toEqual(['instructions', 'snapshot', 'spawn']);
-    const file = path.join(out, 'instructions.txt');
-    expect(fs.readFileSync(file, 'utf8')).toBe('Be brief.');
-    expect(spawned[0]?.env.EVAL_INSTRUCTIONS).toBe(file);
-  });
-
-  it('stops before any request when the CLI has no instructions, and names the file', async () => {
-    const deps: Deps = {
-      ...fakePromptfoo(0),
-      instructions: async () => {
-        throw new InstructionsError(
-          'The CLI has no readable instructions: /x/instructions.js could not be imported.',
-        );
-      },
-    };
-    expect(await run(['--out', out, '--repeat', '5'], io, deps)).toBe(1);
-    expect(stderr).toBe(
-      'The CLI has no readable instructions: /x/instructions.js could not be imported.\n',
-    );
-    expect(order).toEqual([]);
-    expect(spawned).toEqual([]);
-    expect(stdout).toBe('');
-  });
-
-  it('does not hide a failure that is not an instructions error', async () => {
-    const deps: Deps = {
-      ...fakePromptfoo(0),
-      instructions: async () => {
-        throw new TypeError('a bug');
-      },
-    };
-    await expect(
-      run(['--out', out, '--repeat', '5'], io, deps),
-    ).rejects.toThrow('a bug');
-  });
-
-  it('stops before any case when the snapshot cannot be taken, and says why', async () => {
-    const deps: Deps = {
-      ...fakePromptfoo(0),
-      snapshot: async () => {
-        throw new SnapshotError(
-          'Could not fetch the model catalog from x: the API answered 500.',
-        );
-      },
-    };
-    expect(await run(['--out', out, '--repeat', '5'], io, deps)).toBe(1);
-    expect(stderr).toBe(
-      'Could not fetch the model catalog from x: the API answered 500.\n',
-    );
-    expect(stdout).toBe('');
-    expect(spawned).toEqual([]);
-  });
-
-  it('does not hide a failure that is not a snapshot error', async () => {
-    const deps: Deps = {
-      ...fakePromptfoo(0),
-      snapshot: async () => {
-        throw new TypeError('a bug');
-      },
-    };
-    await expect(
-      run(['--out', out, '--repeat', '5'], io, deps),
-    ).rejects.toThrow('a bug');
-  });
-});
-
-describe('the models under test', () => {
-  const config = (text: string) => {
-    const file = path.join(
-      fs.mkdtempSync(path.join(os.tmpdir(), 'evals-matrix-')),
-      'c.yaml',
-    );
-    fs.writeFileSync(file, text);
-    return file;
-  };
-
-  it('are the models of the matrix of the config', () => {
+  it('needs no build for a published version', async () => {
+    vi.stubEnv('EVAL_CLI', '/nonexistent/dist/index.js');
     expect(
-      modelsUnderTest(config('defaultTest:\n  vars:\n    model: [a/b, c/d]\n')),
-    ).toEqual(['a/b', 'c/d']);
+      await run(
+        ['--out', out, '--repeat', '5', '--cli-version', '1.1.0'],
+        io,
+        fakePromptfoo(0),
+      ),
+    ).toBe(0);
+  });
+
+  it('hands on the exit code of a setup that failed, with no line of its own and no report', async () => {
     expect(
-      modelsUnderTest(config('defaultTest:\n  vars:\n    model: a/b\n')),
-    ).toEqual(['a/b']);
-  });
-
-  it.each([
-    ['no matrix', 'prompts: [x]\n'],
-    ['a matrix of numbers', 'defaultTest:\n  vars:\n    model: [1, 2]\n'],
-    ['a matrix of nothing', 'defaultTest:\n  vars:\n    model: []\n'],
-    ['text that is not a config', ':\n - [\n'],
-    ['a list', '- a\n- b\n'],
-  ])('are none for %s, so that promptfoo is the one to complain', (_, text) => {
-    expect(modelsUnderTest(config(text))).toEqual([]);
-  });
-
-  it('are none for a file that is not there', () => {
-    expect(modelsUnderTest('/nonexistent/evals-config.yaml')).toEqual([]);
+      await run(['--out', out, '--repeat', '5'], io, fakePromptfoo(3)),
+    ).toBe(3);
+    expect(stderr).toBe('');
+    expect(stdout).toBe('');
   });
 });

@@ -5,6 +5,12 @@
 # mean to.
 description: ask-openrouter evals
 
+# The setup of a run, before its first request: the target, the instructions of
+# the CLI and the snapshot of the catalog, written beside the results. A
+# failure stops the run with one sentence on stderr and the exit code 3.
+extensions:
+  - file://src/hooks.ts:extensionHook
+
 prompts:
   - '{{question}}'
 

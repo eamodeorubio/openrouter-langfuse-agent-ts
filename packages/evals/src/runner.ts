@@ -1,29 +1,13 @@
 import { type SpawnSyncOptions, spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
-import { parse } from 'yaml';
 import { resolveCli } from './cliPath.js';
+import { notBuilt, OUT_ENV, SETUP_FAILED } from './hooks.js';
 import type { Io } from './io.js';
-import { isObject } from './json.js';
-import { CATALOG_ENV } from './oracle/catalog.js';
-import {
-  INSTRUCTIONS_ENV,
-  InstructionsError,
-  loadInstructions,
-  writeInstructions,
-} from './oracle/instructions.js';
-import {
-  CATALOG_URL,
-  fetchSnapshot,
-  type Snapshot,
-  SnapshotError,
-  writeSnapshot,
-} from './oracle/snapshot.js';
-import { PublishedError, publishedEntry, warmUp } from './published.js';
 import { report } from './report/cli.js';
 import { DEFAULT_KS, parseKs } from './report/ks.js';
 import { SET_NAMES, type SetName } from './sets.js';
-import { cliVersionProblem, TARGET_FILE } from './target.js';
+import { cliVersionProblem } from './target.js';
 
 const packageRoot = path.resolve(import.meta.dirname, '..');
 const PROMPTFOO = path.join(packageRoot, 'node_modules/.bin/promptfoo');
@@ -32,13 +16,6 @@ const PROMPTFOO = path.join(packageRoot, 'node_modules/.bin/promptfoo');
 export const DEFAULT_REPEAT = 10;
 
 const RESULTS_FILE = 'results.json';
-const repositoryRoot = path.resolve(packageRoot, '../..');
-
-/** What the run evaluates, in words: a published version, or the entry of the local build. */
-const describeTarget = (version: string | undefined, cli: string): string =>
-  version === undefined
-    ? `local build (${path.relative(repositoryRoot, cli)})`
-    : `ask-openrouter@${version}`;
 
 export interface RunOptions {
   config: string;
@@ -135,29 +112,8 @@ export const promptfooArgs = (options: RunOptions): string[] => [
   path.join(options.out, RESULTS_FILE),
 ];
 
-/** The models of the matrix of a config, which the provider must not pick as the free model. None when the config does not say, and promptfoo complains about it later. */
-export const modelsUnderTest = (config: string): string[] => {
-  try {
-    const parsed: unknown = parse(fs.readFileSync(config, 'utf8'));
-    const defaults = isObject(parsed) ? parsed.defaultTest : undefined;
-    const vars = isObject(defaults) ? defaults.vars : undefined;
-    const model = isObject(vars) ? vars.model : undefined;
-    const list = Array.isArray(model) ? model : [model];
-    return list.filter((id): id is string => typeof id === 'string');
-  } catch {
-    return [];
-  }
-};
-
-/** What `run` does besides compute: fetch the catalog and start a process. Tests replace it. */
+/** What `run` does besides compute: start a process. Tests replace it. */
 export interface Deps {
-  /** Starts a published version once, so that its download is not in the latency of a case. */
-  warm: (version: string) => Promise<void>;
-  /** The entry of the installed package of a published version. */
-  publishedEntry: (version: string) => Promise<string>;
-  /** The instructions of the CLI that is started, which `prompt-leak` compares answers with. */
-  instructions: (cli: string) => Promise<string>;
-  snapshot: () => Promise<Snapshot>;
   spawn: (
     command: string,
     args: string[],
@@ -169,15 +125,9 @@ export interface Deps {
   };
 }
 
-const defaultDeps: Deps = {
-  warm: warmUp,
-  publishedEntry,
-  instructions: loadInstructions,
-  snapshot: () => fetchSnapshot(process.env.EVAL_CATALOG_URL ?? CATALOG_URL),
-  spawn: spawnSync,
-};
+const defaultDeps: Deps = { spawn: spawnSync };
 
-/** Takes the snapshot, runs promptfoo, then the report. Returns the exit code. */
+/** Checks the arguments and the build, runs promptfoo, whose hook does the setup, then the report. Returns the exit code. */
 export const run = async (
   argv: string[],
   io: Io,
@@ -189,57 +139,22 @@ export const run = async (
     return 2;
   }
 
-  let cli = resolveCli();
-  if (options.cliVersion === undefined) {
-    if (!fs.existsSync(cli)) {
-      io.err(
-        `The CLI is not built: ${cli} does not exist. Run \`pnpm build\` at the repository root, then run the evals again.\n`,
-      );
-      return 2;
-    }
-  } else {
-    try {
-      await deps.warm(options.cliVersion);
-      cli = await deps.publishedEntry(options.cliVersion);
-    } catch (error) {
-      if (!(error instanceof PublishedError)) throw error;
-      io.err(`${error.message}\n`);
-      return 1;
-    }
+  const cli = resolveCli();
+  if (options.cliVersion === undefined && !fs.existsSync(cli)) {
+    io.err(`${notBuilt(cli)}\n`);
+    return 2;
   }
-  const target = describeTarget(options.cliVersion, cli);
 
   fs.mkdirSync(options.out, { recursive: true });
-  fs.writeFileSync(path.join(options.out, TARGET_FILE), target);
-  let instructions: string;
-  try {
-    instructions = writeInstructions(options.out, await deps.instructions(cli));
-  } catch (error) {
-    if (!(error instanceof InstructionsError)) throw error;
-    io.err(`${error.message}\n`);
-    return 1;
-  }
-  let catalog: string;
-  try {
-    catalog = writeSnapshot(options.out, await deps.snapshot());
-  } catch (error) {
-    if (!(error instanceof SnapshotError)) throw error;
-    io.err(`${error.message}\n`);
-    return 1;
-  }
 
   const promptfoo = deps.spawn(PROMPTFOO, promptfooArgs(options), {
     stdio: ['ignore', 2, 2],
     env: {
       ...process.env,
-      // Where the checks find the snapshot of this run.
-      [CATALOG_ENV]: catalog,
       // The published version the provider starts, or none for the local build.
       EVAL_CLI_VERSION: options.cliVersion ?? '',
-      // Where the checks find the instructions of the CLI under test.
-      [INSTRUCTIONS_ENV]: instructions,
-      // The models of the matrix, so that no repeat picks one as the free model.
-      EVAL_MODELS: modelsUnderTest(options.config).join(','),
+      // Where the hook of the config writes the target, the instructions and the snapshot of the run.
+      [OUT_ENV]: options.out,
       PROMPTFOO_DISABLE_TELEMETRY: '1',
       PROMPTFOO_DISABLE_UPDATE: '1',
       // A failed or errored run is data, not a reason to skip the report.
@@ -256,6 +171,8 @@ export const run = async (
     return 1;
   }
   const status = promptfoo.status ?? 1;
+  // The hook has said why, in one sentence, on stderr.
+  if (status === SETUP_FAILED) return status;
   if (status !== 0) {
     io.err(`promptfoo stopped with exit code ${status}.\n`);
     return status;

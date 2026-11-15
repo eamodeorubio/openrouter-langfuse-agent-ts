@@ -1,5 +1,7 @@
 # A config for the harness test: the real provider, a stub CLI (EVAL_CLI) and
 # one case per outcome the provider and the reporter have to handle.
+extensions:
+  - file://../../src/hooks.ts:extensionHook
 prompts: ['{{question}}']
 providers:
   - id: file://../../src/provider/cli.ts
