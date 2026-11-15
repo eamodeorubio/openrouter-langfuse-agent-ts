@@ -28,6 +28,7 @@ Out of scope, each for a later proposal: running evals in CI, A/A calibration of
 - `eval-oracle`: the catalog snapshot, the named queries over it, and variables drawn from it.
 - `eval-checks`: the error classes and their precedence, the deterministic checks, the judge checks and their weights, and the cases with their sets.
 - `eval-report`: the estimators, the per-cell table, the informational metrics and the report's exit behavior.
+- `eval-calibration`: how the threshold of each judge rubric is calibrated against a reference judge, on the runs of the judge set and on runs that are bad by construction. It recommends, and changes no file.
 
 ### Modified Capabilities
 
