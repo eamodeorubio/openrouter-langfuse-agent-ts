@@ -44,6 +44,24 @@ describe('the placeholders of a question', () => {
     expect(argv[4]).toBe('echo b/y f/one:free');
   });
 
+  it('give every repeat on every model the same slug: a case that runs 10 times on 2 models asks about one model', async () => {
+    catalog();
+    vi.stubEnv('EVAL_MODELS', 'm/one,m/two');
+    const asked = await Promise.all(
+      ['m/one', 'm/two'].flatMap((model) =>
+        Array.from({ length: 10 }, async () => {
+          const result = await call('echo {flagship_model} {free_model}', {
+            model,
+          });
+          const argv = JSON.parse((result.output as { answer: string }).answer);
+          return argv[4] as string;
+        }),
+      ),
+    );
+    expect(asked).toHaveLength(20);
+    expect(new Set(asked)).toEqual(new Set(['echo b/y f/one:free']));
+  });
+
   it('name the models under test as they were given, without the empty ones, or none when none were', async () => {
     catalog();
     vi.stubEnv('EVAL_MODELS', 'f/one:free,,m/one,');

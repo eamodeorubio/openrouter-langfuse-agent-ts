@@ -34,7 +34,7 @@ Commit type `test:`. PR title stays `test: add the evals package`. Bump: none. B
 - [x] 2.8 Run `pnpm mutation:evals`. The score stays at or above the `break` threshold. Read every survivor, kill it or justify it.
 - [x] 2.9 Refactor only where `QUALITY_RUBRIC.md` calls for it, at most 3 passes. Name the criterion for each.
 - [x] 2.10 Run `pnpm check`, `pnpm typecheck` and `pnpm test`. Verify all pass.
-- [ ] 2.11 Run `reviewer-code-high`, `reviewer-code-low` and `reviewer-docs`. Fix every must-fix finding.
+- [x] 2.11 Run `reviewer-code-high`, `reviewer-code-low` and `reviewer-docs`. Fix every must-fix finding.
 - [x] 2.13 Add the case contract: `src/checks/caseSpec.ts` reads and validates what a case declares, and fails loudly on an unknown or malformed declaration, so that a typo cannot turn a check into a pass. Verify the config test reads every case with it.
 - [x] 2.14 Split the cases into `cases/<family>.yaml`, with ids written `family/short-name`, a `metadata.set` of `core` or `full`, and `--set` on the runner. Verify the config test finds the three core cases and the id rules.
 - [x] 2.15 Report the results by error class: how many runs each class judged, passed and failed, with pass@k and pass^k of its own. Verify the exact text in `test/format.test.ts` and the counts in `test/classes.test.ts`.
@@ -85,7 +85,7 @@ Commit type `test:`. PR title stays `test: add the evals package`. Bump: none. B
 - [x] 5.8 Refactor only where `QUALITY_RUBRIC.md` calls for it, at most 3 passes. Name the criterion for each.
 - [x] 5.9 Run `pnpm check`, `pnpm typecheck` and `pnpm test`. Verify all pass.
 - [x] 5.10 Run `reviewer-code-high`, `reviewer-code-low` and `reviewer-docs`. Fix every must-fix finding.
-- [ ] 5.11 Write the full report. No live run until the user asks for one. Wait for user approval, which also approves the commit. Commit.
+- [x] 5.11 Write the full report. No live run until the user asks for one. Wait for user approval, which also approves the commit. Commit.
 
 ## 6. Cases chosen from the snapshot (product slice 6)
 
@@ -144,7 +144,7 @@ Commit type `test:`. PR title stays `test: add the evals package`. Bump: none. B
 - [x] 9.3 Move the rubrics out of `defaultTest`, with the config tests first: one file for each rubric under `rubrics/` (`judge-grounding.yaml`, `judge-relevance.yaml`, `judge-usefulness.yaml`, `judge-tool-usage.yaml`, each one assertion, with the metric, weight 0, the question of the spec and its state transform), and a case lists the rubrics that grade it by reference, `- file://rubrics/<name>.yaml`, in its `assert` list. The tests check the four files against the spec, that each reference of each case points to a file that exists, that no case lists a rubric twice, that the rubrics of each case are the ones the table of the spec gives (`judge-grounding` and `judge-tool-usage` for each case with `needsLookup`, `judge-relevance` and `judge-usefulness` for each case but `hostile/prompt-injection`, `judge-relevance` alone for the two `ambiguity` cases), and that the base path of a reference is the one the config resolves (a spike showed that a file of one assertion is read and a file of a list is refused). Covers Judge rubrics. Verify the config tests pass, and the run against the stub CLI and a loopback Jev still records a score for each rubric each case lists.
 - [x] 9.4 Make the report count only Jev answers as scores, with the tests first in `test/results.test.ts` and `test/summary.test.ts`: a rubric with an answer is scored, one with an error reason is unscored although promptfoo records a 0, and the figures per rubric stay as they are. The threshold the reporter falls back on, when a saved config states none, is 0.5, written in place and not as a constant. Covers Judge state limit. Verify the tests pass.
 - [x] 9.5 Add the judge set, with the tests first in `test/caseSpec.test.ts`, `test/runner.args.test.ts` and `test/config.test.ts`: `metadata.set` takes a name or a list of names from `core`, `full` and `judge`, and refuses any other; every case names `full`; `--set` filters on the name for each of the three sets, with no special case for `full`; `--set judge` runs the cases of the set and no other; `--set core` still runs the core set; a case is in the judge set if and only if it lists a rubric, which is every case but `hostile/prompt-injection`; and a run of `--set judge` against the stub CLI and a loopback Jev makes the requests that the table of the spec gives, 72 for the 20 cases of the set at one repeat and one model. Covers Cases and sets. Verify the tests pass.
-- [ ] 9.6 Extend the docs page and the README: what the four rubrics ask, that they weigh 0 until calibrated and never fail a run, what unscored means, the cost in requests, the key and `EVAL_JUDGE_URL`. The docs test must pass. Use the `beautiful-prose` skill with the settings of `AGENTS.md`. Verify `pnpm docs:build` passes.
+- [x] 9.6 Extend the docs page and the README: what the four rubrics ask, that they weigh 0 until calibrated and never fail a run, what unscored means, the cost in requests, the key and `EVAL_JUDGE_URL`. The docs test must pass. Use the `beautiful-prose` skill with the settings of `AGENTS.md`. Verify `pnpm docs:build` passes.
 - [x] 9.7 Run `pnpm mutation:evals`. The score stays at or above the `break` threshold. Read every survivor, kill it or justify it.
 - [x] 9.8 Refactor only where `QUALITY_RUBRIC.md` calls for it, at most 3 passes. Name the criterion for each.
 - [x] 9.9 Run `pnpm check`, `pnpm typecheck` and `pnpm test`, and the deprecation scan. Verify all pass.
@@ -197,7 +197,7 @@ Commit type `refactor:`. PR title stays `test: add the evals package`. Bump: non
 
 ## 12. Archive
 
-- [ ] 12.1 After the last slice, verify the change with `/opsx:verify` and fix what it finds.
+- [x] 12.1 After the last slice, verify the change with `/opsx:verify` and fix what it finds.
 - [ ] 12.2 Once the user approves, archive it as `chore: archive add-evals-package`, as the last commit before merge.
 
 ## Workflow follow-up
