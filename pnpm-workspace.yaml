@@ -6,3 +6,8 @@ allowBuilds:
   '@openrouter/sdk': false
   esbuild: true
   sharp: true
+
+# promptfoo, a dev dependency of the evals, pulls in basic-ftp through proxy-agent. The 5.x line has a
+# denial-of-service advisory (GHSA-5pm8-86m8-9m6r) that only 6.2.4 and later fix. The evals fetch no file over FTP.
+overrides:
+  basic-ftp: '>=6.2.4'
