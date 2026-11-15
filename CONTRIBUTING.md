@@ -16,7 +16,8 @@ pnpm check         # Biome and Prettier, the same check CI runs
 pnpm format        # fix formatting
 pnpm typecheck     # tsc --noEmit
 pnpm test          # Vitest, with HTTP mocked by nock or a local fake server
-pnpm mutation      # Stryker mutation testing, incremental
+pnpm mutation        # Stryker mutation testing of the CLI, incremental
+pnpm mutation:evals  # the same for packages/evals
 pnpm docs:dev      # the documentation site, live
 ```
 
@@ -48,7 +49,7 @@ The whole path is one pull request, with the spec inside it.
 5. **Write a failing test.** Start wide, with an integration test that covers the requirements, and watch it fail for the right reason.
 6. **Make it pass, one piece at a time.** For each piece, write a failing unit test, then the code. Refactor only when the code falls short of the [quality rubric](QUALITY_RUBRIC.md).
 7. **Update the docs** if users will use the product differently.
-8. **Run the checks.** `pnpm check`, `pnpm typecheck` and `pnpm test` must pass. If you changed logic in `src/`, run `pnpm mutation` too and deal with every survivor (see "Tests that test something"). CI runs it as well, but its verdict arrives after you open the pull request, so run it first. If you have [gitleaks](https://github.com/gitleaks/gitleaks#installing) installed, `pnpm secrets` runs a secret scan like the one in CI. It is optional, because gitleaks is not an npm package.
+8. **Run the checks.** `pnpm check`, `pnpm typecheck` and `pnpm test` must pass. If you changed logic in `src/`, run `pnpm mutation` (or `pnpm mutation:evals` for `packages/evals`) too and deal with every survivor (see "Tests that test something"). CI runs it as well, but its verdict arrives after you open the pull request, so run it first. If you have [gitleaks](https://github.com/gitleaks/gitleaks#installing) installed, `pnpm secrets` runs a secret scan like the one in CI. It is optional, because gitleaks is not an npm package.
 9. **Review your own diff** against the rubric. Anyone can run the three read-only reviewers in `.agents/reviewers/` with an AI agent: `reviewer-code-high` for design, `reviewer-code-low` for detail, `reviewer-docs` for prose. Fix every must-fix finding.
 10. **Commit.** Use the Conventional Commits form (see "Commits and versions"). One product slice is one commit.
 11. **Push and open the pull request.** Give it a Conventional Commits title and describe what changed for the user. List anything you did not verify.
