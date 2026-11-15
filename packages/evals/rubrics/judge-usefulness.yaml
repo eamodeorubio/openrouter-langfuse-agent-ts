@@ -4,6 +4,6 @@
 type: llm-rubric
 metric: judge-usefulness
 weight: 0
-threshold: 0.7
+threshold: 0.73
 value: Would the answer let the person decide or act?
 transform: file://src/judge/state.ts:usefulness

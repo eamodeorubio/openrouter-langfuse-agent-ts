@@ -673,19 +673,19 @@ describe('the judge rubrics of the config', () => {
         'judge-grounding',
         'Is every price, context size and capability that the answer states about a model given in the tool results? Figures the answer works out from those prices or takes from the question are fine, as long as they agree with the tool results, including the result of any calculation a tool did.',
         'grounding',
-        0.5,
+        0.53,
       ],
       [
         'judge-relevance',
         'Does the answer address the question that was asked?',
         'relevance',
-        0.5,
+        0.53,
       ],
       [
         'judge-usefulness',
         'Would the answer let the person decide or act?',
         'usefulness',
-        0.7,
+        0.73,
       ],
       [
         'judge-tool-usage',
@@ -1041,9 +1041,9 @@ describe('the rubrics, run for real against a stub CLI and a Jev on loopback', (
       fs.readFileSync(path.join(out, 'results.json'), 'utf8'),
     );
     expect(readRuns(saved).thresholds).toEqual({
-      'judge-grounding': 0.5,
-      'judge-relevance': 0.5,
-      'judge-usefulness': 0.7,
+      'judge-grounding': 0.53,
+      'judge-relevance': 0.53,
+      'judge-usefulness': 0.73,
       'judge-tool-usage': 0.73,
     });
   });

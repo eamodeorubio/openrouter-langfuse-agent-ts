@@ -279,7 +279,7 @@ A case that puts a key in its question SHALL fail with `secret-echo` when the an
 - **THEN** the run passes this check and `wrong-value` judges the price
 
 ### Requirement: Judge rubrics
-Four yes/no rubrics SHALL grade a run with Jev 1.14 through OpenRouter, as the model `typesafe/jev-1.14`: `judge-grounding`, `judge-relevance`, `judge-usefulness` and `judge-tool-usage`. Each SHALL have weight 0 and its own `threshold`, written in its file and calibrated against Claude Opus 5.5: 0.5 for `judge-relevance`, 0.70 for `judge-usefulness`, 0.73 for `judge-tool-usage`, and 0.5 for `judge-grounding`, which the calibration reported as suspect and which keeps 0.5 until its wording and its state are reviewed. The provider SHALL be configured with threshold 0, so that the threshold of the rubric alone decides whether a score is at or above it. Each rubric SHALL use no score levels and be phrased so that yes is good. Each SHALL be defined once, in a file under `rubrics/`, and a case SHALL list the rubrics that grade it by referencing those files in its `assert` list, so that the wording of a question lives in one place. A run is graded by the rubrics of its case, and by no other.
+Four yes/no rubrics SHALL grade a run with Jev 1.14 through OpenRouter, as the model `typesafe/jev-1.14`: `judge-grounding`, `judge-relevance`, `judge-usefulness` and `judge-tool-usage`. Each SHALL have weight 0 and its own `threshold`, written in its file and calibrated against Claude Opus 5.5: 0.53 for `judge-relevance` and `judge-grounding`, and 0.73 for `judge-usefulness` and `judge-tool-usage`, the middle of the range of thresholds that agreed best with Opus. The provider SHALL be configured with threshold 0, so that the threshold of the rubric alone decides whether a score is at or above it. Each rubric SHALL use no score levels and be phrased so that yes is good. Each SHALL be defined once, in a file under `rubrics/`, and a case SHALL list the rubrics that grade it by referencing those files in its `assert` list, so that the wording of a question lives in one place. A run is graded by the rubrics of its case, and by no other.
 
 #### Scenario: Questions and state
 - **WHEN** a run is graded
@@ -302,7 +302,7 @@ Four yes/no rubrics SHALL grade a run with Jev 1.14 through OpenRouter, as the m
 
 #### Scenario: A threshold for each rubric
 - **WHEN** Jev returns 0.6 for `judge-usefulness` and 0.6 for `judge-relevance`
-- **THEN** `judge-relevance` is at or above its threshold of 0.5 and `judge-usefulness` is below its threshold of 0.70
+- **THEN** `judge-relevance` is at or above its threshold of 0.53 and `judge-usefulness` is below its threshold of 0.73
 
 #### Scenario: A figure worked out
 - **WHEN** the answer states a subtotal that it computed from the prices in the tool results, and the total agrees with the result of the `calculate` call
