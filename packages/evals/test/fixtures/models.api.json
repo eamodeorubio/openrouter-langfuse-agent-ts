@@ -1,0 +1,136 @@
+{
+  "data": [
+    {
+      "id": "openai/gpt-oss-20b",
+      "name": "OpenAI: gpt-oss-20b",
+      "context_length": 131072,
+      "architecture": {
+        "input_modalities": ["text"],
+        "output_modalities": ["text"]
+      },
+      "pricing": {
+        "prompt": "0.00000003",
+        "completion": "0.00000013"
+      },
+      "supported_parameters": [
+        "frequency_penalty",
+        "include_reasoning",
+        "logit_bias",
+        "logprobs",
+        "max_tokens",
+        "min_p",
+        "tools"
+      ]
+    },
+    {
+      "id": "openrouter/auto",
+      "name": "Auto Router",
+      "context_length": 2000000,
+      "architecture": {
+        "input_modalities": ["text", "image", "audio", "file", "video"],
+        "output_modalities": ["text", "image"]
+      },
+      "pricing": {
+        "prompt": "-1",
+        "completion": "-1"
+      },
+      "supported_parameters": [
+        "frequency_penalty",
+        "include_reasoning",
+        "logit_bias",
+        "logprobs",
+        "max_tokens",
+        "min_p",
+        "tools"
+      ]
+    },
+    {
+      "id": "nvidia/nemotron-3-ultra-550b-a55b:free",
+      "name": "NVIDIA: Nemotron 3 Ultra (free)",
+      "context_length": 1000000,
+      "architecture": {
+        "input_modalities": ["text"],
+        "output_modalities": ["text"]
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      },
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "reasoning_effort",
+        "seed",
+        "temperature",
+        "tools"
+      ]
+    },
+    {
+      "id": "anthropic/claude-haiku-5.5",
+      "name": "Anthropic: Claude Haiku 5.5",
+      "context_length": 1000000,
+      "architecture": {
+        "input_modalities": ["text", "image", "file"],
+        "output_modalities": ["text"]
+      },
+      "pricing": {
+        "prompt": "0.0000001",
+        "completion": "0.0000005"
+      },
+      "supported_parameters": [
+        "include_reasoning",
+        "max_completion_tokens",
+        "max_tokens",
+        "reasoning",
+        "reasoning_effort",
+        "response_format",
+        "tools"
+      ]
+    },
+    {
+      "id": "google/gemini-omni-1.2-flash",
+      "name": "Google: Gemini Omni 1.2 Flash",
+      "context_length": 131072,
+      "architecture": {
+        "input_modalities": ["text", "image", "video"],
+        "output_modalities": ["text", "video"]
+      },
+      "pricing": {
+        "prompt": "0.0000015",
+        "completion": "0.000009"
+      },
+      "supported_parameters": [
+        "include_reasoning",
+        "max_tokens",
+        "reasoning",
+        "reasoning_effort",
+        "seed",
+        "temperature"
+      ]
+    },
+    {
+      "id": "inclusionai/ling-3.2-flash:free",
+      "name": "inclusionAI: Ling 3.2 Flash (free)",
+      "context_length": 1048576,
+      "architecture": {
+        "input_modalities": ["text", "image"],
+        "output_modalities": ["text"]
+      },
+      "pricing": {
+        "prompt": "0",
+        "completion": "0"
+      },
+      "supported_parameters": [
+        "frequency_penalty",
+        "include_reasoning",
+        "max_tokens",
+        "presence_penalty",
+        "reasoning",
+        "response_format",
+        "tools"
+      ]
+    }
+  ],
+  "total_count": 6
+}

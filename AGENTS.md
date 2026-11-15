@@ -11,11 +11,12 @@ The stack, scripts and CI are in `package.json`, the config files and `.github/w
 These bind every spec, design and implementation.
 
 - Tests never reach the public network. Mock HTTP with `nock`. Where a test must cancel, cut or stall a response stream, use a real server on `127.0.0.1` instead (`packages/cli/test/fakeApi.ts`): `nock`'s mock sockets cannot survive a cancel, and the failures they cause are intermittent. The Langfuse tests (the credential check, which uses `fetch`, and the OTLP exporter) use a real server too, because `nock` failed with them intermittently. A test run cannot reach a real service by accident: `packages/cli/test/setup.ts` clears `LANGFUSE_*`, `OPENROUTER_*` and `OTEL_*` from the environment and refuses every request that `nock` does not answer, except to the loopback interface.
+- Evals are the one exception to the line above. `packages/evals` runs the built CLI against real OpenRouter models with the user's key, and it costs money. Run it only when the user asks. Its own unit tests follow the rule: `pnpm test` never starts an eval run, and `packages/evals/test/setup.ts` refuses every request except to the loopback interface.
 - API keys come from the environment (see `.env.example`). Never log them, print them, commit them, or send them to Langfuse in traces or metadata. Never read or print `.env` contents.
 - Use pnpm, never npm or yarn.
 - Validate untrusted input (arguments, environment, API responses) at the boundary, with clear error messages.
 - Results go to stdout. Diagnostics and errors go to stderr. A failed run exits non-zero.
-- The `openspec` CLI is not in `package.json`. CI pins `@fission-ai/openspec@1.14.3`; install that version (`pnpm add -g @fission-ai/openspec@1.14.3`) or run it with `pnpm dlx`.
+- The `openspec` CLI is not in `package.json`. CI pins `@fission-ai/openspec@2.0.0`; install that version (`pnpm add -g @fission-ai/openspec@2.0.0`) or run it with `pnpm dlx`.
 - Docs scripts: Astro detaches the preview server into the background in agent sessions, and `pnpm docs:preview:stop` stops it.
 - `vitest` and `@vitest/coverage-v8` stay pinned until [stryker-js#6210](https://github.com/stryker-mutator/stryker-js/issues/6210) is fixed. Stryker has no TypeScript checker (it does not support TypeScript 7), so a mutant that no longer compiles can survive.
 
@@ -68,12 +69,12 @@ A technical decision we want to remember needs a spec whatever the row says. Out
 
 ### Mutation testing
 
-- Run `pnpm mutation` whenever you change `src/` logic. The score must stay at or above the `break` threshold in `stryker.config.json`. Do not lower `thresholds` to make a run pass. CI runs it too, but its result arrives after the PR is opened, so run it first and report the result.
+- Run `pnpm mutation` whenever you change `src/` logic, and `pnpm mutation:evals` for `packages/evals/src/`. The score must stay at or above the `break` threshold in `stryker.config.json`. Do not lower `thresholds` to make a run pass. CI runs it too, but its result arrives after the PR is opened, so run it first and report the result.
 - Read every survivor. Kill it with a better test, often a property test. If the invariant was too weak, strengthen it or add an example.
 - Equivalent mutants (a change that cannot alter observable behavior): first try to rewrite the code so the mutant is gone. Only if that harms readability, disable it with `// Stryker disable next-line <MutatorName>: equivalent because <reason>`. Never use a bare `all`, and never disable a mutant to hide a missing test. A survivor that no longer type-checks counts as equivalent: give "does not type-check" as the reason.
 - Do not write tests whose only purpose is to kill a mutant in `console` calls or trivial code (declarations, re-exports, constant tables, thin wiring).
 - Concurrency is pinned low (`concurrency` in `stryker.config.json`) on purpose. Stryker counts any failing test as a kill, so with more workers than the machine can serve, the timing-sensitive tests fail by accident and "kill" mutants no test really catches. The same code scored 99.7% at Stryker's default on an 8-core laptop and 97.5%, with the survivors CI reported, at two workers. Do not raise it, and do not trust a score from a loaded machine. The incremental file keeps those accidental kills until `pnpm mutation:full` rebuilds it.
-- In CI, a pull request runs `.github/scripts/mutation-pr.sh`: `--mutate` on the source files it changed, incrementally against cached results (its own last run, else `main`'s). `main` runs over everything and seeds that cache, so a PR that only weakens tests of code it does not touch is caught there, after the merge. A failed run keeps `report.html` as the `stryker-report` artifact.
+- In CI, a pull request runs `.github/scripts/mutation-pr.sh`, once for each package with a mutation run (`packages/cli` and `packages/evals`): `--mutate` on the source files it changed in that package, incrementally against cached results (its own last run, else `main`'s). `main` runs over everything and seeds that cache, so a PR that only weakens tests of code it does not touch is caught there, after the merge. A failed run keeps the `report.html` of each package as the `stryker-report` artifact. The first run of a package has no cache, so the job may take more than an hour. CI does not run the evals themselves, which cost money: only their unit tests and their mutation tests.
 
 ### Product slices
 

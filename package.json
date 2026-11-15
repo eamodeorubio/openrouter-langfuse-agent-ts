@@ -15,7 +15,8 @@
     "@commitlint/config-conventional": "^21.2.4",
     "husky": "^9.1.7",
     "lint-staged": "^17.6.0",
-    "prettier": "3.9.10"
+    "prettier": "3.9.10",
+    "typescript": "5.9.3"
   },
   "scripts": {
     "prepare": "husky",
@@ -36,7 +37,9 @@
     "docs:dev": "pnpm --dir docs dev",
     "docs:build": "pnpm --dir docs build",
     "docs:preview": "pnpm --dir docs preview",
-    "docs:preview:stop": "pnpm --dir docs exec astro preview stop"
+    "docs:preview:stop": "pnpm --dir docs exec astro preview stop",
+    "mutation:evals": "pnpm --filter ask-openrouter-evals run mutation",
+    "mutation:evals:full": "pnpm --filter ask-openrouter-evals run mutation:full"
   },
   "lint-staged": {
     "*.{ts,tsx,js,mjs,cjs,json,jsonc}": "biome check --write --no-errors-on-unmatched",

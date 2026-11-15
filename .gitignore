@@ -30,3 +30,7 @@ Thumbs.db
 # Copied into packages/cli when the archive is made (see scripts/prepack.ts)
 packages/cli/README.md
 packages/cli/LICENSE
+
+# Eval runs: results, snapshots and promptfoo's own state (see packages/evals)
+packages/evals/results/
+packages/evals/.promptfoo/

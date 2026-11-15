@@ -1,0 +1,9 @@
+# One judge rubric: Jev answers this yes/no question about a state built from the run.
+# Weight 0 records the score under its metric and leaves the pass of the run alone,
+# until the rubric is trusted to count. The threshold comes from a calibration against Claude Opus 5.5.
+type: llm-rubric
+metric: judge-relevance
+weight: 0
+threshold: 0.53
+value: Does the answer address the question that was asked?
+transform: file://src/judge/state.ts:relevance

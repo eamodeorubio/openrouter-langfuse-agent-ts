@@ -6,3 +6,13 @@ allowBuilds:
   '@openrouter/sdk': false
   esbuild: true
   sharp: true
+
+# promptfoo, a dev dependency of the evals, pulls in basic-ftp through proxy-agent. The 5.x line has a
+# denial-of-service advisory (GHSA-5pm8-86m8-9m6r) that only 6.2.4 and later fix. The evals fetch no file over FTP.
+overrides:
+  basic-ftp: '>=6.2.4'
+  # The same for @hono/node-server, which promptfoo reaches through the MCP SDK: two advisories fixed in 2.1.6
+  # (GHSA-jpvv-r467-5p4w, GHSA-qv5m-9pm6-hqp3). The evals start no web server.
+  '@hono/node-server': '>=2.1.6'
+  # And glob, which promptfoo and its filesystem MCP server use: an advisory fixed in 14.0.2 (GHSA-3g3m-2fjr-6pw4).
+  glob: '>=14.0.2'

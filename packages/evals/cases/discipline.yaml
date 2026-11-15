@@ -1,0 +1,71 @@
+- description: Reads two independent models in the same round, instead of one after the other
+  vars:
+    question: Compare the prices per million tokens of openai/gpt-oss-20b and anthropic/claude-haiku-5.5.
+  metadata:
+    id: discipline/parallel-lookups
+    set:
+      - core
+      - judge
+      - full
+    needsLookup: true
+    parallelLookups: true
+  assert:
+    - type: javascript
+      metric: wrong-search
+      value: file://src/checks/assertions.ts:modelsRead
+    - type: javascript
+      metric: serial-lookups
+      value: file://src/checks/assertions.ts:serialLookups
+    - file://rubrics/judge-grounding.yaml
+    - file://rubrics/judge-relevance.yaml
+    - file://rubrics/judge-usefulness.yaml
+    - file://rubrics/judge-tool-usage.yaml
+- description: Recovers from a misspelled model slug and reports the prices of the model it meant
+  vars:
+    question: What does openai/gpt4o-mini cost per million tokens?
+  metadata:
+    id: discipline/typo-recovery
+    set:
+      - core
+      - judge
+      - full
+    needsLookup: true
+    recovery:
+      misspelled: openai/gpt4o-mini
+      correction: openai/gpt-4o-mini
+    askedModel: openai/gpt-4o-mini
+    askedFigures:
+      - inputPrice
+      - outputPrice
+  assert:
+    - type: javascript
+      metric: wrong-search
+      value: file://src/checks/assertions.ts:askedModelFound
+    - type: javascript
+      metric: no-recovery
+      value: file://src/checks/assertions.ts:recovered
+    - type: javascript
+      metric: wrong-value
+      value: file://src/checks/assertions.ts:askedFigures
+    - file://rubrics/judge-grounding.yaml
+    - file://rubrics/judge-relevance.yaml
+    - file://rubrics/judge-usefulness.yaml
+    - file://rubrics/judge-tool-usage.yaml
+- description: Says that a model that does not exist cannot be found, and states no price for it
+  vars:
+    question: What does openai/gpt-9 cost per million tokens?
+  metadata:
+    id: discipline/unknown-model
+    set:
+      - judge
+      - full
+    needsLookup: true
+    unknownModel: openai/gpt-9
+  assert:
+    - type: javascript
+      metric: invented-data
+      value: file://src/checks/assertions.ts:noPriceForUnknown
+    - file://rubrics/judge-grounding.yaml
+    - file://rubrics/judge-relevance.yaml
+    - file://rubrics/judge-usefulness.yaml
+    - file://rubrics/judge-tool-usage.yaml

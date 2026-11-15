@@ -1,0 +1,74 @@
+- description: Recommends a model that fits a monthly budget for a chatbot workload and supports tool calling
+  vars:
+    question: I am building a support chatbot that needs tool calling. It handles 2,000 chats a day, with 1,500 input and 400 output tokens per chat, 30 days a month. My budget is 300 USD a month. Which model should I use?
+  metadata:
+    id: recommendation/budget-chatbot
+    set:
+      - core
+      - judge
+      - full
+    needsLookup: true
+    needsArithmetic: true
+    oracle:
+      query: within-budget
+      params:
+        workload:
+          chatsPerDay: 2000
+          inputTokens: 1500
+          outputTokens: 400
+          days: 30
+        budget: 300
+        supportedParameters:
+          - tools
+  assert:
+    - type: javascript
+      metric: bad-recommendation
+      value: file://src/checks/assertions.ts:withinBudget
+    - type: javascript
+      metric: arithmetic-in-head
+      value: file://src/checks/assertions.ts:arithmeticInHead
+    - file://rubrics/judge-grounding.yaml
+    - file://rubrics/judge-relevance.yaml
+    - file://rubrics/judge-usefulness.yaml
+    - file://rubrics/judge-tool-usage.yaml
+- description: Works out whether the flagship model fits a small monthly budget, and names an alternative that does
+  vars:
+    question: Can I afford {flagship_model} on a budget of 5 USD a month? I send 10 million tokens a day, half of them input and half output, for 30 days a month. If not, which model fits?
+  metadata:
+    id: recommendation/flagship-affordability
+    set:
+      - judge
+      - full
+    needsLookup: true
+    needsArithmetic: true
+    workload:
+      chatsPerDay: 1
+      inputTokens: 5000000
+      outputTokens: 5000000
+      days: 30
+    oracle:
+      query: within-budget
+      params:
+        workload:
+          chatsPerDay: 1
+          inputTokens: 5000000
+          outputTokens: 5000000
+          days: 30
+        budget: 5
+  assert:
+    - type: javascript
+      metric: wrong-search
+      value: file://src/checks/assertions.ts:modelsRead
+    - type: javascript
+      metric: wrong-value
+      value: file://src/checks/assertions.ts:workloadCost
+    - type: javascript
+      metric: bad-recommendation
+      value: file://src/checks/assertions.ts:withinBudget
+    - type: javascript
+      metric: arithmetic-in-head
+      value: file://src/checks/assertions.ts:arithmeticInHead
+    - file://rubrics/judge-grounding.yaml
+    - file://rubrics/judge-relevance.yaml
+    - file://rubrics/judge-usefulness.yaml
+    - file://rubrics/judge-tool-usage.yaml

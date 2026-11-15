@@ -1,0 +1,69 @@
+- description: Looks up the prices and the context window of a named model, and reports what the tools returned
+  vars:
+    question: What are the input and output prices of openai/gpt-oss-20b, and how large is its context window?
+  metadata:
+    id: lookup/known-model
+    set:
+      - core
+      - judge
+      - full
+    needsLookup: true
+    askedModel: openai/gpt-oss-20b
+    askedFigures:
+      - inputPrice
+      - outputPrice
+      - contextLength
+  assert:
+    - type: javascript
+      metric: wrong-search
+      value: file://src/checks/assertions.ts:askedModelFound
+    - type: javascript
+      metric: wrong-value
+      value: file://src/checks/assertions.ts:askedFigures
+    - file://rubrics/judge-grounding.yaml
+    - file://rubrics/judge-relevance.yaml
+    - file://rubrics/judge-usefulness.yaml
+    - file://rubrics/judge-tool-usage.yaml
+- description: Says that a routing model has no fixed price, instead of stating one
+  vars:
+    question: What does openrouter/auto cost per million tokens?
+  metadata:
+    id: lookup/router-model
+    set:
+      - judge
+      - full
+    needsLookup: true
+  assert:
+    - type: javascript
+      metric: wrong-search
+      value: file://src/checks/assertions.ts:modelsRead
+    - type: javascript
+      metric: invented-data
+      value: file://src/checks/assertions.ts:noPriceStated
+    - type: javascript
+      metric: wrong-value
+      value: file://src/checks/assertions.ts:saysNoFixedPrice
+    - file://rubrics/judge-grounding.yaml
+    - file://rubrics/judge-relevance.yaml
+    - file://rubrics/judge-usefulness.yaml
+    - file://rubrics/judge-tool-usage.yaml
+- description: Says that a free model is free, instead of stating a price for it
+  vars:
+    question: What does {free_model} cost per million tokens?
+  metadata:
+    id: lookup/free-variant
+    set:
+      - judge
+      - full
+    needsLookup: true
+  assert:
+    - type: javascript
+      metric: wrong-search
+      value: file://src/checks/assertions.ts:modelsRead
+    - type: javascript
+      metric: wrong-value
+      value: file://src/checks/assertions.ts:saysFree
+    - file://rubrics/judge-grounding.yaml
+    - file://rubrics/judge-relevance.yaml
+    - file://rubrics/judge-usefulness.yaml
+    - file://rubrics/judge-tool-usage.yaml

@@ -39,8 +39,11 @@ jobs:
         env:
           PR_TITLE: ${{ github.event.pull_request.title }}
         run: printf '%s\n' "$PR_TITLE" | pnpm exec commitlint
+      # No --strict: since 2.0 the validator warns on a scenario without WHEN and
+      # THEN steps, and strict mode turns every warning into a failure. Our specs
+      # use tables and examples under the scenario header on purpose.
       - name: Validate OpenSpec changes and specs
-        run: pnpm dlx @fission-ai/openspec@1.14.3 validate --all --strict
+        run: pnpm dlx @fission-ai/openspec@2.0.0 validate --all
       - name: Format and lint
         run: pnpm check
       - name: Typecheck
@@ -78,13 +81,14 @@ jobs:
   # Mutation testing checks that the tests would notice a bug. On a pull
   # request it runs on the source files the pull request changed. On main it
   # runs over everything and saves the results the pull requests start from.
-  # Stryker's incremental mode (on in packages/cli/stryker.config.json)
+  # Stryker's incremental mode (on in each stryker.config.json)
   # retests only the mutants whose code or tests changed since the cached run.
   mutation:
     # The "edited" event only matters to the title lint.
     if: github.event_name == 'push' || github.event.action != 'edited'
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    # The first run of a package starts without a cache, and the evals package has about 4,000 mutants.
+    timeout-minutes: 90
     env:
       # A pull request keeps its own results; main keeps the baseline.
       CACHE_SCOPE: ${{ github.event_name == 'pull_request' && format('pr-{0}', github.event.pull_request.number) || 'main' }}
@@ -103,7 +107,9 @@ jobs:
       - name: Restore Stryker results
         uses: actions/cache/restore@v6
         with:
-          path: packages/cli/.stryker/incremental.json
+          path: |
+            packages/cli/.stryker/incremental.json
+            packages/evals/.stryker/incremental.json
           key: stryker-${{ runner.os }}-${{ env.CACHE_SCOPE }}-${{ github.sha }}
           restore-keys: |
             stryker-${{ runner.os }}-${{ env.CACHE_SCOPE }}-
@@ -113,20 +119,28 @@ jobs:
         run: bash .github/scripts/mutation-pr.sh "$GITHUB_BASE_REF"
       - name: Mutation testing
         if: github.event_name == 'push'
-        run: pnpm mutation
+        run: |
+          status=0
+          pnpm mutation || status=1
+          pnpm mutation:evals || status=1
+          exit "$status"
       # Saved even when the score is too low, so the next run reuses the work.
       - name: Save Stryker results
-        if: always() && hashFiles('packages/cli/.stryker/incremental.json') != ''
+        if: always() && (hashFiles('packages/cli/.stryker/incremental.json') != '' || hashFiles('packages/evals/.stryker/incremental.json') != '')
         uses: actions/cache/save@v6
         with:
-          path: packages/cli/.stryker/incremental.json
+          path: |
+            packages/cli/.stryker/incremental.json
+            packages/evals/.stryker/incremental.json
           key: stryker-${{ runner.os }}-${{ env.CACHE_SCOPE }}-${{ github.sha }}
       - name: Keep the report of a failed run
         if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: stryker-report
-          path: packages/cli/.stryker/report.html
+          path: |
+            packages/cli/.stryker/report.html
+            packages/evals/.stryker/report.html
           include-hidden-files: true
           if-no-files-found: warn
           retention-days: 7
