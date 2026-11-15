@@ -22,11 +22,15 @@ The `calibrate collect` command SHALL read the `results.json` of a run and write
 - **THEN** the command exits non-zero, names the file, and leaves it as it was
 
 ### Requirement: Negative controls
-The `calibrate controls` command SHALL add, for each collected record, copies that are bad by construction, each with a `control` field that names how: `answer-swapped` (the answer of another case), `figure-invented` (the first price or context size of the answer, a figure written with `$`, with thousands separators or before a currency or a unit of tokens, replaced by a wrong one where it stands) and `tools-swapped` (the tool calls of another case). A control SHALL keep the question, rebuild its states, carry none of the answers of Opus or scores of Jev about the run it was made from, and name the rubrics it is expected to fail, which Opus and Jev then judge like any record. A control SHALL NOT be written when it cannot be made, for lack of a figure to replace or of another case.
+The `calibrate controls` command SHALL add, for each collected record, copies that are bad by construction, each with a `control` field that names how: `answer-swapped` (the answer of another case), `figure-invented` (the first price or context size of the answer, a figure written with `$`, with thousands separators or before a currency or a unit of tokens, replaced by a wrong one where it stands) and `tools-swapped` (the tool calls of another case, and only of a case none of whose calls repeats a call of the record, with the same tool and the same arguments, because a control that holds the same evidence is not bad). A control SHALL keep the question, rebuild the states of the rubrics it is expected to fail and no others, carry none of the answers of Opus or scores of Jev about the run it was made from, and name the rubrics it is expected to fail, which Opus and Jev then judge like any record. A control SHALL NOT be written when it cannot be made, for lack of a figure to replace or of another case.
 
 #### Scenario: An invented figure
 - **WHEN** the answer of a record states `$0.05`
 - **THEN** its control `figure-invented` states another price, is expected to fail `judge-grounding`, and keeps its tool calls
+
+#### Scenario: Tool calls that would still ground the answer
+- **WHEN** the only other cases call `get_model` with the same slug as the record
+- **THEN** no control `tools-swapped` is made for the record
 
 ### Requirement: Scoring the controls with Jev
 The `calibrate jev` command SHALL score the states of the controls with the same grader as a run, so that a control holds `jevAssertScores` like a record that was collected, and SHALL send no request for a record that already has its scores.

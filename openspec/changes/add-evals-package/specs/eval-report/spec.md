@@ -130,7 +130,7 @@ When the results file holds the duration of the eval, the report SHALL end with 
 - **THEN** the report has no wall time line
 
 ### Requirement: Judge pass rate
-Each cell SHALL show, per rubric, the share of its scored runs at or above the rubric's threshold, and how many runs had no score. The rate SHALL NOT enter the pass estimators while the rubric has weight 0.
+Each cell SHALL show, per rubric, the share of its scored runs at or above the rubric's own threshold, as the saved results state it for that rubric, and how many runs had no score. The rate SHALL NOT enter the pass estimators while the rubric has weight 0.
 
 #### Scenario: Unscored runs
 - **WHEN** 8 runs scored and 2 had a state over the limit, and 6 of the 8 reached 0.5

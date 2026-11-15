@@ -167,6 +167,15 @@ Commit type `test:`. PR title stays `test: add the evals package`. Bump: none. B
 - [x] 10.10 Run `reviewer-code-high`, `reviewer-code-low` and `reviewer-docs`. Fix every must-fix finding.
 - [x] 10.11 Write the full report. No live run until the user asks for one, and then a pilot of one repeat first. Wait for user approval, which also approves the commit. Commit.
 
+## 10b. Calibrated rubrics (product slice 10b)
+
+- [ ] 10b.1 Write the failing tests: the grounding question has the new wording; `tools-swapped` borrows only from a case none of whose calls repeats a call of the record; each rubric file states a `threshold`; the provider config holds threshold 0; the reporter counts the share at or above each rubric's own threshold, read from the saved results. Verify they fail for the right reason.
+- [ ] 10b.2 Reword `judge-grounding`, make `tools-swapped` skip a borrowed case with a shared call, put `threshold` in the four rubric files, set the provider threshold to 0 in `promptfooconfig.yaml`, and make the reporter read each rubric's threshold from the results. Verify the tests pass.
+- [ ] 10b.3 Calibrate again, on the user's say-so: re-ask Opus the grounding question in its new wording, one call for each record as before, in batches the plan allows; make the new `tools-swapped` controls, score them with Jev, and run `analyze`. Set the thresholds of the four rubric files from the figures, and report them. Verify `analyze` recommends no threshold for any rubric that the files do not state.
+- [ ] 10b.4 Update the docs, the README and the comments of the rubric files and the config. Use the `beautiful-prose` skill with the settings of `AGENTS.md`. Verify `pnpm docs:build` passes.
+- [ ] 10b.5 Run `pnpm mutation:evals`, `pnpm check`, `pnpm typecheck` and `pnpm test`. Verify all pass.
+- [ ] 10b.6 Run the three reviewers and fix every must-fix finding. Write the full report. Wait for user approval, which also approves the commit. Commit.
+
 ## 11. Setup in promptfoo hooks (refactor slice 11)
 
 Commit type `refactor:`. PR title stays `test: add the evals package`. Bump: none. Branch `evals`. Behavior does not change: no spec requirement changes, and the existing tests stay green, which is the proof. The slice moves setup that is promptfoo's business from the runner into extension hooks of the config (`extensions: - file://src/hooks.ts:...`, run in the promptfoo process), and keeps in the runner what has to happen before promptfoo starts or after it ends. The first task is a spike, because the hooks of promptfoo 0.125.1 have never been tried here, and the split depends on what they do. Open points for the spike, each answered offline with the stub CLI and a loopback server: (1) whether a `.ts` hook loads from `file://`, with which signature, and what its context holds (the suite, its `defaultTest`, the results); (2) whether `process.env` set in `beforeAll` is seen by the provider and the checks of the same run; (3) whether a `beforeAll` that throws stops the eval before the first request, with a non-zero exit and its message; (4) whether the results file exists when `afterAll` runs. Candidates, and why each fits or not:

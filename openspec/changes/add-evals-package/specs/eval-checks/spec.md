@@ -279,7 +279,7 @@ A case that puts a key in its question SHALL fail with `secret-echo` when the an
 - **THEN** the run passes this check and `wrong-value` judges the price
 
 ### Requirement: Judge rubrics
-Four yes/no rubrics SHALL grade a run with Jev 1.14 through OpenRouter, as the model `typesafe/jev-1.14`: `judge-grounding`, `judge-relevance`, `judge-usefulness` and `judge-tool-usage`. Each SHALL have weight 0 and a threshold of 0.5, use no score levels and be phrased so that yes is good. Each SHALL be defined once, in a file under `rubrics/`, and a case SHALL list the rubrics that grade it by referencing those files in its `assert` list, so that the wording of a question lives in one place. A run is graded by the rubrics of its case, and by no other.
+Four yes/no rubrics SHALL grade a run with Jev 1.14 through OpenRouter, as the model `typesafe/jev-1.14`: `judge-grounding`, `judge-relevance`, `judge-usefulness` and `judge-tool-usage`. Each SHALL have weight 0 and its own `threshold`, written in its file and calibrated against Claude Opus 5.5: 0.5 for `judge-relevance`, 0.70 for `judge-usefulness`, 0.73 for `judge-tool-usage`, and 0.5 for `judge-grounding`, which the calibration reported as suspect and which keeps 0.5 until its wording and its state are reviewed. The provider SHALL be configured with threshold 0, so that the threshold of the rubric alone decides whether a score is at or above it. Each rubric SHALL use no score levels and be phrased so that yes is good. Each SHALL be defined once, in a file under `rubrics/`, and a case SHALL list the rubrics that grade it by referencing those files in its `assert` list, so that the wording of a question lives in one place. A run is graded by the rubrics of its case, and by no other.
 
 #### Scenario: Questions and state
 - **WHEN** a run is graded
@@ -287,7 +287,7 @@ Four yes/no rubrics SHALL grade a run with Jev 1.14 through OpenRouter, as the m
 
 | Rubric | Question | State sent |
 | --- | --- | --- |
-| `judge-grounding` | Is every price, context size and capability in the answer given in the tool results? | tool calls with arguments and outputs, answer |
+| `judge-grounding` | Is every price, context size and capability that the answer states about a model given in the tool results? Figures the answer works out from those prices or takes from the question are fine, as long as they agree with the tool results, including the result of any calculation a tool did. | tool calls with arguments and outputs, answer |
 | `judge-relevance` | Does the answer address the question that was asked? | question, tool calls, answer |
 | `judge-usefulness` | Would the answer let the person decide or act? | question, tool calls, answer |
 | `judge-tool-usage` | Were the tool calls relevant to the question? | question, tool calls with arguments |
@@ -299,6 +299,14 @@ Four yes/no rubrics SHALL grade a run with Jev 1.14 through OpenRouter, as the m
 #### Scenario: A case with no lookup
 - **WHEN** `calculation/given-prices` runs
 - **THEN** it is graded by `judge-relevance` and `judge-usefulness`, and `judge-grounding` and `judge-tool-usage` are not asked
+
+#### Scenario: A threshold for each rubric
+- **WHEN** Jev returns 0.6 for `judge-usefulness` and 0.6 for `judge-relevance`
+- **THEN** `judge-relevance` is at or above its threshold of 0.5 and `judge-usefulness` is below its threshold of 0.70
+
+#### Scenario: A figure worked out
+- **WHEN** the answer states a subtotal that it computed from the prices in the tool results, and the total agrees with the result of the `calculate` call
+- **THEN** `judge-grounding` is asked in the wording above, which does not count the subtotal against the answer, and a total that the tool did not calculate counts against it
 
 #### Scenario: Recorded score
 - **WHEN** Jev returns 0.42 for a rubric
