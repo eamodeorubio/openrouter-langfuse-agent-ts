@@ -28,6 +28,10 @@ on:
         description: An exact published version of ask-openrouter, such as 1.1.0. Empty runs the build of this branch.
         type: string
         default: ''
+      model:
+        description: One or more models of the config, as --model, comma separated. Empty asks every model of the config. An id the config does not list stops the run before any request.
+        type: string
+        default: ''
 
 permissions:
   contents: read
@@ -69,6 +73,7 @@ jobs:
           REPEAT: ${{ inputs.repeat }}
           K: ${{ inputs.k }}
           CLI_VERSION: ${{ inputs.cli_version }}
+          MODEL: ${{ inputs.model }}
         run: |
           set -o pipefail
           # The default k needs 5 repeats. A run with fewer would be refused
@@ -76,6 +81,7 @@ jobs:
           if [ "$REPEAT" -lt 5 ] && [ "$K" = '1,3,5' ]; then K=1; fi
           args=(--set "$SET" --repeat "$REPEAT" --k "$K" --out "$OUT")
           if [ -n "$CLI_VERSION" ]; then args+=(--cli-version "$CLI_VERSION"); fi
+          if [ -n "$MODEL" ]; then args+=(--model "$MODEL"); fi
           mkdir -p "$OUT"
           # The report is on stdout, the progress on stderr. tee keeps the report for the summary.
           pnpm --filter ask-openrouter-evals run eval "${args[@]}" | tee "$OUT/report.txt"
@@ -87,13 +93,14 @@ jobs:
           REPEAT: ${{ inputs.repeat }}
           K: ${{ inputs.k }}
           CLI_VERSION: ${{ inputs.cli_version }}
+          MODEL: ${{ inputs.model }}
         run: |
           {
             echo '## Evals'
             echo
             echo "- Branch: \`$GITHUB_REF_NAME\`"
             echo "- Commit: \`$GITHUB_SHA\`"
-            echo "- Inputs: set \`$SET\`, repeat \`$REPEAT\`, k \`$K\`, cli_version \`${CLI_VERSION:-(this build)}\`"
+            echo "- Inputs: set \`$SET\`, repeat \`$REPEAT\`, k \`$K\`, cli_version \`${CLI_VERSION:-(this build)}\`, model \`${MODEL:-(every model of the config)}\`"
             if [ -f "$OUT/target.txt" ]; then echo "- Target: $(head -n 1 "$OUT/target.txt")"; fi
             if [ -f "$OUT/catalog.json" ]; then echo "- Catalog snapshot: $(jq -r .fetchedAt "$OUT/catalog.json")"; fi
             echo

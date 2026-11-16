@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { resolveCli } from './cliPath.js';
-import { isObject } from './json.js';
+import { MODEL_FILTER_ENV, modelsOf, narrowModels } from './models.js';
 import { CATALOG_ENV } from './oracle/catalog.js';
 import {
   INSTRUCTIONS_ENV,
@@ -60,18 +60,18 @@ const defaultDeps: SetupDeps = {
 };
 
 /** What the run evaluates, in words: a published version, or the entry of the local build. */
-const describeTarget = (version: string | undefined, cli: string): string =>
-  version === undefined
-    ? `local build (${path.relative(repositoryRoot, cli)})`
-    : `ask-openrouter@${version}`;
-
-/** The models of the matrix, as the suite declares them. None when it declares none, so that promptfoo is the one to complain. */
-export const modelsOf = (suite: unknown): string[] => {
-  const defaults = isObject(suite) ? suite.defaultTest : undefined;
-  const vars = isObject(defaults) ? defaults.vars : undefined;
-  const model = isObject(vars) ? vars.model : undefined;
-  const list = Array.isArray(model) ? model : [model];
-  return list.filter((id): id is string => typeof id === 'string');
+const describeTarget = (
+  version: string | undefined,
+  cli: string,
+  models: string[] | undefined,
+): string => {
+  const target =
+    version === undefined
+      ? `local build (${path.relative(repositoryRoot, cli)})`
+      : `ask-openrouter@${version}`;
+  return models === undefined
+    ? target
+    : `${target}, models: ${models.join(', ')}`;
 };
 
 /**
@@ -79,12 +79,14 @@ export const modelsOf = (suite: unknown): string[] => {
  * the CLI and the snapshot of the catalog, written beside the results, and the
  * environment that the providers and the checks read them from. Throws a
  * `PublishedError`, an `InstructionsError` or a `SnapshotError` that says why.
+ * Returns the suite that promptfoo is to run when `--model` narrowed it, and
+ * nothing when the run asks every model of the config.
  */
 export const setup = async (
   suite: unknown,
   env: NodeJS.ProcessEnv,
   deps: SetupDeps = defaultDeps,
-): Promise<void> => {
+): Promise<{ suite: unknown } | undefined> => {
   const out = env[OUT_ENV];
   if (!out) {
     throw new SetupError(
@@ -96,6 +98,11 @@ export const setup = async (
   const problem =
     version === undefined ? undefined : cliVersionProblem(version);
   if (problem !== undefined) throw new SetupError(problem);
+  // Before the warm-up and the catalog, which are requests.
+  const filter = env[MODEL_FILTER_ENV];
+  const narrowed =
+    filter === undefined ? undefined : narrowModels(suite, filter);
+  if (typeof narrowed === 'string') throw new SetupError(narrowed);
   let cli = resolveCli();
   if (version !== undefined) {
     await deps.warm(version);
@@ -105,11 +112,15 @@ export const setup = async (
     throw new SetupError(notBuilt(cli));
   }
   fs.mkdirSync(out, { recursive: true });
-  fs.writeFileSync(path.join(out, TARGET_FILE), describeTarget(version, cli));
+  fs.writeFileSync(
+    path.join(out, TARGET_FILE),
+    describeTarget(version, cli, narrowed?.models),
+  );
   env[INSTRUCTIONS_ENV] = writeInstructions(out, await deps.instructions(cli));
   env[CATALOG_ENV] = writeSnapshot(out, await deps.snapshot());
   // So that no repeat picks one of the models under test as the free model.
-  env.EVAL_MODELS = modelsOf(suite).join(',');
+  env.EVAL_MODELS = (narrowed?.models ?? modelsOf(suite)).join(',');
+  return narrowed === undefined ? undefined : { suite: narrowed.suite };
 };
 
 /**
@@ -123,10 +134,10 @@ export const runHook = async (
   hookName: string,
   context: { suite?: unknown },
   deps: SetupDeps = defaultDeps,
-): Promise<void> => {
-  if (hookName !== 'beforeAll') return;
+): Promise<{ suite: unknown } | undefined> => {
+  if (hookName !== 'beforeAll') return undefined;
   try {
-    await setup(context.suite, process.env, deps);
+    return await setup(context.suite, process.env, deps);
   } catch (error) {
     if (
       !(
@@ -147,4 +158,4 @@ export const runHook = async (
 export const extensionHook = (
   hookName: string,
   context: { suite?: unknown },
-): Promise<void> => runHook(hookName, context);
+): Promise<{ suite: unknown } | undefined> => runHook(hookName, context);
