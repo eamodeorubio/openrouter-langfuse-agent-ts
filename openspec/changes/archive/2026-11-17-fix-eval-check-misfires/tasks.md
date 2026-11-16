@@ -20,7 +20,7 @@ Commit type `test:`: the evals are test tooling and no part of the CLI, as in `t
 ## 2. Archive
 
 - [x] 2.1 Verify the change with `/opsx:verify` and fix what it finds.
-- [ ] 2.2 Once the user approves, archive it as `chore: archive fix-eval-check-misfires`, as the last commit before merge.
+- [x] 2.2 Once the user approves, archive it as `chore: archive fix-eval-check-misfires`, as the last commit before merge.
 
 ## Workflow follow-up
 
