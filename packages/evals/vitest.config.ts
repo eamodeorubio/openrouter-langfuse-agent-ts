@@ -3,6 +3,7 @@ import { defineConfig } from 'vitest/config';
 export default defineConfig({
   test: {
     include: ['test/**/*.test.ts'],
+    globalSetup: ['test/globalSetup.ts'],
     setupFiles: ['test/setup.ts'],
     // The integration tests start promptfoo as a child process, which takes seconds.
     testTimeout: 60_000,
