@@ -18,7 +18,6 @@ const NO_FIXED_PRICE = [
     `(?:\\bnot|n't) ${STATING} (?:an? |the |its )?${WORDS}(?:price|pricing)\\b`,
   ),
   new RegExp(`\\b${PRICE}s? (?:is|are) (?:not|n't) ${KIND}`),
-  new RegExp(`\\bdoes(?: not|n't) have an? (?:\\w+ )?${PRICE}`),
   new RegExp(`\\b${PRICE}s?\\b[^.]{0,40}\\b${VARIES}\\b`),
   new RegExp(`\\b${VARIES}\\b[^.]{0,40}\\b${PRICE}`),
   /\bdepends? on (?:the )?model/,

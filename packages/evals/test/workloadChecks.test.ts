@@ -484,6 +484,8 @@ describe('saysNoFixedPrice, for wrong-value', () => {
     'It has no published, very good, per-token price.',
     'It does not offer a rate limit.',
     "It doesn't give the cost of caching.",
+    'It does not have a cost advantage.',
+    "It doesn't have a rate limit.",
   ])('fails an answer that does not say so: %s', (answer) => {
     withSnapshot();
     expect(

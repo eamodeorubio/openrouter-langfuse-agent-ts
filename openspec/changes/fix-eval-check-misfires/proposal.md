@@ -29,5 +29,5 @@ None.
 
 - `packages/evals/src/checks/`: `discipline.ts`, `modelPrices.ts` and `searchChecks.ts`, which also holds the no-match list.
 - `packages/evals/test/`: the tests of those checks.
-- `docs/src/content/docs/evals.md` and the results page of 1.1.0, which must say that the figures it reports predate the fix.
+- `docs/src/content/docs/evals.md` and the package README, which say what the checks accept. The results page of 1.1.0, on its own branch, is revised in a later change, once the run is repeated with these checks.
 - The run of 1.1.0 is not rerun. Its zip keeps the verdicts the old checks gave.
