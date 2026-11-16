@@ -101,3 +101,22 @@ describe('--cli-version', () => {
     );
   });
 });
+
+describe('--model', () => {
+  it('is kept as written, and absent when it is not given', () => {
+    expect(parse(['--model', 'a/b,c/d'])).toMatchObject({ model: 'a/b,c/d' });
+    expect(parse([])).not.toHaveProperty('model');
+  });
+
+  it('keeps any text, so that the setup is the one to refuse it, and the empty string too', () => {
+    fc.assert(
+      fc.property(fc.string(), (text) => {
+        expect(parse(['--model', text])).toMatchObject({ model: text });
+      }),
+    );
+  });
+
+  it('needs a value', () => {
+    expect(parse(['--model'])).toBe('Unexpected argument: --model');
+  });
+});

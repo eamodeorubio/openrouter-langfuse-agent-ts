@@ -1,0 +1,125 @@
+name: Evals
+
+# Runs the evals of packages/evals against real models, on demand and on any
+# branch. It is not part of ci.yml: it has another trigger, a secret and a cost.
+# GitHub lets only people with write access start a run, so a fork never sees
+# the key. Write access can still edit this file on a branch and dispatch it, so
+# restrict the evals environment to protected branches or add a required
+# reviewer, and keep a credit limit on the key. Nothing blocks on the result:
+# the run measures and does not judge.
+on:
+  workflow_dispatch:
+    inputs:
+      set:
+        description: Which cases to ask. core is at least one case for each error class, at the lowest cost.
+        type: choice
+        options: [core, judge, full]
+        default: core
+      repeat:
+        description: How many times each case is asked of each model. A choice, so that a typo cannot start a run of 100.
+        type: choice
+        options: ['1', '2', '3', '5', '10']
+        default: '10'
+      k:
+        description: The k of pass@k and pass^k, as --k. The default becomes 1 when repeat is below 5, because k cannot exceed repeat.
+        type: string
+        default: '1,3,5'
+      cli_version:
+        description: An exact published version of ask-openrouter, such as 1.1.0. Empty runs the build of this branch.
+        type: string
+        default: ''
+      model:
+        description: One or more models of the config, as --model, comma separated. Empty asks every model of the config. An id the config does not list stops the run before any request.
+        type: string
+        default: ''
+
+permissions:
+  contents: read
+
+concurrency:
+  # Two runs would share the request caps of the free model, so the second waits.
+  # GitHub keeps one waiting run: a third dispatch replaces the second.
+  group: evals
+  cancel-in-progress: false
+
+jobs:
+  evals:
+    runs-on: ubuntu-latest
+    # A core run at n = 10 is 220 CLI runs, about 7 minutes, plus the judge calls.
+    # The full set is larger and has not been timed: if it hits this limit, the results written so far are still kept.
+    timeout-minutes: 60
+    # Holds OPENROUTER_API_KEY: a dedicated key with a hard credit limit, not a personal one.
+    environment: evals
+    env:
+      OUT: ${{ runner.temp }}/evals
+    steps:
+      - uses: actions/checkout@v7
+      # Reads the pnpm version from "packageManager" in package.json.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # A published version needs no build.
+      - name: Build the CLI
+        if: inputs.cli_version == ''
+        run: pnpm build
+      - name: Run the evals
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+          # Inputs reach the shell as variables, never pasted into the script.
+          SET: ${{ inputs.set }}
+          REPEAT: ${{ inputs.repeat }}
+          K: ${{ inputs.k }}
+          CLI_VERSION: ${{ inputs.cli_version }}
+          MODEL: ${{ inputs.model }}
+        run: |
+          set -o pipefail
+          # The default k needs 5 repeats. A run with fewer would be refused
+          # before its first request, so it asks for k = 1 instead.
+          if [ "$REPEAT" -lt 5 ] && [ "$K" = '1,3,5' ]; then K=1; fi
+          args=(--set "$SET" --repeat "$REPEAT" --k "$K" --out "$OUT")
+          if [ -n "$CLI_VERSION" ]; then args+=(--cli-version "$CLI_VERSION"); fi
+          if [ -n "$MODEL" ]; then args+=(--model "$MODEL"); fi
+          mkdir -p "$OUT"
+          # The report is on stdout, the progress on stderr. tee keeps the report for the summary.
+          pnpm --filter ask-openrouter-evals run eval "${args[@]}" | tee "$OUT/report.txt"
+      # The steps below run after a failure too, and publish what the run wrote.
+      - name: Write the job summary
+        if: always()
+        env:
+          SET: ${{ inputs.set }}
+          REPEAT: ${{ inputs.repeat }}
+          K: ${{ inputs.k }}
+          CLI_VERSION: ${{ inputs.cli_version }}
+          MODEL: ${{ inputs.model }}
+        run: |
+          {
+            echo '## Evals'
+            echo
+            echo "- Branch: \`$GITHUB_REF_NAME\`"
+            echo "- Commit: \`$GITHUB_SHA\`"
+            echo "- Inputs: set \`$SET\`, repeat \`$REPEAT\`, k \`$K\`, cli_version \`${CLI_VERSION:-(this build)}\`, model \`${MODEL:-(every model of the config)}\`"
+            if [ -f "$OUT/target.txt" ]; then echo "- Target: $(head -n 1 "$OUT/target.txt")"; fi
+            if [ -f "$OUT/catalog.json" ]; then echo "- Catalog snapshot: $(jq -r .fetchedAt "$OUT/catalog.json")"; fi
+            echo
+            if [ -s "$OUT/report.txt" ]; then
+              echo '````'
+              cat "$OUT/report.txt"
+              echo '````'
+            else
+              echo 'The run wrote no report. See the log of the step "Run the evals".'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+      # The results let anyone rerun `report` with another k, at no cost. In a
+      # public repository, anyone signed in to GitHub can download them. A test
+      # checks that nothing the run writes holds the key.
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: evals-${{ inputs.set }}-${{ github.run_id }}
+          path: ${{ env.OUT }}
+          if-no-files-found: warn
+          retention-days: 90

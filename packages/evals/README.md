@@ -2,12 +2,12 @@
 
 The test suite of this repository mocks every request. It knows the tools return the right shape and the loop stops when it should. It cannot know whether a real model, handed the system prompt and the tool descriptions, does the right thing. This package asks the model.
 
-An eval run starts the built `ask-openrouter` CLI against real models on OpenRouter, many times per question, and records what happened. A reporter then turns the results into two figures per case and model: how often at least one of k runs passes, and how often all k do. It talks to real services with your key and costs real money. It never runs as part of `pnpm test`, and it never runs in CI.
+An eval run starts the built `ask-openrouter` CLI against real models on OpenRouter, many times per question, and records what happened. A reporter then turns the results into two figures per case and model: how often at least one of k runs passes, and how often all k do. It talks to real services with your key and costs real money. It never runs as part of `pnpm test`, and no pull request starts it. Someone with write access starts it, from a terminal or from the Actions tab of GitHub.
 
 ## What a run needs
 
 - A built CLI. From the repository root, run `pnpm build`. The run stops before any request, with a message, when `packages/cli/dist/index.js` is missing.
-- Your OpenRouter key in the environment: `export OPENROUTER_API_KEY=...`. The key stays in the environment. Nothing the run writes holds it, and a test checks that.
+- Your OpenRouter key in the environment: `export OPENROUTER_API_KEY=...`. The key stays in the environment. Nothing the run writes holds it, and a test checks that. On GitHub, the [Evals workflow](#on-github) supplies it from the `evals` environment, so a run there needs no key of yours.
 - A network that reaches `openrouter.ai`. Before the first case, the run fetches OpenRouter's public model list, which needs no key, and saves it as `catalog.json` beside the results. That snapshot is the oracle: it says which models are good answers to a question like "the cheapest model with 200,000 tokens of context and tools", so that no case holds a model name that the weekly catalog will outdate. A run that cannot fetch it stops before any case. The run also saves the instructions of the CLI as `instructions.txt`, and stops the same way when the CLI has none readable.
 
 Then:
@@ -16,13 +16,45 @@ Then:
 pnpm --filter ask-openrouter-evals run eval
 ```
 
-The run asks two models each of the eleven core cases that [`promptfooconfig.yaml`](promptfooconfig.yaml) loads, ten times each, with no cache, so that every repeat is a new request. The models are `nvidia/nemotron-3-ultra-550b-a55b:free` and `anthropic/claude-haiku-5.5`. The free model has request caps, and a free model can leave the free tier, as `thinkingmachines/inkling:free` did. A run that hits a cap or a 404 counts as a failed run, so a small set of cases keeps a full run inside the limits.
+The run asks two models each of the eleven core cases that [`promptfooconfig.yaml`](promptfooconfig.yaml) loads, ten times each, with no cache, so that every repeat is a new request. The models are `nvidia/nemotron-3-ultra-550b-a55b:free` and `anthropic/claude-haiku-5.5`. The free model has request caps, and a free model can leave the free tier, as `thinkingmachines/inkling:free` did. A run that hits a cap or a 404 counts as a failed run, so a small set of cases keeps a full run inside the limits. To ask fewer models, see `--model` below.
 
 The report needs `n` of at least the widest `k`, which is 5 by default. A run whose `--k` is wider than its `--repeat` is refused before the first request, so that a paid run never ends without a report. To try the harness cheaply, shrink the run:
 
 ```sh
 pnpm --filter ask-openrouter-evals run eval --repeat 2 --k 1,2
 ```
+
+To ask one model, or a few, name them with `--model`:
+
+```sh
+pnpm --filter ask-openrouter-evals run eval --model anthropic/claude-haiku-5.5
+```
+
+The list narrows the config's own. Every id must be one of the models in [`promptfooconfig.yaml`](promptfooconfig.yaml), spelled exactly. Anything else stops the run before its first request, with exit code 3 and a message that names the id and the models the config holds. The order of the list does not matter, and a repeated id asks nothing new, so two runs that name the same models write the same results. Without `--model`, the run asks every model of the config. The runner hands the list to the setup in the environment variable `EVAL_MODELS_FILTER`, which a run started on the config directly can set the same way.
+
+A narrowed run says so on the first line of its report, `target: local build (...), models: anthropic/claude-haiku-5.5`, and in `target.txt`. That line is how you tell the artifacts of two such runs apart. It also changes one thing you might not expect: the free model that a case's `{free_model}` placeholder picks avoids only the models in the run. A run of the paid model alone may therefore use the free model of the config as the free answer.
+
+### On GitHub
+
+The [Evals workflow](../../.github/workflows/evals.yml) runs the same command on a GitHub runner, on demand and on any branch. Open the Actions tab, pick Evals, press "Run workflow", and choose the branch in the form. The trigger is `workflow_dispatch` and nothing else, so only people with write access can start it, and a fork never sees the key. No result blocks a pull request: a run measures and does not judge. It is green when it produced a report, whatever the pass rates, and red when the run could not finish: a failed setup, a refused argument or a promptfoo error.
+
+The form has five inputs:
+
+| Input         | Default | What it does                                                                                                                                                                    |
+| ------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `set`         | `core`  | `core`, `judge` or `full`, as `--set`                                                                                                                                           |
+| `repeat`      | `10`    | One of 1, 2, 3, 5 or 10, as `--repeat`. It is a list of choices, so a typo cannot start a run of 100                                                                            |
+| `k`           | `1,3,5` | As `--k`. The runner refuses a `k` wider than `repeat`, so the default becomes `1` when `repeat` is below 5                                                                     |
+| `cli_version` | empty   | Empty runs the build of the branch. An exact published version, such as `1.1.0`, runs that package instead, as [Against a published version](#against-a-published-version) says |
+| `model`       | empty   | One or more models of the config, comma separated, as `--model`. Empty asks every model of the config                                                                           |
+
+The config owns the list of models, and `model` only narrows it, so a run for one model needs no change to the config. That is how to run an A/A test: the same code asked again and again, one model per dispatch, to learn how far a pass rate moves by chance. The concurrency is promptfoo's default, so that wall times compare from one run to the next. Two runs never overlap: the second waits for the first, so that they do not share the request caps of the free model.
+
+The run reads `OPENROUTER_API_KEY` from the secrets of the `evals` environment of the repository. Give that environment a dedicated key with a hard credit limit, 5 USD for instance, and not a personal one. A run that reaches the limit ends in provider errors, which the report counts as `err`. Write access is enough to push a branch that edits the workflow and dispatch it, and such a run can read the key. Two settings of the environment close that gap: limit it to protected branches, or add a required reviewer, which also puts a human between the click and the spend. The credit limit caps the damage in the meantime.
+
+The report is on the page of the run, in the job summary: the branch, the commit, the inputs, the target and the date of the catalog snapshot, then the text report. The whole output folder is kept for 90 days as the artifact `evals-<set>-<run id>`: `results.json`, `catalog.json`, `instructions.txt`, `target.txt` and the report. Download it and run `report` on `results.json` with another `--k`, at no cost.
+
+In a public repository, anyone signed in to GitHub can download an artifact. That is acceptable here: a test checks that nothing the run writes holds the key, and the key in `hostile/key-in-question` is generated and opens nothing.
 
 ## The cases
 

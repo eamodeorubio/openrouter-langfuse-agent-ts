@@ -1,0 +1,24 @@
+# A config for the model filter test: the real provider, a stub CLI (EVAL_CLI)
+# and a matrix of two models, as the real config has, with two cases.
+extensions:
+  - file://../../src/hooks.ts:extensionHook
+prompts: ['{{question}}']
+providers:
+  - id: file://../../src/provider/cli.ts
+    label: cli
+defaultTest:
+  vars:
+    model:
+      - m/one
+      - m/two
+  assert:
+    - type: javascript
+      metric: wrong-value
+      value: output.answer.includes('GOOD')
+tests:
+  - description: A CLI that answers well
+    metadata: { id: ok, set: core }
+    vars: { question: 'ok' }
+  - description: A CLI that answers wrongly
+    metadata: { id: wrong, set: core }
+    vars: { question: 'wrong' }

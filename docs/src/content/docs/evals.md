@@ -5,7 +5,7 @@ description: How the evals test the agent against real models, the error taxonom
 
 The tests of this repository mock every request. They know that a tool returns the right shape and that the loop stops when it should. They cannot know whether a real model, given the system prompt and the tool descriptions, does the right thing. The evals ask the model.
 
-An eval run starts the built `ask-openrouter` CLI against real models on OpenRouter, many times for each question, and writes down what happened. It talks to real services with your key and it costs real money, which depends on the models and which the report prints. So it never runs as part of `pnpm test`, and it never runs in CI. It starts when you start it.
+An eval run starts the built `ask-openrouter` CLI against real models on OpenRouter, many times for each question, and writes down what happened. It talks to real services with your key and it costs real money, which depends on the models and which the report prints. So it never runs as part of `pnpm test`, and no pull request starts it. It starts when you start it, from a terminal or from the Actions tab of GitHub.
 
 ## Running the evals
 
@@ -16,6 +16,16 @@ pnpm build
 export OPENROUTER_API_KEY=...
 pnpm --filter ask-openrouter-evals run eval
 ```
+
+You can also start a run on GitHub, on any branch, with no key of your own. Open the Actions tab, pick the Evals workflow and press "Run workflow". The form asks for the set of cases, the number of repeats, the `k` of the report and, if you want them, a published version and the models to ask. The run reads a dedicated OpenRouter key with a credit limit from the `evals` environment of the repository. It puts the report on the page of the run, and keeps the results as an artifact for 90 days. In a public repository, anyone signed in to GitHub can download that artifact. Nothing in it holds the key. The [README of the package](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/blob/main/packages/evals/README.md#on-github) lists every input.
+
+To ask fewer models than the config lists, add `--model` with a comma-separated list of ids from the config:
+
+```sh
+pnpm --filter ask-openrouter-evals run eval --model anthropic/claude-haiku-5.5
+```
+
+An id the config does not list stops the run before any request, with exit code 3 and the models the config holds in the message. A narrowed run names its models on the first line of the report, as [the target](#against-a-published-version) does, so that you can tell two such runs apart.
 
 By default this evaluates **the local build**, `packages/cli/dist/index.js`, the CLI as the branch you are on would ship it. To evaluate a version from npm instead, see [Against a published version](#against-a-published-version) below. Each question runs on each model ten times, with no cache, so that every repeat is a new request. Before the first question, the run fetches OpenRouter's public model list, which needs no key, and saves it beside the results as `catalog.json`. That snapshot is the oracle: it says which models are good answers to a question such as "the cheapest paid model with 200,000 tokens of context and tool calling", so that no question holds a model name that next week's catalog will outdate.
 
@@ -55,7 +65,7 @@ The version must be exact and from 1.1.0, the first that lists its tool calls in
 
 Before the first case, the run starts the version once with `--version`, so that the download does not count toward the latency of any case. It waits up to three minutes for it, using the `pnpm` on your path, or the command that `EVAL_PNPM` names. If the warm-up fails, or the version that answers is another one, the run stops with a message that names the version and sends no request. The instructions that `prompt-leak` compares answers with are read from the package that `pnpm dlx` installed, so each version is judged against its own.
 
-The report starts with a line that names what it measured, `target: ask-openrouter@1.1.0` or `target: local build (packages/cli/dist/index.js)`. The run saves the same text as `target.txt` beside the results, so a rerun of the reporter shows the line too.
+The report starts with a line that names what it measured, `target: ask-openrouter@1.1.0` or `target: local build (packages/cli/dist/index.js)`. A run narrowed with `--model` adds the models, as in `target: local build (packages/cli/dist/index.js), models: anthropic/claude-haiku-5.5`. The run saves the same text as `target.txt` beside the results, so a rerun of the reporter shows the line too.
 
 ## The judge rubrics
 

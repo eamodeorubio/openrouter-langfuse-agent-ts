@@ -302,7 +302,7 @@ describe('a run', () => {
   it('stops with a message and the usage on a bad argument, and runs nothing', async () => {
     expect(await run(['--bogus'], io, fakePromptfoo(0))).toBe(2);
     expect(stderr).toBe(
-      'Unexpected argument: --bogus\nUsage: run [--set core|judge|full] [--config <file>] [--repeat <n>] [--k 1,3,5] [--out <dir>] [--cli-version <x.y.z>]\n',
+      'Unexpected argument: --bogus\nUsage: run [--set core|judge|full] [--config <file>] [--repeat <n>] [--k 1,3,5] [--out <dir>] [--cli-version <x.y.z>] [--model <id[,id...]>]\n',
     );
     expect(spawned).toEqual([]);
   });
@@ -428,6 +428,24 @@ describe('a run', () => {
       fakePromptfoo(0),
     );
     expect(spawned[1]?.env.EVAL_CLI_VERSION).toBe('1.1.0');
+  });
+
+  it('tells the hook which models to keep, and tells it nothing when --model is absent, whatever the shell holds', async () => {
+    vi.stubEnv('EVAL_MODELS_FILTER', 'left/over');
+    await run(['--out', out, '--repeat', '5'], io, fakePromptfoo(0));
+    expect(spawned[0]?.env).not.toHaveProperty('EVAL_MODELS_FILTER');
+    await run(
+      ['--out', out, '--repeat', '5', '--model', 'a/b,c/d'],
+      io,
+      fakePromptfoo(0),
+    );
+    expect(spawned[1]?.env.EVAL_MODELS_FILTER).toBe('a/b,c/d');
+    await run(
+      ['--out', out, '--repeat', '5', '--model', ''],
+      io,
+      fakePromptfoo(0),
+    );
+    expect(spawned[2]?.env.EVAL_MODELS_FILTER).toBe('');
   });
 
   it('needs no build for a published version', async () => {

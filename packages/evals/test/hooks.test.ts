@@ -2,10 +2,10 @@ import { execFile } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import fc from 'fast-check';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   extensionHook,
-  modelsOf,
   OUT_ENV,
   runHook,
   SETUP_FAILED,
@@ -14,6 +14,7 @@ import {
   setup,
   takeSnapshot,
 } from '../src/hooks.js';
+import { modelsOf } from '../src/models.js';
 import { InstructionsError } from '../src/oracle/instructions.js';
 import { type Snapshot, SnapshotError } from '../src/oracle/snapshot.js';
 import { PublishedError } from '../src/published.js';
@@ -241,6 +242,152 @@ describe('the setup of a run', () => {
     ).rejects.toThrow(SnapshotError);
     expect(env.EVAL_CATALOG).toBeUndefined();
   });
+
+  describe('with --model', () => {
+    const three = {
+      defaultTest: {
+        vars: { model: ['a/one', 'b/two', 'c/three'] },
+        assert: [{ type: 'javascript' }],
+      },
+      tests: ['kept'],
+    };
+
+    it('narrows the matrix to the models the filter names, in the order of the config', async () => {
+      env.EVAL_MODELS_FILTER = 'c/three,a/one';
+      const narrowed = await setup(three, env, deps());
+      expect(narrowed).toEqual({
+        suite: {
+          ...three,
+          defaultTest: {
+            ...three.defaultTest,
+            vars: { model: ['a/one', 'c/three'] },
+          },
+        },
+      });
+      expect(env.EVAL_MODELS).toBe('a/one,c/three');
+    });
+
+    it('leaves the suite it was given as it was', async () => {
+      env.EVAL_MODELS_FILTER = 'b/two';
+      await setup(three, env, deps());
+      expect(three.defaultTest.vars.model).toEqual([
+        'a/one',
+        'b/two',
+        'c/three',
+      ]);
+    });
+
+    it('returns nothing, and keeps every model, when there is no filter', async () => {
+      expect(await setup(three, env, deps())).toBeUndefined();
+      expect(env.EVAL_MODELS).toBe('a/one,b/two,c/three');
+    });
+
+    it('keeps each model once, in the order of the config, whatever the filter lists and repeats', async () => {
+      const config = ['a/one', 'b/two', 'c/three'];
+      await fc.assert(
+        fc.asyncProperty(
+          fc.array(fc.constantFrom(...config), { minLength: 1, maxLength: 9 }),
+          async (listed) => {
+            const run: NodeJS.ProcessEnv = {
+              [OUT_ENV]: out,
+              EVAL_MODELS_FILTER: listed.join(','),
+            };
+            const narrowed = (await setup(three, run, deps())) as {
+              suite: typeof three;
+            };
+            expect(narrowed.suite.defaultTest.vars.model).toEqual(
+              config.filter((id) => listed.includes(id)),
+            );
+          },
+        ),
+        { numRuns: 50 },
+      );
+    });
+
+    it('refuses a filter with any id outside the config, whatever the text, and starts nothing', async () => {
+      const config = ['a/one', 'b/two', 'c/three'];
+      await fc.assert(
+        fc.asyncProperty(
+          fc.array(fc.oneof(fc.constantFrom(...config), fc.string()), {
+            minLength: 1,
+            maxLength: 6,
+          }),
+          async (listed) => {
+            const filter = listed.join(',');
+            order.length = 0;
+            const run: NodeJS.ProcessEnv = {
+              [OUT_ENV]: out,
+              EVAL_MODELS_FILTER: filter,
+            };
+            if (filter.split(',').every((id) => config.includes(id))) {
+              await expect(setup(three, run, deps())).resolves.toBeDefined();
+            } else {
+              await expect(setup(three, run, deps())).rejects.toThrow(
+                SetupError,
+              );
+              expect(order).toEqual([]);
+            }
+          },
+        ),
+        { numRuns: 100 },
+      );
+    });
+
+    it.each([
+      ['an id the config does not list', 'x/none', 'x/none'],
+      ['an id in another case', 'A/ONE', 'A/ONE'],
+      ['an id with a trailing space', 'a/one ', 'a/one '],
+      ['a good id and an unknown one', 'a/one,x/none', 'x/none'],
+    ])(
+      'refuses %s, names it and the models of the config, and starts nothing',
+      async (_, filter, named) => {
+        env.EVAL_MODELS_FILTER = filter;
+        env.EVAL_CLI_VERSION = '1.1.0';
+        const refusal = setup(three, env, deps());
+        await expect(refusal).rejects.toThrow(SetupError);
+        await expect(refusal).rejects.toThrow(
+          `--model ${JSON.stringify(named)} is not a model of the config. The config holds: a/one, b/two, c/three.`,
+        );
+        expect(order).toEqual([]);
+        expect(fs.existsSync(out)).toBe(false);
+      },
+    );
+
+    it('says that the config holds none when it lists no model', async () => {
+      env.EVAL_MODELS_FILTER = 'a/one';
+      await expect(setup({ defaultTest: {} }, env, deps())).rejects.toThrow(
+        '--model "a/one" is not a model of the config. The config holds: none.',
+      );
+    });
+
+    it.each([
+      ['the empty string', ''],
+      ['a trailing comma', 'a/one,'],
+      ['a leading comma', ',a/one'],
+      ['two commas in a row', 'a/one,,b/two'],
+    ])('refuses %s as an empty id', async (_, filter) => {
+      env.EVAL_MODELS_FILTER = filter;
+      const refusal = setup(three, env, deps());
+      await expect(refusal).rejects.toThrow(SetupError);
+      await expect(refusal).rejects.toThrow(
+        '--model "" is not a model of the config.',
+      );
+      expect(order).toEqual([]);
+    });
+
+    it('writes the models after the target, for a local build and for a published version', async () => {
+      env.EVAL_MODELS_FILTER = 'c/three,a/one';
+      await setup(three, env, deps());
+      expect(fs.readFileSync(path.join(out, 'target.txt'), 'utf8')).toMatch(
+        /^local build \(.+\), models: a\/one, c\/three$/,
+      );
+      env.EVAL_CLI_VERSION = '1.1.0';
+      await setup(three, env, deps());
+      expect(fs.readFileSync(path.join(out, 'target.txt'), 'utf8')).toBe(
+        'ask-openrouter@1.1.0, models: a/one, c/three',
+      );
+    });
+  });
 });
 
 describe('the snapshot of a run', () => {
@@ -341,6 +488,27 @@ describe('the extension hook', () => {
         expect(written).toBe(`${error.message}\n`);
       },
     );
+
+    it('hands promptfoo the narrowed suite, and says nothing when there is no filter', async () => {
+      const wide = {
+        defaultTest: { vars: { model: ['a/one', 'b/two'] } },
+      };
+      expect(await runHook('beforeAll', { suite: wide }, base)).toBeUndefined();
+      vi.stubEnv('EVAL_MODELS_FILTER', 'b/two');
+      expect(await runHook('beforeAll', { suite: wide }, base)).toEqual({
+        suite: { defaultTest: { vars: { model: ['b/two'] } } },
+      });
+    });
+
+    it('writes the sentence on stderr and exits with the reserved code for an unknown model', async () => {
+      vi.stubEnv('EVAL_MODELS_FILTER', 'x/none');
+      await expect(runHook('beforeAll', { suite }, base)).rejects.toThrow(
+        `exit ${SETUP_FAILED}`,
+      );
+      expect(written).toBe(
+        '--model "x/none" is not a model of the config. The config holds: a/one, b/two.\n',
+      );
+    });
 
     it('does not hide a failure that is not an error of the setup', async () => {
       await expect(

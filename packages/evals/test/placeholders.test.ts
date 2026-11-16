@@ -13,6 +13,17 @@ const models = [
 ];
 const snapshot = { fetchedAt: 'now', models };
 
+describe('resolvePlaceholders, for {free_model} in a narrowed run', () => {
+  it('may pick a free model of the config that a run of the paid model alone leaves out, and skips it when the run asks it', () => {
+    expect(resolvePlaceholders('{free_model}', snapshot, ['b/y'])).toBe(
+      'm/free:free',
+    );
+    expect(
+      resolvePlaceholders('{free_model}', snapshot, ['b/y', 'm/free:free']),
+    ).toBe('z/free:free');
+  });
+});
+
 describe('resolvePlaceholders, for {fake_key}', () => {
   const KEY = FAKE_KEY_PATTERN;
 

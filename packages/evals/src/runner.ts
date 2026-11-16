@@ -4,6 +4,7 @@ import path from 'node:path';
 import { resolveCli } from './cliPath.js';
 import { notBuilt, OUT_ENV, SETUP_FAILED } from './hooks.js';
 import type { Io } from './io.js';
+import { MODEL_FILTER_ENV } from './models.js';
 import { report } from './report/cli.js';
 import { DEFAULT_KS, parseKs } from './report/ks.js';
 import { SET_NAMES, type SetName } from './sets.js';
@@ -27,9 +28,11 @@ export interface RunOptions {
   k?: string;
   /** The published version of the CLI to evaluate. Absent for the local build. */
   cliVersion?: string;
+  /** The models to ask, as written: a comma list that the setup checks against the config. Absent for every model of the config. */
+  model?: string;
 }
 
-const USAGE = `Usage: run [--set ${SET_NAMES.join('|')}] [--config <file>] [--repeat <n>] [--k 1,3,5] [--out <dir>] [--cli-version <x.y.z>]\n`;
+const USAGE = `Usage: run [--set ${SET_NAMES.join('|')}] [--config <file>] [--repeat <n>] [--k 1,3,5] [--out <dir>] [--cli-version <x.y.z>] [--model <id[,id...]>]\n`;
 
 /** Reads the arguments of the eval script. Returns the options, or the message that explains the mistake. */
 export const parseRunArgs = (
@@ -42,6 +45,7 @@ export const parseRunArgs = (
   let out: string | undefined;
   let k: string | undefined;
   let cliVersion: string | undefined;
+  let model: string | undefined;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i] as string;
     const value = argv[i + 1];
@@ -68,6 +72,9 @@ export const parseRunArgs = (
       if (problem !== undefined) return problem;
       cliVersion = value;
       i++;
+    } else if (arg === '--model' && value !== undefined) {
+      model = value;
+      i++;
     } else if (arg === '--k' && value !== undefined) {
       k = value;
       i++;
@@ -91,6 +98,7 @@ export const parseRunArgs = (
     out: out ?? path.join(packageRoot, 'results', stamp),
     ...(k === undefined ? {} : { k }),
     ...(cliVersion === undefined ? {} : { cliVersion }),
+    ...(model === undefined ? {} : { model }),
   };
 };
 
@@ -147,20 +155,24 @@ export const run = async (
 
   fs.mkdirSync(options.out, { recursive: true });
 
+  const env: NodeJS.ProcessEnv = {
+    ...process.env,
+    // The published version the provider starts, or none for the local build.
+    EVAL_CLI_VERSION: options.cliVersion ?? '',
+    // Where the hook of the config writes the target, the instructions and the snapshot of the run.
+    [OUT_ENV]: options.out,
+    PROMPTFOO_DISABLE_TELEMETRY: '1',
+    PROMPTFOO_DISABLE_UPDATE: '1',
+    // A failed or errored run is data, not a reason to skip the report.
+    PROMPTFOO_FAILED_TEST_EXIT_CODE: '0',
+    PROMPTFOO_CONFIG_DIR: path.join(packageRoot, '.promptfoo'),
+  };
+  // The models to keep, or none: a filter left in the shell must not narrow a run that asked for none.
+  if (options.model === undefined) delete env[MODEL_FILTER_ENV];
+  else env[MODEL_FILTER_ENV] = options.model;
   const promptfoo = deps.spawn(PROMPTFOO, promptfooArgs(options), {
     stdio: ['ignore', 2, 2],
-    env: {
-      ...process.env,
-      // The published version the provider starts, or none for the local build.
-      EVAL_CLI_VERSION: options.cliVersion ?? '',
-      // Where the hook of the config writes the target, the instructions and the snapshot of the run.
-      [OUT_ENV]: options.out,
-      PROMPTFOO_DISABLE_TELEMETRY: '1',
-      PROMPTFOO_DISABLE_UPDATE: '1',
-      // A failed or errored run is data, not a reason to skip the report.
-      PROMPTFOO_FAILED_TEST_EXIT_CODE: '0',
-      PROMPTFOO_CONFIG_DIR: path.join(packageRoot, '.promptfoo'),
-    },
+    env,
   });
   if (promptfoo.error) {
     io.err(`promptfoo could not start: ${promptfoo.error.message}\n`);

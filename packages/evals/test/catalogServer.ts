@@ -10,7 +10,9 @@ const MODELS = fs.readFileSync(
 
 /** A model list on the loopback interface that answers with `status`. */
 export const serveCatalog = async (status = 200) => {
+  let requests = 0;
   const server = http.createServer((_, res) => {
+    requests++;
     res.writeHead(status, { 'content-type': 'application/json' });
     res.end(status === 200 ? MODELS : '{"error":"boom"}');
   });
@@ -18,6 +20,8 @@ export const serveCatalog = async (status = 200) => {
   const { port } = server.address() as AddressInfo;
   return {
     url: `http://127.0.0.1:${port}/api/v1/models`,
+    /** How many requests the server has answered. */
+    requests: () => requests,
     close: () => new Promise<void>((resolve) => server.close(() => resolve())),
   };
 };
