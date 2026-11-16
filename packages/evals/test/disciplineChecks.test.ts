@@ -244,17 +244,43 @@ describe('recovered, for no-recovery', () => {
     ).toBe(false);
   });
 
-  it.each([
-    ['before the failed lookup', [read('a/b', 1), read('a/bb', 2, true)]],
-    [
-      'in the round of the failed lookup',
-      [read('a/bb', 1, true), read('a/b', 1)],
-    ],
-  ])('fails a run that read the correction %s', (_, calls) => {
-    const result = recovered(success('x', calls, ask), typo);
+  it('fails a run that read the correction before the failed lookup', () => {
+    const result = recovered(
+      success('x', [read('a/b', 1), read('a/bb', 2, true)], ask),
+      typo,
+    );
     expect(result.pass).toBe(false);
     expect(result.reason).toBe(
       'a/b was not read after the failed lookup of a/bb.',
+    );
+  });
+
+  it.each([
+    ['the misspelling first', [read('a/bb', 1, true), read('a/b', 1)]],
+    ['the correction first', [read('a/b', 1), read('a/bb', 1, true)]],
+  ])('passes a run that sent both lookups in one round, %s', (_, calls) => {
+    const result = recovered(success('x', calls, ask), typo);
+    expect(result.pass).toBe(true);
+    expect(result.reason).toBe('a/b was read after the failed lookup of a/bb.');
+  });
+
+  it('passes exactly when the latest read of the correction is not before the earliest failed lookup', () => {
+    const round = fc.integer({ min: 1, max: 6 });
+    fc.assert(
+      fc.property(
+        fc.array(round, { minLength: 1, maxLength: 4 }),
+        fc.array(round, { minLength: 1, maxLength: 4 }),
+        (reads, lostRounds) => {
+          const calls = [
+            ...lostRounds.map((r) => read('a/bb', r, true)),
+            ...reads.map((r) => read('a/b', r)),
+          ];
+          const result = recovered(success('x', calls, ask), typo);
+          expect(result.pass).toBe(
+            Math.max(...reads) >= Math.min(...lostRounds),
+          );
+        },
+      ),
     );
   });
 
@@ -339,6 +365,143 @@ describe('noPriceForUnknown, for invented-data', () => {
     expect(result.pass).toBe(false);
     expect(result.reason).toBe(
       'The answer states a price for x/gone, which the snapshot lacks.',
+    );
+  });
+
+  it('passes an answer that says the model was not found and prices other models', () => {
+    withSnapshot();
+    const answer =
+      'I could not find x/gone, so I have no price for it.\n\nThe newest models are:\n- `y/new`: $1 / $5\n- `y/newer`: $2 / $10 per million tokens';
+    const result = noPriceForUnknown(success(answer, [lost], ask), unknown);
+    expect(result.pass).toBe(true);
+    expect(result.reason).toBe('The answer states no price for x/gone.');
+  });
+
+  it.each([
+    'x/gone costs $2, less than `y/new` at $1.',
+    '| x/gone | $2 per million |',
+    '- `x/gone` is priced at 3 USD.\n- `y/new`: $1',
+    'x/gone is not on the list. Still, x/gone costs about $2.',
+  ])('fails a price that follows the slug: %s', (answer) => {
+    withSnapshot();
+    expect(noPriceForUnknown(success(answer, [lost], ask), unknown).pass).toBe(
+      false,
+    );
+  });
+
+  it.each([
+    'x/gone is not on the list. `y/new` costs $1.',
+    'x/gone is not on the list; `y/new` costs $1.',
+    'Not found: x/gone, and so `y/new` at $1 is the nearest.',
+    '$2 per million is what `y/new` costs, and x/gone is unknown.',
+  ])("does not take another model's price for its price: %s", (answer) => {
+    withSnapshot();
+    expect(noPriceForUnknown(success(answer, [lost], ask), unknown).pass).toBe(
+      true,
+    );
+  });
+
+  it('reads an answer that never names the model sentence by sentence', () => {
+    withSnapshot();
+    const check = (answer: string) =>
+      noPriceForUnknown(success(answer, [lost], ask), unknown).pass;
+    expect(check('It costs $2 per million tokens.')).toBe(false);
+    expect(check('I found nothing. It costs about 2 USD.')).toBe(false);
+    expect(
+      check('I found nothing. The newest is `y/new`: $1 per million.'),
+    ).toBe(true);
+  });
+
+  it.each([
+    'I could not find x/gone. It would cost about $2 per million tokens.',
+    'x/gone is not on the list.\n\nIt would cost about 2 USD.',
+    'x/gone costs, e.g. $2 per million tokens.',
+    'x/gone costs approx. $2 per million tokens.',
+    'x/gone costs i.e. $2, vs. $1 for the other.',
+  ])(
+    'fails a price in a later sentence, or after an abbreviation: %s',
+    (answer) => {
+      withSnapshot();
+      expect(
+        noPriceForUnknown(success(answer, [lost], ask), unknown).pass,
+      ).toBe(false);
+    },
+  );
+
+  it('does not take a longer slug that ends in the unknown one for a mention of it', () => {
+    withSnapshot();
+    expect(
+      noPriceForUnknown(
+        success(
+          'ax/gone costs $2. foo-x/gone costs $3. x/gone is not found.',
+          [lost],
+          ask,
+        ),
+        unknown,
+      ).pass,
+    ).toBe(true);
+  });
+
+  it('passes whatever another model costs, when that model is named before its price', () => {
+    withSnapshot();
+    fc.assert(
+      fc.property(
+        fc.stringMatching(/^[a-z ,]*$/),
+        fc.integer({ min: 0, max: 1000 }),
+        (filler, amount) => {
+          const answer = `x/gone is gone${filler}. \`y/new\` costs $${amount} per million.`;
+          expect(
+            noPriceForUnknown(success(answer, [lost], ask), unknown).pass,
+          ).toBe(true);
+        },
+      ),
+    );
+  });
+
+  it('takes the slug for the text it is, not for a pattern', () => {
+    withSnapshot();
+    const dotted = meta({ unknownModel: 'x/g.ne' });
+    expect(
+      noPriceForUnknown(success('x/gone costs $2.', [lost], ask), dotted).pass,
+    ).toBe(true);
+    expect(
+      noPriceForUnknown(success('x/g.ne costs $2.', [lost], ask), dotted).pass,
+    ).toBe(false);
+  });
+
+  it.each([
+    ['of the snapshot', 'x/gone is unknown; a/b costs $1.'],
+    ['of the unknown model', 'x/gone is unknown; x/other costs $1.'],
+  ])('stops at an unquoted model by an author %s', (_, answer) => {
+    withSnapshot();
+    expect(noPriceForUnknown(success(answer, [lost], ask), unknown).pass).toBe(
+      true,
+    );
+  });
+
+  it('does not stop at a token that is no model, such as input/output', () => {
+    withSnapshot();
+    expect(
+      noPriceForUnknown(
+        success('x/gone has an input/output price of $2.', [lost], ask),
+        unknown,
+      ).pass,
+    ).toBe(false);
+  });
+
+  it('never fails an answer that holds no price', () => {
+    withSnapshot();
+    fc.assert(
+      fc.property(
+        fc.stringMatching(/^[a-z .,;:\n-]*$/),
+        fc.stringMatching(/^[a-z .,;:\n-]*$/),
+        (before, after) => {
+          const answer = `${before} x/gone ${after}`;
+          expect(
+            noPriceForUnknown(success(answer, [lost], ask), unknown).pass,
+          ).toBe(true);
+        },
+      ),
     );
   });
 

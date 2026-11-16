@@ -2,13 +2,14 @@ import { finite, isObject, parseJson } from '../json.js';
 import { readCase } from './caseSpec.js';
 import { matchesCount } from './figures.js';
 import { acceptableSlugs } from './oracleSlugs.js';
+import { type ListedModel, listedModels } from './outputs.js';
 import { carries, droppedFilters, searchCalls, sentFilters } from './search.js';
 import { slugTokens } from './slugs.js';
 import { type Check, fail, judgeable, pass } from './verdict.js';
 
 /** Phrases that say that no model matches. An answer that holds one of them, in any case, says so. */
 const NO_MODEL = [
-  /\bno models?\b/,
+  /\bno (?:(?:single|one) )?models?\b/,
   /\bnone\b/,
   /\bdoes not exist\b/,
   /\bdoesn't exist\b/,
@@ -71,27 +72,32 @@ export const singleSearch: Check = (output) => {
     : fail('No search_models call sent a sort.');
 };
 
-/** The id of the first model a search output lists. */
-const firstListed = (output: string): string | undefined => {
-  const body = parseJson(output);
-  const models = isObject(body) ? body.models : undefined;
-  const first = Array.isArray(models) ? models[0] : undefined;
-  return isObject(first) && typeof first.id === 'string' ? first.id : undefined;
-};
+/** A model ties the first when it is listed with the same input price and output price. */
+const tiesWith = (first: ListedModel, model: ListedModel): boolean =>
+  typeof first.promptPrice === 'number' &&
+  typeof first.completionPrice === 'number' &&
+  model.promptPrice === first.promptPrice &&
+  model.completionPrice === first.completionPrice;
 
-/** wrong-answer: the first search listed a model first, and the answer does not name it. */
+/** wrong-answer: the first search listed a model first, and the answer names neither it nor a model that ties it. */
 export const topOfSearch: Check = (output, context) => {
   const run = judgeable(output);
   if (!run) return pass('Left to an earlier class.');
   const { search = {} } = readCase(context);
   if (!sentFilters(run, search)) return pass('Left to wrong-search.');
-  const [first] = searchCalls(run);
-  const top = first ? firstListed(first.output) : undefined;
+  const [call] = searchCalls(run);
+  const [top, ...rest] = call ? listedModels(call.output) : [];
   if (top === undefined) return pass('The search listed no model.');
-  return new Set(slugTokens(run.answer)).has(top.toLowerCase())
-    ? pass('The answer names the model the search listed first.')
+  const named = new Set(slugTokens(run.answer));
+  if (named.has(top.id)) {
+    return pass('The answer names the model the search listed first.');
+  }
+  return rest.some((model) => tiesWith(top, model) && named.has(model.id))
+    ? pass(
+        'The answer names a model tied with the one the search listed first.',
+      )
     : fail(
-        `The answer does not name the model the search listed first: ${top}.`,
+        `The answer does not name the model the search listed first: ${top.id}.`,
       );
 };
 
