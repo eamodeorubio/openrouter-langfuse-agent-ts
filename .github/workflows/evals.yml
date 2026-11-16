@@ -50,9 +50,12 @@ jobs:
     timeout-minutes: 60
     # Holds OPENROUTER_API_KEY: a dedicated key with a hard credit limit, not a personal one.
     environment: evals
-    env:
-      OUT: ${{ runner.temp }}/evals
     steps:
+      # The runner context does not exist at the level of the job, so the folder
+      # is chosen in a step. It comes first, so that the steps that run after a
+      # failure always know it.
+      - name: Choose the results folder
+        run: echo "OUT=$RUNNER_TEMP/evals" >> "$GITHUB_ENV"
       - uses: actions/checkout@v7
       # Reads the pnpm version from "packageManager" in package.json.
       - uses: pnpm/action-setup@v6
