@@ -19,8 +19,8 @@ Commit type `test:`, as `test: add the evals package (#46)` was: the evals are t
 
 ## 2. Archive
 
-- [ ] 2.1 Verify the change with `/opsx:verify` and fix what it finds.
-- [ ] 2.2 Once the user approves, archive it as `chore: archive add-evals-model-filter`, as the last commit before merge.
+- [x] 2.1 Verify the change with `/opsx:verify` and fix what it finds.
+- [x] 2.2 Once the user approves, archive it as `chore: archive add-evals-model-filter`, as the last commit before merge.
 
 ## Workflow follow-up
 
