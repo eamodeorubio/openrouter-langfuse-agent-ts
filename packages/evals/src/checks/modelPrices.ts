@@ -1,3 +1,4 @@
+import { escapeRegExp } from '../regexp.js';
 import { CaseError } from './caseSpec.js';
 import { statesNonZeroPrice, statesPrice } from './figures.js';
 import { type ModelRecord, modelRecord } from './outputs.js';
@@ -8,8 +9,14 @@ import { type Check, fail, judgeable, pass } from './verdict.js';
 const PRICE = '(?:price|pricing|cost|rate)';
 const KIND = '(?:fixed|single|set|listed|published|specific|flat|standard)';
 const VARIES = '(?:vary|varies|varying|variable|dynamic|depends?)';
+const STATING = '(?:list|publish|state|give|show|provide|offer|have)';
+// Up to two words between, such as `per-token`.
+const WORDS = '(?:[\\w-]+ ){0,2}';
 const NO_FIXED_PRICE = [
-  new RegExp(`(?:\\bno|\\bnot|n't) (?:an? )?${KIND} ${PRICE}`),
+  new RegExp(`(?:\\bno|\\bnot|n't) (?:an? )?${KIND} ${WORDS}${PRICE}`),
+  new RegExp(
+    `(?:\\bnot|n't) ${STATING} (?:an? |the |its )?${WORDS}(?:price|pricing)\\b`,
+  ),
   new RegExp(`\\b${PRICE}s? (?:is|are) (?:not|n't) ${KIND}`),
   new RegExp(`\\bdoes(?: not|n't) have an? (?:\\w+ )?${PRICE}`),
   new RegExp(`\\b${PRICE}s?\\b[^.]{0,40}\\b${VARIES}\\b`),
@@ -104,9 +111,6 @@ const FREE = [
 
 /** A negation takes the word back, and "feel free" is an invitation: neither says that a model is free. */
 const NOT_FREE = /\b(?:not|never|isn't|aren't|n't)\s+(?:\w+\s+)?free\b/;
-
-const escapeRegExp = (text: string): string =>
-  text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 const isFree = (record: ModelRecord): boolean =>
   record.promptPrice === 0 && record.completionPrice === 0;

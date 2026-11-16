@@ -10,12 +10,20 @@ interface Found {
   author: string;
   /** The slug is written between backticks. */
   quoted: boolean;
+  /** Where the token starts, in the text with its URLs left out. */
+  start: number;
 }
+
+// Stryker disable next-line StringLiteral: equivalent because a URL ends at whitespace, so no token touches it, and every caller reads the same text
+const withoutUrls = (text: string): string => text.replace(URL_TEXT, ' ');
+
+/** A token is a model mention when its author is known or it is in backticks. That keeps `input/output` and `24/7` out. */
+const isModelMention = (found: Found, authors: ReadonlySet<string>): boolean =>
+  found.quoted || authors.has(found.author);
 
 /** Every slug-shaped token of the text, in order, with URLs left out. */
 const scan = (text: string): Found[] => {
-  // Stryker disable next-line StringLiteral: equivalent because a URL ends at whitespace, so no token touches it
-  const plain = text.replace(URL_TEXT, ' ');
+  const plain = withoutUrls(text);
   return [...plain.matchAll(SLUG)].map((match) => {
     const whole = match[0];
     const author = match[1] as string;
@@ -28,6 +36,7 @@ const scan = (text: string): Found[] => {
       slug: `${author}/${trimmed}${suffix ? `:${suffix}` : ''}`.toLowerCase(),
       author: author.toLowerCase(),
       quoted: plain[start - 1] === '`' && plain[start + whole.length] === '`',
+      start,
     };
   });
 };
@@ -45,9 +54,19 @@ export const namedModels = (
 ): string[] =>
   unique(
     scan(answer)
-      .filter((found) => found.quoted || authors.has(found.author))
+      .filter((found) => isModelMention(found, authors))
       .map((found) => found.slug),
   );
+
+/** The text up to the first model it names, or all of it when it names none. URLs are left out. */
+export const beforeNextModel = (
+  text: string,
+  authors: ReadonlySet<string>,
+): string => {
+  const plain = withoutUrls(text);
+  const next = scan(plain).find((found) => isModelMention(found, authors));
+  return next ? plain.slice(0, next.start) : plain;
+};
 
 /** Every slug-shaped token of a source text, whoever the author. */
 export const slugTokens = (text: string): string[] =>

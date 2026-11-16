@@ -439,6 +439,11 @@ describe('saysNoFixedPrice, for wrong-value', () => {
     'The price is variable.',
     'Pricing is dynamic.',
     'It routes your request to another model.',
+    'It has no published per-token price.',
+    'OpenRouter does not list a per-token price for it.',
+    "OpenRouter doesn't publish a fixed price for it.",
+    'The catalog gives no flat per-token rate.',
+    'It does not state a price.',
   ])('passes an answer that says so: %s', (answer) => {
     withSnapshot();
     const result = saysNoFixedPrice(success(answer, calls, router), meta({}));
@@ -448,11 +453,37 @@ describe('saysNoFixedPrice, for wrong-value', () => {
     );
   });
 
+  it('never passes an answer that holds no word of price, cost, rate or routing', () => {
+    withSnapshot();
+    fc.assert(
+      fc.property(
+        fc
+          .stringMatching(/^[a-z .,']*$/)
+          .filter(
+            (text) =>
+              text.trim() !== '' &&
+              !/pric|cost|rate|rout|depend|vari|dynamic/.test(text),
+          ),
+        (answer) => {
+          expect(
+            saysNoFixedPrice(success(answer, calls, router), meta({})).pass,
+          ).toBe(false);
+        },
+      ),
+    );
+  });
+
   it.each([
     'It is a good model.',
     'It routes requests quickly.',
     'It depends on the weather.',
     'Choose it for speed. Pricing is on the page.',
+    'The price is $1.',
+    "OpenRouter doesn't publish the context window.",
+    'It does not list a discount, but it costs $1.',
+    'It has no published, very good, per-token price.',
+    'It does not offer a rate limit.',
+    "It doesn't give the cost of caching.",
   ])('fails an answer that does not say so: %s', (answer) => {
     withSnapshot();
     expect(

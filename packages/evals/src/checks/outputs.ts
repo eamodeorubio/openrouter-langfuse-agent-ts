@@ -43,6 +43,22 @@ const searchEntries = (result: Json): unknown[] =>
   // Stryker disable next-line ArrayDeclaration: equivalent because a string in the list is never an object with an id
   Array.isArray(result.models) ? result.models : [];
 
+/** A model of a `search_models` page, with the prices of its entry. */
+export interface ListedModel extends ModelRecord {
+  id: string;
+}
+
+/** The models a `search_models` output lists, in its order, with ids in lower case. */
+export const listedModels = (output: string): ListedModel[] => {
+  const result = parseJson(output);
+  if (!isObject(result)) return [];
+  return searchEntries(result).flatMap((entry) =>
+    isObject(entry) && typeof entry.id === 'string'
+      ? [{ id: entry.id.toLowerCase(), ...fromSearchEntry(entry) }]
+      : [],
+  );
+};
+
 /** The ids of the models the successful calls returned: a `get_model` id and the ids of a `search_models` page. */
 export const modelIds = (calls: readonly ToolCall[]): string[] =>
   calls.flatMap((call) => {

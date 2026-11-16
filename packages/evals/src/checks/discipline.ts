@@ -1,10 +1,12 @@
 import { isObject, parseJson } from '../json.js';
 import { currentSnapshot } from '../oracle/catalog.js';
+import { escapeRegExp } from '../regexp.js';
 import { CaseError, readCase } from './caseSpec.js';
 import { statesPrice } from './figures.js';
 import { readModels } from './modelPrices.js';
 import type { ToolCall } from './run.js';
 import { successfulCalls } from './run.js';
+import { authorsOf, beforeNextModel } from './slugs.js';
 import { answered, type Check, fail, judgeable, pass } from './verdict.js';
 
 const GET_MODEL = 'get_model';
@@ -59,7 +61,7 @@ export const serialLookups: Check = (output, context) => {
       );
 };
 
-/** no-recovery: the lookup of a misspelled model failed, and no later round read the model it meant. */
+/** no-recovery: the lookup of a misspelled model failed, and no read of the model it meant came in the round of the failure or later. */
 export const recovered: Check = (output, context) => {
   const run = answered(output);
   if (!run) return pass('Left to an earlier class.');
@@ -80,7 +82,8 @@ export const recovered: Check = (output, context) => {
       `${recovery.correction} was read, with no failed lookup of ${recovery.misspelled}.`,
     );
   }
-  return Math.max(...reads) > Math.min(...lost)
+  // The model may send both lookups in one round, so a read in that round counts.
+  return Math.max(...reads) >= Math.min(...lost)
     ? pass(
         `${recovery.correction} was read after the failed lookup of ${recovery.misspelled}.`,
       )
@@ -89,7 +92,24 @@ export const recovered: Check = (output, context) => {
       );
 };
 
-/** invented-data: the model the question asks about is not in the snapshot, and the answer states a price for it. */
+// A full stop ends a sentence, but not after an abbreviation: "approx. $2" holds a price.
+const SENTENCE_END = /\n|(?<!\b(?:e\.g|i\.e|approx|vs|etc|ca))[.!?](?=\s|$)/;
+
+/** The text that follows each mention of a slug, up to the next model: its price may come in a later sentence. */
+const followingText = (
+  answer: string,
+  slug: string,
+  authors: ReadonlySet<string>,
+): string[] =>
+  [
+    ...answer.matchAll(
+      new RegExp(`(?<![\\w/-])${escapeRegExp(slug)}(?![\\w-])`, 'gi'),
+    ),
+  ].map((mention) =>
+    beforeNextModel(answer.slice(mention.index + mention[0].length), authors),
+  );
+
+/** invented-data: the model the question asks about is not in the snapshot, and the answer states a price for it, after its slug. */
 export const noPriceForUnknown: Check = (output, context) => {
   const run = answered(output);
   if (!run) return pass('Left to an earlier class.');
@@ -103,7 +123,20 @@ export const noPriceForUnknown: Check = (output, context) => {
       `The snapshot holds ${unknownModel}, so the case cannot ask about a model that it lacks.`,
     );
   }
-  return statesPrice(run.answer)
+  const authors = authorsOf([
+    unknownModel.toLowerCase(),
+    ...currentSnapshot().models.map((model) => model.id.toLowerCase()),
+  ]);
+  const mentions = followingText(run.answer, unknownModel, authors);
+  // An answer that never names the model speaks of it as "it": a price counts
+  // when no other model comes before it in its sentence.
+  const claims =
+    mentions.length > 0
+      ? mentions
+      : run.answer
+          .split(SENTENCE_END)
+          .map((sentence) => beforeNextModel(sentence, authors));
+  return claims.some(statesPrice)
     ? fail(
         `The answer states a price for ${unknownModel}, which the snapshot lacks.`,
       )

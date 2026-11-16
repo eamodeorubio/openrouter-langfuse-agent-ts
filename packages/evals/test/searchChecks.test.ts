@@ -142,6 +142,8 @@ describe('phantomMatch', () => {
     'I found no match.',
     'I could not find one.',
     'Nothing fits.',
+    'No single model meets all three requirements.',
+    'No one model has all three.',
   ])('passes an answer that says none exists: %s', (answer) => {
     withSnapshot();
     const result = phantomMatch(success(answer, sent), none);
@@ -159,6 +161,13 @@ describe('phantomMatch', () => {
     expect(result.reason).toBe(
       'The snapshot holds no matching model, and the answer does not say so.',
     );
+  });
+
+  it('does not take "no" followed by a comma for "no model"', () => {
+    withSnapshot();
+    expect(
+      phantomMatch(success('No, models differ. Use t/a.', sent), none).pass,
+    ).toBe(false);
   });
 
   it('does not take a word that merely holds a phrase for the phrase', () => {
@@ -285,6 +294,110 @@ describe('topOfSearch, for wrong-answer', () => {
     );
   });
 
+  const priced = (
+    rows: ReadonlyArray<
+      readonly [string, number | undefined, number | undefined]
+    >,
+  ) => [
+    {
+      ...search({ sort: 'pricing-low-to-high' }),
+      output: JSON.stringify({
+        total: rows.length,
+        models: rows.map(([id, prompt_price, completion_price]) => ({
+          id,
+          prompt_price,
+          completion_price,
+        })),
+      }),
+    },
+  ];
+
+  it('passes an answer that names a model tied with the first on both prices', () => {
+    const calls = priced([
+      ['a/free', 0, 0],
+      ['b/free', 0, 0],
+      ['c/dear', 1, 4],
+    ]);
+    const result = topOfSearch(success('Use b/free.', calls), sorted);
+    expect(result.pass).toBe(true);
+    expect(result.reason).toBe(
+      'The answer names a model tied with the one the search listed first.',
+    );
+  });
+
+  it.each([
+    [
+      'another output price',
+      [
+        ['a/x', 1, 4],
+        ['b/y', 1, 5],
+      ],
+    ],
+    [
+      'another input price',
+      [
+        ['a/x', 1, 4],
+        ['b/y', 2, 4],
+      ],
+    ],
+    [
+      'no prices at all',
+      [
+        ['a/x', undefined, undefined],
+        ['b/y', undefined, undefined],
+      ],
+    ],
+    [
+      'one price missing',
+      [
+        ['a/x', 1, undefined],
+        ['b/y', 1, undefined],
+      ],
+    ],
+    [
+      'the input price missing',
+      [
+        ['a/x', undefined, 4],
+        ['b/y', undefined, 4],
+      ],
+    ],
+  ] as const)('fails an answer that names a model with %s', (_, rows) => {
+    const result = topOfSearch(success('Use b/y.', priced(rows)), sorted);
+    expect(result.pass).toBe(false);
+    expect(result.reason).toBe(
+      'The answer does not name the model the search listed first: a/x.',
+    );
+  });
+
+  it('fails an answer that names a model the first search did not list', () => {
+    const calls = priced([
+      ['a/free', 0, 0],
+      ['b/free', 0, 0],
+    ]);
+    expect(topOfSearch(success('Use z/free.', calls), sorted).pass).toBe(false);
+  });
+
+  it('passes whenever the answer names the model listed first, whatever the prices', () => {
+    fc.assert(
+      fc.property(
+        fc.array(
+          fc.tuple(
+            fc.option(fc.nat(5), { nil: undefined }),
+            fc.option(fc.nat(5), { nil: undefined }),
+          ),
+          { minLength: 1, maxLength: 5 },
+        ),
+        (prices) => {
+          const rows = prices.map(([p, c], i) => [`m/n${i}`, p, c] as const);
+          const calls = priced(rows);
+          expect(topOfSearch(success('Use m/n0.', calls), sorted).pass).toBe(
+            true,
+          );
+        },
+      ),
+    );
+  });
+
   it('matches a whole name, in any case', () => {
     expect(
       topOfSearch(success('Use A/CHEAP!', first(['a/cheap'])), sorted).pass,
@@ -307,6 +420,18 @@ describe('topOfSearch, for wrong-answer', () => {
     expect(result.pass).toBe(true);
     expect(result.reason).toBe('The search listed no model.');
   });
+
+  it.each(['not json', 'null', '[]', '"text"'])(
+    'passes when the output of the search is no object: %s',
+    (body) => {
+      const calls = [
+        { ...search({ sort: 'pricing-low-to-high' }), output: body },
+      ];
+      const result = topOfSearch(success('b/y', calls), sorted);
+      expect(result.pass).toBe(true);
+      expect(result.reason).toBe('The search listed no model.');
+    },
+  );
 
   it('leaves a run whose search dropped a required filter to wrong-search', () => {
     const result = topOfSearch(success('b/y', [search({}, ['a/x'])]), sorted);
