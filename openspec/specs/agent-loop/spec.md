@@ -77,7 +77,7 @@ With `--verbose`, and only then, the CLI SHALL write for each tool call one line
 
 ```
 tool: get_model {"slug":"openai/gpt-5"}
-tool: search_models {"sort":"pricing-low-to-high","limit":5}
+tool: search_models {"sort":"input-price-low-to-high","limit":5}
 ```
 
 #### Scenario: Two parallel calls with --verbose

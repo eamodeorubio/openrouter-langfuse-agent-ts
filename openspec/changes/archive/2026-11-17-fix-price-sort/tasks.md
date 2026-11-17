@@ -22,10 +22,10 @@ If the slice outgrows a human review, split it after task 2 (sorts and options) 
 - [x] 1.12 Run `reviewer-code-high`, `reviewer-code-low` and `reviewer-docs`. Fix every must-fix finding.
 - [x] 1.13 Skipped on the user's decision: the single-case run of `search/cheapest-input` was blocked in the session, and the user runs the core set against the pull request instead.
 - [x] 1.14 Run the core set once as a smoke check (`--set core --repeat 1`, both models; read the usage in `packages/evals/README.md` first). The user asked for this run, which costs money. Report each case that fails and whether the failure is new, by comparing with the full run in `evals-full-44034078224`. `search/cheapest-input` is not in the core set, so task 1.13 stays.
-- [ ] 1.15 Write the full report. Wait for the user's approval, which also approves the commit. Commit.
+- [x] 1.15 Write the full report. Wait for the user's approval, which also approves the commit. Commit.
 - [x] 1.16 Address the verification findings: stale `pricing-low-to-high` examples in the `agent-loop` and `eval-checks` specs (deltas), a test of a failure shared by calls that wait on one fetch, a generic `ToolResult` and `callCatalog` that remove the cast, and a `single-search` question that names the cheapest paid model.
 
 ## 2. Archive
 
-- [ ] 2.1 Run `/opsx:verify` on `fix-price-sort`, and fix what it finds.
-- [ ] 2.2 Archive the change as its own commit, `chore: archive fix-price-sort`, once the user has approved it.
+- [x] 2.1 Run `/opsx:verify` on `fix-price-sort`, and fix what it finds.
+- [x] 2.2 Archive the change as its own commit, `chore: archive fix-price-sort`, once the user has approved it.
