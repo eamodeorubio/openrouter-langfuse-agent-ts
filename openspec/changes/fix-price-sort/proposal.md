@@ -10,7 +10,8 @@ The agent trusts the `sort` argument of `search_models`, and its `pricing-low-to
 - A new argument `paid_only` drops models that cost nothing or have no price. It works with a price sort.
 - The tool fetches every match of the API filters once per run, keeps it in memory, and serves later price-sorted pages from it.
 - The descriptions of the four price bounds say they are bounds. `min_prompt_price` no longer reads as "the lowest price".
-- The case `search/single-search` asks for `blended-price-low-to-high`, where it asked for `pricing-low-to-high`.
+- The case `search/single-search` asks for `blended-price-low-to-high`, where it asked for `pricing-low-to-high`, and its question names the cheapest paid model, so that one search with `paid_only` answers it.
+- The examples in the `agent-loop` and `eval-checks` specs that named `pricing-low-to-high` name a sort the tool offers.
 - The instructions do not change. They already say to use the sort order a tool offers, which is now true of every sort the tool offers.
 
 ## Capabilities
@@ -22,6 +23,8 @@ None.
 ### Modified Capabilities
 
 - `model-tools`: `search_models` gains tool-side price sorts, `input_per_output`, `paid_only` and the run cache; loses two API sort values; the result order and `total` follow the sort.
+- `agent-loop`: the sample `tool:` line names a sort the tool offers.
+- `eval-checks`: the example of a required sort names `blended-price-low-to-high`, and the question of `search/single-search` names the cheapest paid model.
 
 ## Impact
 

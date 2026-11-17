@@ -236,7 +236,7 @@ describe('the search cases of the full set', () => {
   it('search/single-search expects one sorted search that does the filtering on the server', () => {
     const spec = readCase({ test: byId('search/single-search') });
     expect(byId('search/single-search')?.vars.question).toBe(
-      'Which is the cheapest model with at least 200,000 tokens of context that supports tools?',
+      'Which is the cheapest paid model with at least 200,000 tokens of context that supports tools?',
     );
     expect(spec.oracle).toBeUndefined();
     expect(spec.search).toEqual({

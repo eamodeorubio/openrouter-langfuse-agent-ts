@@ -3,8 +3,8 @@ import type { z } from 'zod';
 import type { CatalogCache } from './catalogCache.js';
 
 /** What a tool hands back to the model: a value, or a one-line reason it failed. */
-export type ToolResult =
-  | { ok: true; value: unknown }
+export type ToolResult<Value = unknown> =
+  | { ok: true; value: Value }
   | { ok: false; message: string };
 
 export interface ToolContext {

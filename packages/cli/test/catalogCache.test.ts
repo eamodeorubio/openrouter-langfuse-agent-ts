@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
-import { createCatalogCache } from '../src/tools/catalogCache.js';
+import {
+  type CatalogModel,
+  createCatalogCache,
+} from '../src/tools/catalogCache.js';
 
-const found = { ok: true as const, value: ['a/x'] };
+const found = { ok: true as const, value: [] as CatalogModel[] };
 
 describe('the catalog cache', () => {
   it('runs the fetch once for a key, however many calls ask, even before the first ends', async () => {

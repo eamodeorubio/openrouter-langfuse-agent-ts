@@ -6,6 +6,9 @@
 `search_models` SHALL accept the arguments below, all optional, and SHALL send each given one to `GET /api/v1/models` under the API's own name, except `input_per_output`, `paid_only` and the price sorts, which the tool applies itself. A `null` value SHALL be read as the argument being absent. Unknown arguments SHALL fail validation.
 
 #### Scenario: Accepted arguments
+- **WHEN** the model sends an argument of the table
+- **THEN** the call is valid when the value fits the type and range given
+
 | Argument | Type | Meaning |
 | --- | --- | --- |
 | `query` | string | free text over name and slug |
@@ -35,6 +38,9 @@
 - **THEN** the call is valid, the request carries only `limit=10` and `offset=0`, and the schema offered to the model allows `null` for each optional argument
 
 #### Scenario: Bounds
+- **WHEN** the model sends a `limit` of the table
+- **THEN** the call has the result the table gives
+
 | `limit` | Result |
 | --- | --- |
 | 1, 50 | valid |

@@ -336,6 +336,27 @@ describe('search_models price sorts and the cache', () => {
     expect(seen).toHaveLength(1);
   });
 
+  it('gives the failure of a fetch to every call that waited on it, and fetches again on the next call', async () => {
+    nock(HOST)
+      .get('/api/v1/models')
+      .query(true)
+      .reply(400, { error: { message: 'bad filter', code: 400 } });
+    const context = newContext();
+    const [first, second] = await Promise.all([
+      call({ sort: 'input-price-low-to-high' }, context),
+      call({ sort: 'output-price-low-to-high' }, context),
+    ]);
+    for (const result of [first, second]) {
+      expect(result.ok).toBe(false);
+      expect((result as { message: string }).message).toMatch(/bad filter/);
+    }
+
+    serve(apiPage(CATALOG, null));
+    expect(
+      ids(await call({ sort: 'input-price-low-to-high' }, context)),
+    ).toHaveLength(5);
+  });
+
   it('does not keep a fetch that failed on its second page', async () => {
     nock(HOST)
       .get('/api/v1/models')

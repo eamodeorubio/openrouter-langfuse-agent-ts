@@ -13,11 +13,14 @@ export type CatalogModel = ModelsListResponse['data'][number];
  */
 export interface CatalogCache {
   /** Returns what an earlier call fetched for `key`, or runs `fetch` and keeps its value when it succeeds. */
-  read(key: string, fetch: () => Promise<ToolResult>): Promise<ToolResult>;
+  read(
+    key: string,
+    fetch: () => Promise<ToolResult<CatalogModel[]>>,
+  ): Promise<ToolResult<CatalogModel[]>>;
 }
 
 export const createCatalogCache = (): CatalogCache => {
-  const kept = new Map<string, Promise<ToolResult>>();
+  const kept = new Map<string, Promise<ToolResult<CatalogModel[]>>>();
   return {
     read(key, fetch) {
       const earlier = kept.get(key);

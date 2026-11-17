@@ -54,12 +54,12 @@ export const allMatches = async (
       () => readPages(context, filters),
       (models) => models,
     );
-    return read.ok && read.value === null
+    if (!read.ok) {
+      return read;
+    }
+    return read.value === null
       ? { ok: false, message: TOO_MANY }
-      : read;
+      : { ok: true, value: read.value };
   });
-  // `callCatalog` hands the value back as unknown; `readPages` made it.
-  return fetched.ok
-    ? { ok: true, models: fetched.value as CatalogModel[] }
-    : fetched;
+  return fetched.ok ? { ok: true, models: fetched.value } : fetched;
 };
