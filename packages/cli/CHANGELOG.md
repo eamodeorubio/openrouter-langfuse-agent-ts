@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.0](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v1.1.0...v1.2.0) (2026-11-17)
+
+
+### Features
+
+* sort model searches by price on the tool side ([#54](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues/54)) ([620ce35](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/commit/620ce3554047c1dea068a749c69c319fbe1d5624))
+
 ## [1.1.0](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v1.0.1...v1.1.0) (2026-11-10)
 
 
