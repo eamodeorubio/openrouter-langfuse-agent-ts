@@ -1,0 +1,406 @@
+---
+// A report of one eval run: a row for each case, a column for each model, a
+// cell for each pair.
+import data from '../data/evals-1-1-0.json';
+
+const models = data.models;
+const short = (id: string) => id.split('/').slice(1).join('/');
+const pct = (n: number, d: number) => `${((100 * n) / d).toFixed(2)}%`;
+const level = (rate: number) =>
+  rate === 1 ? 'good' : rate >= 0.8 ? 'warn' : 'bad';
+const money = (v: number) => (v === 0 ? 'free' : `$${v.toFixed(4)}`);
+const seconds = (ms: number) => `${(ms / 1000).toFixed(1)} s`;
+const judges = [
+  'judge-grounding',
+  'judge-relevance',
+  'judge-usefulness',
+  'judge-tool-usage',
+];
+const caseIds = models[0].cases.map((c) => c.id);
+const byId = (m: (typeof models)[number], id: string) =>
+  m.cases.find((c) => c.id === id)!;
+const heat = (v: number | null) =>
+  v === null ? 'none' : v >= 0.85 ? 'good' : v >= 0.65 ? 'warn' : 'bad';
+const secs = Math.round(data.durationMs / 1000);
+const summary = `${data.successes + data.failures} runs in ${Math.floor(secs / 60)} min ${secs % 60} s, ${data.successes} passed, ${data.failures} failed, ${data.errors} errors. promptfoo ${data.promptfoo}, concurrency ${data.concurrency}, ${data.repeat} repeats.`;
+---
+
+<div class="report not-content">
+  <section class="cards">
+    {
+      models.map((m) => {
+        const mean = m.mean!;
+        return (
+          <article class="card">
+            <h3>{m.id}</h3>
+            <p class={`big ${level(mean.c / mean.n)}`}>{pct(mean.c, mean.n)}</p>
+            <p class="sub">
+              {mean.c} of {mean.n} runs passed
+            </p>
+            <dl>
+              <div>
+                <dt>pass@5</dt>
+                <dd>{mean.passAt[2].toFixed(3)}</dd>
+              </div>
+              <div>
+                <dt>pass^5</dt>
+                <dd>{mean.passPow[2].toFixed(3)}</dd>
+              </div>
+              <div>
+                <dt>latency</dt>
+                <dd>{seconds(mean.latencyMs!)}</dd>
+              </div>
+              <div>
+                <dt>cost / run</dt>
+                <dd>{money(mean.cost!)}</dd>
+              </div>
+            </dl>
+          </article>
+        );
+      })
+    }
+  </section>
+  <p class="footnote">{summary}</p>
+
+  <h3>Results by case</h3>
+  <div class="scroll">
+    <table class="matrix">
+      <thead>
+        <tr>
+          <th class="left">Case</th>
+          {
+            models.map((m) => (
+              <th>
+                <span class="model">{short(m.id)}</span>
+                <span class="rate">{pct(m.mean!.c, m.mean!.n)}</span>
+              </th>
+            ))
+          }
+        </tr>
+      </thead>
+      <tbody>
+        {
+          caseIds.map((id) => (
+            <tr>
+              <th class="left" scope="row">
+                <code>{id}</code>
+                <span class="desc">{byId(models[0], id).description}</span>
+              </th>
+              {models.map((m) => {
+                const c = byId(m, id);
+                const fails = Object.entries(c.failures);
+                return (
+                  <td class={`cell ${level(c.c / c.n)}`}>
+                    <span class="score">
+                      {c.c}/{c.n}
+                    </span>
+                    <span class="bar">
+                      <span style={`width:${(100 * c.c) / c.n}%`} />
+                    </span>
+                    <span class="meta">
+                      pass^5 {c.passPow[2].toFixed(2)} · {seconds(c.latencyMs!)}
+                    </span>
+                    {fails.length > 0 && (
+                      <span class="badges">
+                        {fails.map(([code, n]) => (
+                          <span class="badge">
+                            {code} ×{n}
+                          </span>
+                        ))}
+                      </span>
+                    )}
+                    {'sample' in c && c.sample && (
+                      <details>
+                        <summary>a failed run</summary>
+                        <p class="reason">{c.sample.reason}</p>
+                        <blockquote>{c.sample.answer}</blockquote>
+                      </details>
+                    )}
+                  </td>
+                );
+              })}
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <h3>Judge scores</h3>
+  <p class="footnote">
+    The share of scored runs whose score reached the threshold of the rubric.
+    A dash means that no run of the case was scored.
+  </p>
+  <div class="scroll">
+    <table class="matrix judge">
+      <thead>
+        <tr>
+          <th class="left" rowspan="2">Case</th>
+          {
+            models.map((m) => (
+              <th colspan={judges.length}>{short(m.id)}</th>
+            ))
+          }
+        </tr>
+        <tr>
+          {
+            models.flatMap(() =>
+              judges.map((j) => <th>{j.replace('judge-', '')}</th>),
+            )
+          }
+        </tr>
+      </thead>
+      <tbody>
+        {
+          caseIds.map((id) => (
+            <tr>
+              <th class="left" scope="row">
+                <code>{id}</code>
+              </th>
+              {models.flatMap((m) =>
+                judges.map((j) => {
+                  const v = byId(m, id).judge[j] ?? null;
+                  return (
+                    <td class={`cell ${heat(v)}`}>
+                      {v === null ? '–' : v.toFixed(2)}
+                    </td>
+                  );
+                }),
+              )}
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+
+  <h3>By error class</h3>
+  <p class="footnote">
+    Passed over judged: a class judges a run only when an earlier class of the
+    chain has not failed it.
+  </p>
+  <div class="scroll">
+    <table class="matrix classes">
+      <thead>
+        <tr>
+          <th class="left">Class</th>
+          {models.map((m) => <th>{short(m.id)}</th>)}
+        </tr>
+      </thead>
+      <tbody>
+        {
+          models[0].classes.map((cl) => (
+            <tr>
+              <th class="left" scope="row">
+                <code>{cl.id}</code>
+              </th>
+              {models.map((m) => {
+                const k = m.classes.find((x) => x.id === cl.id)!;
+                return (
+                  <td class={`cell ${level(k.passed / k.judged)}`}>
+                    <span class="score">
+                      {k.passed}/{k.judged}
+                    </span>
+                    <span class="meta">pass^5 {k.passPow[2].toFixed(2)}</span>
+                  </td>
+                );
+              })}
+            </tr>
+          ))
+        }
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<style>
+  .report {
+    --good: var(--sl-color-green);
+    --warn: var(--sl-color-orange);
+    --bad: var(--sl-color-red);
+    --good-bg: var(--sl-color-green-low);
+    --warn-bg: var(--sl-color-orange-low);
+    --bad-bg: var(--sl-color-red-low);
+    font-size: var(--sl-text-sm);
+  }
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+    gap: 1rem;
+  }
+  .card {
+    border: 1px solid var(--sl-color-hairline);
+    border-radius: 0.5rem;
+    padding: 1rem 1.25rem;
+    background: var(--sl-color-bg-nav);
+  }
+  .card h3 {
+    margin: 0;
+    font-family: var(--sl-font-mono);
+    font-size: var(--sl-text-sm);
+    word-break: break-all;
+  }
+  .big {
+    margin: 0.5rem 0 0;
+    font-size: 2.25rem;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  .big.good {
+    color: var(--good);
+  }
+  .big.warn {
+    color: var(--warn);
+  }
+  .big.bad {
+    color: var(--bad);
+  }
+  .sub {
+    margin: 0 0 0.75rem;
+    color: var(--sl-color-gray-3);
+  }
+  dl {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.5rem 1rem;
+    margin: 0;
+  }
+  dt {
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-xs);
+  }
+  dd {
+    margin: 0;
+    font-weight: 600;
+  }
+  .footnote {
+    color: var(--sl-color-gray-3);
+    margin: 0.75rem 0;
+  }
+  .scroll {
+    overflow-x: auto;
+  }
+  table.matrix {
+    border-collapse: separate;
+    border-spacing: 0;
+    width: 100%;
+    min-width: 40rem;
+  }
+  .matrix th,
+  .matrix td {
+    border-bottom: 1px solid var(--sl-color-hairline);
+    padding: 0.5rem 0.75rem;
+    vertical-align: top;
+    text-align: center;
+  }
+  .matrix thead th {
+    position: sticky;
+    top: 0;
+    background: var(--sl-color-bg-nav);
+    font-weight: 600;
+  }
+  .matrix th.left {
+    text-align: left;
+    font-weight: 400;
+    min-width: 14rem;
+  }
+  .model {
+    display: block;
+    font-family: var(--sl-font-mono);
+    font-size: var(--sl-text-xs);
+  }
+  .rate {
+    display: block;
+    color: var(--sl-color-gray-3);
+    font-weight: 400;
+  }
+  .desc {
+    display: block;
+    margin-top: 0.25rem;
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-xs);
+  }
+  .cell.good {
+    background: color-mix(in srgb, var(--good-bg) 55%, transparent);
+  }
+  .cell.warn {
+    background: color-mix(in srgb, var(--warn-bg) 65%, transparent);
+  }
+  .cell.bad {
+    background: color-mix(in srgb, var(--bad-bg) 80%, transparent);
+  }
+  .cell.none {
+    color: var(--sl-color-gray-4);
+  }
+  .score {
+    display: block;
+    font-weight: 700;
+  }
+  .bar {
+    display: block;
+    height: 0.3rem;
+    margin: 0.35rem auto;
+    max-width: 8rem;
+    border-radius: 0.15rem;
+    background: color-mix(in srgb, var(--sl-color-gray-4) 40%, transparent);
+    overflow: hidden;
+  }
+  .bar span {
+    display: block;
+    height: 100%;
+    background: var(--sl-color-gray-2);
+  }
+  .good .bar span {
+    background: var(--good);
+  }
+  .warn .bar span {
+    background: var(--warn);
+  }
+  .bad .bar span {
+    background: var(--bad);
+  }
+  .meta {
+    display: block;
+    color: var(--sl-color-gray-3);
+    font-size: var(--sl-text-xs);
+  }
+  .badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem;
+    justify-content: center;
+    margin-top: 0.4rem;
+  }
+  .badge {
+    border: 1px solid var(--bad);
+    border-radius: 0.75rem;
+    padding: 0 0.5rem;
+    font-size: var(--sl-text-xs);
+    color: var(--sl-color-white);
+  }
+  details {
+    margin-top: 0.4rem;
+    text-align: left;
+    font-size: var(--sl-text-xs);
+  }
+  summary {
+    cursor: pointer;
+    text-align: center;
+    color: var(--sl-color-gray-2);
+  }
+  .reason {
+    margin: 0.5rem 0 0.25rem;
+    font-weight: 600;
+  }
+  blockquote {
+    margin: 0;
+    padding: 0.4rem 0.6rem;
+    border-inline-start: 3px solid var(--sl-color-gray-4);
+    white-space: pre-wrap;
+    word-break: break-word;
+    max-width: 22rem;
+  }
+  .judge .cell {
+    min-width: 4.5rem;
+  }
+</style>
