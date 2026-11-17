@@ -147,6 +147,7 @@ export const alternativesPresented: Check = (output, context) => {
     (group) => !group.slugs.some((slug) => named.has(slug)),
   );
   const reached = groups.length - missed.length;
+  // A pass says how many of the groups that exist the answer reached. A failure says how many of the groups the case needs.
   return reached >= needed
     ? pass(
         `The answer names acceptable models from ${reached} of the ${groups.length} groups.`,
