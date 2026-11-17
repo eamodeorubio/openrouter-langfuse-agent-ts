@@ -8,6 +8,9 @@ export const PRICE_SORTS = [
   'blended-price-high-to-low',
 ] as const;
 
+/** Input tokens for each output token when a blended sort comes without a mix. */
+export const DEFAULT_MIX = 3;
+
 export type PriceSort = (typeof PRICE_SORTS)[number];
 
 export const isPriceSort = (sort: string | undefined): sort is PriceSort =>

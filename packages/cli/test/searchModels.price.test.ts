@@ -3,6 +3,7 @@ import nock from 'nock';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createClient } from '../src/client.js';
 import { createCatalogCache } from '../src/tools/catalogCache.js';
+import { DEFAULT_MIX } from '../src/tools/priceSort.js';
 import { callTool, functionTools, TOOLS } from '../src/tools/registry.js';
 import { SORTS, searchModels } from '../src/tools/searchModels.js';
 import type { ToolContext } from '../src/tools/types.js';
@@ -563,6 +564,14 @@ describe('search_models schema offered to the model', () => {
     expect(text).toMatch(/without a score come last/);
     expect(text).toMatch(/price 0/);
     expect(text).toMatch(/limit to 1/);
+  });
+
+  it('names the blended sorts as the choice when the user gives no usage, and the default mix', () => {
+    const text = description('sort');
+    expect(text).toMatch(
+      /states no usage, use blended-price-low-to-high or blended-price-high-to-low/,
+    );
+    expect(text).toContain(`the default mix is ${DEFAULT_MIX}`);
   });
 
   it('names the sorts that input_per_output and paid_only need, and what happens otherwise', () => {

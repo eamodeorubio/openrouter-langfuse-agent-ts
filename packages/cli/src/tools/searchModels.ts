@@ -3,6 +3,7 @@ import { callCatalog } from './catalog.js';
 import type { CatalogModel } from './catalogCache.js';
 import { allMatches, type CatalogFilters } from './catalogFetch.js';
 import {
+  DEFAULT_MIX,
   isPaid,
   isPriceSort,
   PRICE_SORTS,
@@ -15,8 +16,6 @@ import { requestOptions, type Tool, type ToolContext } from './types.js';
 
 const MAX_LIMIT = 50;
 const DEFAULT_LIMIT = 10;
-/** Input tokens for each output token when a blended sort comes without a mix. */
-const DEFAULT_MIX = 3;
 
 // The values of the API's `category` filter, as its reference lists it.
 const CATEGORIES = [
@@ -97,7 +96,7 @@ const SORT_DESCRIPTION = [
   'How to order the results.',
   'Orders the API applies: most-popular, top-weekly, newest (creation date), context-high-to-low, throughput-high-to-low, latency-low-to-high, intelligence-high-to-low, coding-high-to-low, agentic-high-to-low, design-arena-elo-high-to-low. Models without a score come last.',
   'Orders this tool applies over every match: input-price-low-to-high and input-price-high-to-low (by input price), output-price-low-to-high and output-price-high-to-low (by output price), blended-price-low-to-high and blended-price-high-to-low (input and output weighted by input_per_output). Prices are USD per million tokens. A free model has price 0 and comes first in a low-to-high order. A model with no price comes last. Equal prices come in id order.',
-  'For the cheapest model by one price, sort by it and set limit to 1; add paid_only to skip free models.',
+  `For the cheapest model by one price the user names, sort by it and set limit to 1; add paid_only to skip free models. When the user states no usage, use blended-price-low-to-high or blended-price-high-to-low; the default mix is ${DEFAULT_MIX}.`,
 ].join(' ');
 
 const parameters = z
