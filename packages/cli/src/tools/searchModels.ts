@@ -1,17 +1,23 @@
-import type { OpenRouter } from '@openrouter/sdk';
-import type { ModelsListResponse } from '@openrouter/sdk/models';
 import { z } from 'zod';
 import { callCatalog } from './catalog.js';
+import type { CatalogModel } from './catalogCache.js';
+import { allMatches, type CatalogFilters } from './catalogFetch.js';
+import {
+  DEFAULT_MIX,
+  isPaid,
+  isPriceSort,
+  PRICE_SORTS,
+  type PriceSort,
+  rankByPrice,
+} from './priceSort.js';
 import { perMillionTokens } from './prices.js';
 import { isoDate } from './shape.js';
-import { requestOptions, type Tool } from './types.js';
-
-type ListQuery = NonNullable<Parameters<OpenRouter['models']['list']>[0]>;
+import { requestOptions, type Tool, type ToolContext } from './types.js';
 
 const MAX_LIMIT = 50;
 const DEFAULT_LIMIT = 10;
 
-// The values of the API's `category` and `sort` filters, as its reference lists them.
+// The values of the API's `category` filter, as its reference lists it.
 const CATEGORIES = [
   'programming',
   'roleplay',
@@ -27,12 +33,13 @@ const CATEGORIES = [
   'academia',
 ] as const;
 
-const SORTS = [
+// The orders the API applies. Its `pricing-*` orders are left out on purpose:
+// they sort by the average of both prices, so the first row is the cheapest
+// by neither. The price sorts below replace them.
+const API_SORTS = [
   'most-popular',
   'newest',
   'top-weekly',
-  'pricing-low-to-high',
-  'pricing-high-to-low',
   'context-high-to-low',
   'throughput-high-to-low',
   'latency-low-to-high',
@@ -41,6 +48,14 @@ const SORTS = [
   'agentic-high-to-low',
   'design-arena-elo-high-to-low',
 ] as const;
+
+export const SORTS = [...API_SORTS, ...PRICE_SORTS] as const;
+
+const quoted = (values: readonly string[]): string =>
+  values.map((value) => `"${value}"`).join(', ');
+
+const PRICE_SORT_LIST = quoted(PRICE_SORTS);
+const BLENDED_SORTS = PRICE_SORTS.filter((sort) => sort.startsWith('blended'));
 
 const words = z.array(z.string().min(1)).min(1);
 const price = z.number().min(0);
@@ -68,6 +83,22 @@ const optionalWith = <T extends z.ZodType>(
     .transform((value): z.infer<T> => value ?? fallback)
     .describe(description);
 
+/** The error for a sort that is not offered. It points a model that asks for a removed `pricing-*` order to the ones that replace it. */
+const unknownSort = (value: unknown): string => {
+  const shown = String(value);
+  const replacement = shown.startsWith('pricing-')
+    ? ' For the lowest input price use "input-price-low-to-high", for the lowest output price "output-price-low-to-high", for a mix of both "blended-price-low-to-high"; "-high-to-low" reverses each.'
+    : '';
+  return `"${shown}" is not offered.${replacement} The values are: ${quoted(SORTS)}.`;
+};
+
+const SORT_DESCRIPTION = [
+  'How to order the results.',
+  'Orders the API applies: most-popular, top-weekly, newest (creation date), context-high-to-low, throughput-high-to-low, latency-low-to-high, intelligence-high-to-low, coding-high-to-low, agentic-high-to-low, design-arena-elo-high-to-low. Models without a score come last.',
+  'Orders this tool applies over every match: input-price-low-to-high and input-price-high-to-low (by input price), output-price-low-to-high and output-price-high-to-low (by output price), blended-price-low-to-high and blended-price-high-to-low (input and output weighted by input_per_output). Prices are USD per million tokens. A free model has price 0 and comes first in a low-to-high order. A model with no price comes last. Equal prices come in id order.',
+  `For the cheapest model by one price the user names, sort by it and set limit to 1; add paid_only to skip free models. When the user states no usage, use blended-price-low-to-high or blended-price-high-to-low; the default mix is ${DEFAULT_MIX}.`,
+].join(' ');
+
 const parameters = z
   .object({
     query: optional(
@@ -79,8 +110,21 @@ const parameters = z
       'The use case the models are used for.',
     ),
     sort: optional(
-      z.enum(SORTS),
-      'Server-side order. Prefer it to sorting yourself: models without the chosen score come last.',
+      z.enum(SORTS, { error: (issue) => unknownSort(issue.input) }),
+      SORT_DESCRIPTION,
+    ),
+    input_per_output: optional(
+      z
+        .number()
+        .gt(
+          0,
+          'must be above 0, the input tokens for each output token, such as 3.',
+        ),
+      `Input tokens for each output token, above 0, default ${DEFAULT_MIX}. Only for ${BLENDED_SORTS.join(' and ')}; with any other sort the call fails. Use the ratio the user states.`,
+    ),
+    paid_only: optional(
+      z.boolean(),
+      'true drops free models (input and output price both 0) and models with no price. Needs a price sort: input-, output- or blended-price-*; without one the call fails. total counts the models that remain. false or absent keeps them all.',
     ),
     input_modalities: optional(
       words,
@@ -100,19 +144,19 @@ const parameters = z
     ),
     min_prompt_price: optional(
       price,
-      'Lowest input price, in USD per million tokens.',
+      'Keep models whose input price is at least this many USD per million tokens, the input price, bound included. A free model has price 0, so a minimum of 0 keeps it. Applies before any sort.',
     ),
     max_prompt_price: optional(
       price,
-      'Highest input price, in USD per million tokens.',
+      'Keep models whose input price is at most this many USD per million tokens, the input price, bound included. A free model has price 0, so it passes any maximum. Applies before any sort.',
     ),
     min_completion_price: optional(
       price,
-      'Lowest output price, in USD per million tokens.',
+      'Keep models whose output price is at least this many USD per million tokens, the output price, bound included. A free model has price 0, so a minimum of 0 keeps it. Applies before any sort.',
     ),
     max_completion_price: optional(
       price,
-      'Highest output price, in USD per million tokens.',
+      'Keep models whose output price is at most this many USD per million tokens, the output price, bound included. A free model has price 0, so it passes any maximum. Applies before any sort.',
     ),
     architecture: optional(
       z.string().min(1),
@@ -152,23 +196,33 @@ const parameters = z
     offset: optionalWith(
       z.number().int().min(0),
       0,
-      'Models to skip. The default is 0. Use `next_offset` from the previous page to continue.',
+      'Models to skip. The default is 0. Use `next_offset` from the previous result to continue.',
     ),
   })
-  .strict();
+  .strict()
+  .refine((args) => args.paid_only !== true || isPriceSort(args.sort), {
+    path: ['paid_only'],
+    message: `needs a price sort. Set sort to one of ${PRICE_SORT_LIST}.`,
+  })
+  .refine(
+    (args) =>
+      args.input_per_output === undefined ||
+      (BLENDED_SORTS as readonly (string | undefined)[]).includes(args.sort),
+    {
+      path: ['input_per_output'],
+      message: `applies to a blended sort only. Set sort to ${BLENDED_SORTS.map((sort) => `"${sort}"`).join(' or ')}, or leave input_per_output out.`,
+    },
+  );
 
 type Args = z.infer<typeof parameters>;
 
 const joined = (values: string[] | undefined): string | undefined =>
   values?.join(',');
 
-/** The arguments under the API's own names. Lists become comma-separated text. */
-const toListQuery = (args: Args): ListQuery => ({
-  offset: args.offset,
-  limit: args.limit,
+/** The filters the API applies, under its own names. Lists become comma-separated text. */
+const toFilters = (args: Args): CatalogFilters => ({
   q: args.query,
   category: args.category,
-  sort: args.sort,
   inputModalities: joined(args.input_modalities),
   outputModalities: joined(args.output_modalities),
   supportedParameters: joined(args.supported_parameters),
@@ -199,12 +253,18 @@ export const nextOffset = (
   hasNext: boolean,
 ): number | null => (hasNext && count > 0 ? offset + count : null);
 
+interface Page {
+  models: CatalogModel[];
+  total: number;
+  hasNext: boolean;
+}
+
 /** One page of the catalog as the model reads it: compact entries, prices per million tokens, no descriptions. */
-const shapePage = (offset: number, page: ModelsListResponse) => ({
-  total: page.totalCount,
+const shapePage = (offset: number, { models, total, hasNext }: Page) => ({
+  total,
   offset,
-  next_offset: nextOffset(offset, page.data.length, page.links.next !== null),
-  models: page.data.map((model) => ({
+  next_offset: nextOffset(offset, models.length, hasNext),
+  models: models.map((model) => ({
     id: model.id,
     name: model.name,
     context_length: model.contextLength,
@@ -222,16 +282,68 @@ const shapePage = (offset: number, page: ModelsListResponse) => ({
   })),
 });
 
+/** One page of every match, ordered by price here, since the API has no order by one price. */
+const priceSorted = async (
+  args: Args,
+  sort: PriceSort,
+  context: ToolContext,
+) => {
+  const fetched = await allMatches(context, toFilters(args));
+  if (!fetched.ok) {
+    return fetched;
+  }
+  const priced = fetched.models.map((model) => ({
+    id: model.id,
+    input: perMillionTokens(model.pricing.prompt),
+    output: perMillionTokens(model.pricing.completion),
+    model,
+  }));
+  const ranked = rankByPrice(
+    args.paid_only === true ? priced.filter(isPaid) : priced,
+    sort,
+    args.input_per_output ?? DEFAULT_MIX,
+  );
+  const models = ranked
+    .slice(args.offset, args.offset + args.limit)
+    .map((entry) => entry.model);
+  return {
+    ok: true as const,
+    value: shapePage(args.offset, {
+      models,
+      total: ranked.length,
+      hasNext: args.offset + models.length < ranked.length,
+    }),
+  };
+};
+
 export const searchModels: Tool<typeof parameters> = {
   name: 'search_models',
   description:
-    'Search the OpenRouter catalog with filters and a sort order. Returns one page of compact entries: id, context length, prices in USD per million tokens, modalities, reasoning support and benchmark indices. Use get_model for the details of one entry.',
+    'Search the OpenRouter catalog with filters and a sort order. Returns one page of compact entries: id, context length, prices in USD per million tokens, modalities, reasoning support and benchmark indices. Price sorts and paid_only are applied by this tool over every match, so the first row of a price sort is the cheapest by that price. Use get_model for the details of one entry.',
   parameters,
   run(args, context) {
     const { client } = context;
+    const { sort } = args;
+    if (isPriceSort(sort)) {
+      return priceSorted(args, sort, context);
+    }
     return callCatalog(
-      () => client.models.list(toListQuery(args), requestOptions(context)),
-      ({ result }) => shapePage(args.offset, result),
+      () =>
+        client.models.list(
+          {
+            ...toFilters(args),
+            sort,
+            offset: args.offset,
+            limit: args.limit,
+          },
+          requestOptions(context),
+        ),
+      ({ result }) =>
+        shapePage(args.offset, {
+          models: result.data,
+          total: result.totalCount,
+          hasNext: result.links.next !== null,
+        }),
     );
   },
 };

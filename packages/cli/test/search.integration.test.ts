@@ -50,7 +50,7 @@ const cli = async (argv: string[]) => {
 };
 
 const SEARCH = {
-  sort: 'pricing-low-to-high',
+  sort: 'newest',
   supported_parameters: ['tools'],
   limit: 2,
 };
@@ -88,7 +88,7 @@ describe('a question that needs a search', () => {
     const [get] = api.sent.filter((sent) => sent.method === 'GET');
     expect(get?.path).toBe('/api/v1/models');
     expect(Object.fromEntries(get?.query ?? [])).toMatchObject({
-      sort: 'pricing-low-to-high',
+      sort: 'newest',
       supported_parameters: 'tools',
       limit: '2',
     });
@@ -129,5 +129,91 @@ describe('a question that needs a search', () => {
     });
     expect(page.models[1].intelligence_index).toBeNull();
     expect(JSON.stringify(page)).not.toContain('description');
+  });
+});
+
+describe('a question about the cheapest input price', () => {
+  const perToken = (perMillion: number) => (perMillion / 1e6).toFixed(12);
+  const priced = (id: string, input: number, output: number) => ({
+    ...(recordedModelsList.data[0] as Record<string, unknown>),
+    id,
+    name: id,
+    pricing: { prompt: perToken(input), completion: perToken(output) },
+  });
+  // The API orders by the average of both prices, so ling comes first and glm-5.2 last.
+  const catalog = {
+    data: [
+      priced('inclusionai/ling-3.0-tiny', 0.015, 0.045),
+      priced('inclusionai/ling-3.0-flash', 0.021, 0.063),
+      priced('z-ai/glm-5.2', 0.007, 6.8),
+    ],
+    total_count: 3,
+    links: { next: null },
+  };
+  const CHEAPEST = {
+    sort: 'input-price-low-to-high',
+    supported_parameters: ['tools'],
+    min_context_length: 200000,
+    paid_only: true,
+    limit: 1,
+  };
+
+  it('sorts by the input price itself, so the model reads the cheapest model first', async () => {
+    api.reply(
+      200,
+      toolRound([
+        {
+          id: 'c1',
+          name: 'search_models',
+          arguments: JSON.stringify(CHEAPEST),
+        },
+      ]),
+    );
+    api.replyGet('/models', 200, catalog);
+    api.reply(200, sseBody(contentChunk('z-ai/glm-5.2'), usageChunk()));
+    const result = await cli([
+      '-q',
+      'Which paid model has the lowest input price?',
+    ]);
+    expect(result.code).toBe(0);
+    const [get] = api.sent.filter((sent) => sent.method === 'GET');
+    expect(Object.fromEntries(get?.query ?? [])).toMatchObject({
+      supported_parameters: 'tools',
+      context: '200000',
+      limit: '1000',
+    });
+    const [, second] = api.sent.filter((sent) => sent.method === 'POST');
+    const message = second?.body.messages?.find((m) => m.role === 'tool');
+    const page = JSON.parse(String(message?.content));
+    expect(page.models.map((m: { id: string }) => m.id)).toEqual([
+      'z-ai/glm-5.2',
+    ]);
+    expect(page).toMatchObject({ total: 3, next_offset: 1 });
+  });
+
+  it('fetches the catalog once for two searches of the same matches in one run', async () => {
+    api.reply(
+      200,
+      toolRound([
+        {
+          id: 'c1',
+          name: 'search_models',
+          arguments: JSON.stringify(CHEAPEST),
+        },
+        {
+          id: 'c2',
+          name: 'search_models',
+          arguments: JSON.stringify({
+            ...CHEAPEST,
+            sort: 'output-price-low-to-high',
+          }),
+        },
+      ]),
+    );
+    api.replyGet('/models', 200, catalog);
+    api.reply(200, sseBody(contentChunk('done'), usageChunk()));
+    const result = await cli(['-q', 'Cheapest by input and by output?']);
+    expect(result.code).toBe(0);
+    expect(api.sent.filter((sent) => sent.method === 'GET')).toHaveLength(1);
   });
 });

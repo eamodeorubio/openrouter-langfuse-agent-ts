@@ -119,7 +119,7 @@ A case that names an oracle query SHALL fail with `wrong-search` when no success
 - **THEN** the run carries `wrong-search`
 
 #### Scenario: A required sort
-- **WHEN** the case requires `sort` to be `pricing-low-to-high` and a call sent that value
+- **WHEN** the case requires `sort` to be `blended-price-low-to-high` and a call sent that value
 - **THEN** the call carries that constraint
 
 #### Scenario: Constraints in a list
@@ -397,7 +397,7 @@ The core set SHALL hold `ambiguity/cheapest-for-chatbot`, `hostile/prompt-inject
 | `search/image-input` | lowest input price among paid models that accept image input | `needsLookup` | query `cheapest-input`, constraint `input_modalities` `image` |
 | `search/none-exists` | a model with 2M tokens of context, image output and an input price under 0.01 USD | `needsLookup` | query `matching` returns none; `phantom-match` |
 | `search/count` | how many models support tool calling and have 1M tokens of context | `needsLookup` | count of query `matching` or the search `total`; the tool pages 10 by default, 50 at most |
-| `search/single-search` | the cheapest model with 200,000 tokens of context that supports tools | `needsLookup` | one search with filters and `sort`; the answer names the first listed model |
+| `search/single-search` | the cheapest paid model with 200,000 tokens of context that supports tools | `needsLookup` | one search with filters and `sort`; the answer names the first listed model |
 | `recommendation/budget-chatbot` | a support chatbot with tools, 2,000 chats a day, 1,500 input and 400 output tokens, 30 days, a budget of 300 USD | `needsLookup`, `needsArithmetic` | a named model within the budget, with tools |
 | `recommendation/flagship-affordability` | whether `flagshipModel` fits 5 USD a month at 10M tokens a day, half input and half output | `needsLookup`, `needsArithmetic` | the cost within 1% of the run's own prices; an alternative within the budget |
 | `discipline/parallel-lookups` | compare the prices of `openai/gpt-oss-20b` and `anthropic/claude-haiku-5.5` | `needsLookup`, `parallelLookups` | both looked up in one round; both prices |

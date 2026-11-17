@@ -17,11 +17,11 @@ interface CatalogCall {
  * connection) becomes a result for the model. Anything else is a bug and is
  * thrown.
  */
-export const callCatalog = async <T>(
+export const callCatalog = async <T, Shaped = unknown>(
   call: () => Promise<T>,
-  shape: (value: T) => unknown,
+  shape: (value: T) => Shaped,
   { notFound }: CatalogCall = {},
-): Promise<ToolResult> => {
+): Promise<ToolResult<Shaped>> => {
   try {
     return { ok: true, value: shape(await withRetry(call)) };
   } catch (error) {

@@ -150,9 +150,9 @@
     - file://rubrics/judge-relevance.yaml
     - file://rubrics/judge-usefulness.yaml
     - file://rubrics/judge-tool-usage.yaml
-- description: Answers a cheapest-model question with one search that filters and sorts on the server
+- description: Answers a cheapest-paid-model question with one search that filters and sorts on the server
   vars:
-    question: Which is the cheapest model with at least 200,000 tokens of context that supports tools?
+    question: Which is the cheapest paid model with at least 200,000 tokens of context that supports tools?
   metadata:
     id: search/single-search
     set:
@@ -164,7 +164,7 @@
       min_context_length: 200000
       supported_parameters:
         - tools
-      sort: pricing-low-to-high
+      sort: blended-price-low-to-high
   assert:
     - type: javascript
       metric: wrong-search
