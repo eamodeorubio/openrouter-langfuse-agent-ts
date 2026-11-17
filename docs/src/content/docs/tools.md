@@ -45,30 +45,42 @@ A model that keeps asking for lookups gets stopped. After eight rounds that end 
 
 ## Searching the catalog
 
-`search_models` asks OpenRouter to filter and sort its catalog, so the model can request "the ten cheapest models with a 200k context window that can call tools" and receive just those, instead of the whole catalog. Every argument is optional, and the ones the model gives are passed to OpenRouter as filters:
+`search_models` asks OpenRouter to filter and sort its catalog, so the model can request "the ten cheapest models with a 200k context window that can call tools" and receive just those, instead of the whole catalog. Every argument is optional, and the ones the model gives are passed to OpenRouter, apart from the price sorts below, which the tool applies itself:
 
-| Argument                                                          | What it filters                                                                  |
-| ----------------------------------------------------------------- | -------------------------------------------------------------------------------- |
-| `query`                                                           | free text over names and slugs                                                   |
-| `category`                                                        | use case, such as `programming` or `translation`                                 |
-| `sort`                                                            | server-side order: price, age, popularity, context size, speed, benchmark scores |
-| `input_modalities`, `output_modalities`                           | kinds of input and output the model must handle                                  |
-| `supported_parameters`                                            | request parameters the model must support, such as `tools`                       |
-| `min_context_length`                                              | smallest context window, in tokens                                               |
-| `min_prompt_price`, `max_prompt_price`                            | input price bounds, in USD per million tokens                                    |
-| `min_completion_price`, `max_completion_price`                    | output price bounds, in USD per million tokens                                   |
-| `architecture`, `authors`, `providers`                            | model family, author slugs, hosting providers                                    |
-| `min_intelligence_index`, `min_coding_index`, `min_agentic_index` | Artificial Analysis benchmark floors                                             |
-| `min_tool_success_rate`                                           | tool-calling reliability floor, from 0 to 1                                      |
-| `max_age_days`                                                    | only recent models                                                               |
-| `zero_data_retention`                                             | only models with zero-data-retention endpoints                                   |
-| `limit`, `offset`                                                 | the page: 1 to 50 entries (10 by default), and where it starts                   |
+| Argument                                                          | What it does                                                                |
+| ----------------------------------------------------------------- | --------------------------------------------------------------------------- |
+| `query`                                                           | free text over names and slugs                                              |
+| `category`                                                        | use case, such as `programming` or `translation`                            |
+| `sort`                                                            | the order: price, age, popularity, context size, speed, benchmark scores    |
+| `input_per_output`                                                | for a blended price sort: input tokens for each output token (3 by default) |
+| `paid_only`                                                       | with a price sort, drop free models and models with no price                |
+| `input_modalities`, `output_modalities`                           | kinds of input and output the model must handle                             |
+| `supported_parameters`                                            | request parameters the model must support, such as `tools`                  |
+| `min_context_length`                                              | smallest context window, in tokens                                          |
+| `min_prompt_price`, `max_prompt_price`                            | input price bounds, in USD per million tokens                               |
+| `min_completion_price`, `max_completion_price`                    | output price bounds, in USD per million tokens                              |
+| `architecture`, `authors`, `providers`                            | model family, author slugs, hosting providers                               |
+| `min_intelligence_index`, `min_coding_index`, `min_agentic_index` | Artificial Analysis benchmark floors                                        |
+| `min_tool_success_rate`                                           | tool-calling reliability floor, from 0 to 1                                 |
+| `max_age_days`                                                    | only recent models                                                          |
+| `zero_data_retention`                                             | only models with zero-data-retention endpoints                              |
+| `limit`, `offset`                                                 | the page: 1 to 50 entries (10 by default), and where it starts              |
+
+### Sorting by price
+
+OpenRouter has an order it calls `pricing-low-to-high`, and it sorts by the average of the input and the output price. A model that charges almost nothing to read and a great deal to write lands far down the list, so the first row is not the cheapest by either price. An eval question that asked for the lowest input price among long-context models with tool calling failed in nearly every run for this reason: the models took the first row, and the model that costs 0.007 USD per million input tokens sat at the bottom of the page.
+
+So the tool does the price sorts itself, and offers six: `input-price-low-to-high`, `output-price-low-to-high` and `blended-price-low-to-high`, each with a `-high-to-low` twin. A blended price weighs the two prices by `input_per_output`, the input tokens for each output token. The default is 3, and the model uses the ratio the user states. Models with no price come last in both directions, and equal prices come in slug order, so a page is the same on every call.
+
+To sort, the tool reads every match of the other filters from OpenRouter, up to 5,000 models, and keeps them in memory for the rest of the run. The catalog holds a few hundred models today, so that is one request. A second page, another price sort or `paid_only` over the same matches costs no further request. Past 5,000 matches the tool answers with an error that asks for narrower filters. A free model has a price of 0 and comes first in a low-to-high order; `paid_only` drops it, along with models whose price OpenRouter does not give. The other orders, such as `newest` or `context-high-to-low`, stay with OpenRouter, which applies them to one page.
+
+A model missing either price comes last in a blended sort. A model that asks for something the tool does not accept is told what to send instead. A request for `pricing-low-to-high` gets the three price sorts that replace it, `paid_only` without a price sort gets the list of price sorts, and `input_per_output` without a blended sort is refused with the two blended sorts to choose from.
 
 Each entry in the answer is compact: the slug and name, the creation date, the context window, the maximum output size, the input and output prices in USD per million tokens, the modalities, whether the model reasons, and its benchmark indices (or `null` when it has none). The description is left out; `get_model` gives it. The answer also carries the total number of matches and the offset of the next page, or `null` on the last one, so the model can ask for more when the first page is not enough.
 
 Every result stays in the conversation and is sent again with each later request, so a large page costs tokens on every round. The run below, whose model asked for a page of 50, used 11,010 prompt tokens across its two rounds. The two-lookup comparison above used 2,678. The model chooses the page size; the limit of 50 caps it.
 
-Here is a real run. Its model made a single search and asked for a page of 50:
+Here is a real run, recorded before the price sorts existed. Its model made a single search and asked for a page of 50. The `pricing-low-to-high` it chose is no longer offered; the free models led the list either way:
 
 ```text
 $ ask-openrouter --model anthropic/claude-haiku-4.5 --verbose -q "Find me the 3 cheapest models that support tool calling and have at least a 200k context window. Give prices per million tokens."

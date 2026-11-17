@@ -242,7 +242,7 @@ describe('the search cases of the full set', () => {
     expect(spec.search).toEqual({
       min_context_length: 200000,
       supported_parameters: ['tools'],
-      sort: 'pricing-low-to-high',
+      sort: 'blended-price-low-to-high',
     });
     expect(metrics('search/single-search')).toEqual([
       'wasteful-search',

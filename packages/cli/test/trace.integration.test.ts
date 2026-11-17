@@ -337,7 +337,7 @@ describe('a traced question that needs tools', () => {
         {
           id: 'c1',
           name: 'search_models',
-          arguments: JSON.stringify({ sort: 'pricing-low-to-high', limit: 2 }),
+          arguments: JSON.stringify({ sort: 'newest', limit: 2 }),
         },
       ]),
     );

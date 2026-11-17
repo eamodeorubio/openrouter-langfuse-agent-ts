@@ -12,6 +12,7 @@ import {
 } from './errors.js';
 import { INSTRUCTIONS } from './instructions.js';
 import { oneLine, redactKey } from './text.js';
+import { createCatalogCache } from './tools/catalogCache.js';
 import { functionTools, TOOLS } from './tools/registry.js';
 import {
   type GenerationResult,
@@ -133,6 +134,7 @@ async function* converse(
   answered: (answer: string) => void,
 ): AsyncGenerator<AskEvent, void> {
   const client = createClient(apiKey, serverURL);
+  const catalog = createCatalogCache();
   const tools = functionTools(TOOLS);
   const messages: ChatMessages[] = [
     { role: 'system', content: INSTRUCTIONS },
@@ -239,7 +241,7 @@ async function* converse(
         ...(await runCalls(
           TOOLS,
           response.toolCalls,
-          { client, timeoutMs: toolTimeoutMs },
+          { client, timeoutMs: toolTimeoutMs, catalog },
           apiKey,
           root,
           outcomes,

@@ -164,7 +164,7 @@
       min_context_length: 200000
       supported_parameters:
         - tools
-      sort: pricing-low-to-high
+      sort: blended-price-low-to-high
   assert:
     - type: javascript
       metric: wrong-search

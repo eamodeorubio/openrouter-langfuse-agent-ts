@@ -1,5 +1,6 @@
 import type { OpenRouter } from '@openrouter/sdk';
 import type { z } from 'zod';
+import type { CatalogCache } from './catalogCache.js';
 
 /** What a tool hands back to the model: a value, or a one-line reason it failed. */
 export type ToolResult =
@@ -12,6 +13,8 @@ export interface ToolContext {
   timeoutMs: number;
   /** The trace context of this call, to send with its requests, when the run is traced. */
   traceparent?: string | undefined;
+  /** What the calls of this run have read from the catalog. A context without one reads again on every call. */
+  catalog?: CatalogCache | undefined;
 }
 
 /** The per-request options every SDK method takes: deadline, headers, signal. */
