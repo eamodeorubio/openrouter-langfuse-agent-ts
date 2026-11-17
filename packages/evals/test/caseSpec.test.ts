@@ -74,6 +74,7 @@ describe('what a case declares', () => {
 
   it('lists the declarations a case may make', () => {
     expect([...KNOWN_DECLARATIONS].sort()).toEqual([
+      'alternatives',
       'askedFigures',
       'askedModel',
       'assumes',
@@ -97,7 +98,7 @@ describe('a declaration that is not known', () => {
   it('fails loudly, with the name and the known ones, so that a typo cannot turn a check into a pass', () => {
     expect(() => readCase(declare({ needsLookp: true }))).toThrow(CaseError);
     expect(() => readCase(declare({ needsLookp: true }))).toThrow(
-      'Unknown declaration "needsLookp" in the metadata of a case. The known ones are: id, set, needsLookup, needsArithmetic, expectedCost, askedModel, askedFigures, oracle, search, workload, parallelLookups, recovery, unknownModel, underspecified, assumes.',
+      'Unknown declaration "needsLookp" in the metadata of a case. The known ones are: id, set, needsLookup, needsArithmetic, expectedCost, askedModel, askedFigures, oracle, alternatives, search, workload, parallelLookups, recovery, unknownModel, underspecified, assumes.',
     );
   });
 

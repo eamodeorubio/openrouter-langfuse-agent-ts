@@ -1,4 +1,5 @@
 import { finite, isObject } from '../json.js';
+import { QUERY_NAMES } from '../oracle/queries.js';
 import { parseWorkload, type Workload } from '../oracle/workload.js';
 import { SET_NAMES, type SetName } from '../sets.js';
 
@@ -19,6 +20,18 @@ export interface Oracle {
   params: Record<string, unknown>;
 }
 
+/** A kind of acceptable answer: a name for the report, and the query that returns its models. */
+export interface AlternativeGroup {
+  name: string;
+  oracle: Oracle;
+}
+
+/** The answer must name an acceptable model from at least `min` of the groups. */
+export interface Alternatives {
+  min: number;
+  groups: AlternativeGroup[];
+}
+
 /** What a good search sends: a number is a lower bound, text is an exact value, a list must be held whole. */
 export type SearchRequirements = Record<string, number | string | string[]>;
 
@@ -33,6 +46,8 @@ export interface CaseSpec {
   askedModel?: string;
   askedFigures?: FigureName[];
   oracle?: Oracle;
+  /** Kinds of acceptable answer, of which a good answer presents enough. */
+  alternatives?: Alternatives;
   search?: SearchRequirements;
   /** What the case asks a chatbot to do in a month, for the cost of it. */
   workload?: Workload;
@@ -62,6 +77,7 @@ export const KNOWN_DECLARATIONS = [
   'askedModel',
   'askedFigures',
   'oracle',
+  'alternatives',
   'search',
   'workload',
   'parallelLookups',
@@ -121,6 +137,52 @@ const readOracle = (value: unknown): Oracle => {
     );
   }
   return { query: value.query, params };
+};
+
+const ALTERNATIVES_KEYS = ['min', 'groups'];
+const GROUP_KEYS = ['name', 'query', 'params'];
+const ALTERNATIVES_RULE =
+  'an object of min, a whole number from 1, and groups, a list of objects of name, query and params, each name used once and each query one of ' +
+  QUERY_NAMES.join(', ');
+
+const readGroup = (value: unknown, seen: Set<string>): AlternativeGroup => {
+  if (
+    !isObject(value) ||
+    !isText(value.name) ||
+    !isText(value.query) ||
+    !QUERY_NAMES.includes(value.query) ||
+    seen.has(value.name) ||
+    Object.keys(value).some((key) => !GROUP_KEYS.includes(key)) ||
+    (value.params !== undefined && !isObject(value.params))
+  ) {
+    throw wrong('alternatives', ALTERNATIVES_RULE, value);
+  }
+  seen.add(value.name);
+  return {
+    name: value.name,
+    oracle: {
+      query: value.query,
+      params: (value.params as Record<string, unknown> | undefined) ?? {},
+    },
+  };
+};
+
+const readAlternatives = (value: unknown): Alternatives => {
+  if (
+    !isObject(value) ||
+    Object.keys(value).some((key) => !ALTERNATIVES_KEYS.includes(key)) ||
+    !Number.isInteger(value.min) ||
+    (value.min as number) < 1 ||
+    !Array.isArray(value.groups) ||
+    value.groups.length === 0
+  ) {
+    throw wrong('alternatives', ALTERNATIVES_RULE, value);
+  }
+  const seen = new Set<string>();
+  return {
+    min: value.min as number,
+    groups: value.groups.map((group) => readGroup(group, seen)),
+  };
 };
 
 const readSearch = (value: unknown): SearchRequirements => {
@@ -212,6 +274,9 @@ export const readCase = (context: unknown): CaseSpec => {
     spec.askedFigures = metadata.askedFigures;
   }
   if (metadata.oracle !== undefined) spec.oracle = readOracle(metadata.oracle);
+  if (metadata.alternatives !== undefined) {
+    spec.alternatives = readAlternatives(metadata.alternatives);
+  }
   if (metadata.search !== undefined) spec.search = readSearch(metadata.search);
   if (metadata.workload !== undefined) {
     const workload = parseWorkload(metadata.workload);

@@ -142,6 +142,53 @@ describe('the classes of a model', () => {
     });
   });
 
+  it('list missing-alternative right after wrong-answer in the taxonomy', () => {
+    const runs = many(1, {
+      checks: [
+        'wrong-value',
+        'missing-alternative',
+        'phantom-match',
+        'wrong-answer',
+        'wrong-search',
+        'run-failed',
+      ],
+    });
+    expect(classesOf(runs, [1]).map((entry) => entry.name)).toEqual([
+      'run-failed',
+      'wrong-search',
+      'wrong-answer',
+      'missing-alternative',
+      'phantom-match',
+      'wrong-value',
+    ]);
+  });
+
+  it('judge missing-alternative only on runs that wrong-search did not fail', () => {
+    const runs = [
+      ...many(3, {
+        checks: ['run-failed', 'missing-alternative'],
+        failed: ['wrong-search'],
+      }),
+      ...many(7, { checks: ['run-failed', 'missing-alternative'] }),
+    ];
+    expect(row(runs, 'missing-alternative')).toMatchObject({ judged: 7 });
+  });
+
+  it('let missing-alternative and wrong-answer judge the same run, and put wrong-value after both', () => {
+    const runs = [
+      ...many(5, {
+        checks: ['run-failed', 'missing-alternative'],
+        failed: ['wrong-answer'],
+      }),
+      ...many(5, {
+        checks: ['run-failed', 'wrong-value'],
+        failed: ['missing-alternative'],
+      }),
+    ];
+    expect(row(runs, 'missing-alternative')).toMatchObject({ judged: 10 });
+    expect(row(runs, 'wrong-value')).toMatchObject({ judged: 0 });
+  });
+
   it('are listed in the order of the taxonomy, the others after, by name', () => {
     const runs = many(1, {
       checks: [

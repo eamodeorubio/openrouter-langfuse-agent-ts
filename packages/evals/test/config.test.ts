@@ -118,6 +118,7 @@ describe('the files of cases', () => {
       'search/cheapest-blended',
       'search/none-exists',
       'search/single-search',
+      'search/alternatives',
     ]);
   });
 
@@ -149,6 +150,7 @@ describe('the search cases of the full set', () => {
       'search/none-exists': 'core',
       'search/count': 'full',
       'search/single-search': 'core',
+      'search/alternatives': 'core',
     };
     for (const [id, set] of Object.entries(sets)) {
       expect(byId(id)?.family, id).toBe('search');
@@ -231,6 +233,45 @@ describe('the search cases of the full set', () => {
       supported_parameters: ['tools'],
     });
     expect(metrics('search/count')).toEqual(['wrong-search', 'wrong-value']);
+  });
+
+  it('search/alternatives asks for the cheapest model without saying free or paid, and expects two of the three groups of answers', () => {
+    const spec = readCase({ test: byId('search/alternatives') });
+    expect(byId('search/alternatives')?.vars.question).toBe(
+      'What is the cheapest model with at least 200,000 tokens of context that supports tools?',
+    );
+    expect(spec.oracle).toBeUndefined();
+    expect(spec.search).toEqual({
+      min_context_length: 200000,
+      supported_parameters: ['tools'],
+    });
+    expect(spec.alternatives?.min).toBe(2);
+    expect(
+      spec.alternatives?.groups.map((group) => [
+        group.name,
+        group.oracle.query,
+        group.oracle.params,
+      ]),
+    ).toEqual([
+      ['free', 'free', { minContext: 200000, supportedParameters: ['tools'] }],
+      [
+        'paid by blend',
+        'cheapest-blended',
+        { minContext: 200000, supportedParameters: ['tools'], mix: 3 },
+      ],
+      [
+        'paid by input',
+        'cheapest-input',
+        { minContext: 200000, supportedParameters: ['tools'] },
+      ],
+    ]);
+    expect(metrics('search/alternatives')).toEqual([
+      'missing-alternative',
+      'wrong-search',
+    ]);
+    expect(byId('search/alternatives')?.sets).toEqual(
+      expect.arrayContaining(['core', 'judge', 'full']),
+    );
   });
 
   it('search/single-search expects one sorted search that does the filtering on the server', () => {
@@ -553,6 +594,7 @@ describe('the core set', () => {
       'search/none-exists',
       'search/count',
       'search/single-search',
+      'search/alternatives',
     ]);
   });
 });
@@ -899,12 +941,12 @@ describe('the config, run for real against a stub CLI', () => {
     await catalog.close();
   });
 
-  it('loads every check, and each of the two models runs each of the eleven cases twice', () => {
+  it('loads every check, and each of the two models runs each of the twelve cases twice', () => {
     expect(result.status, String(result.stderr)).toBe(0);
     const saved = JSON.parse(
       fs.readFileSync(path.join(out, 'results.json'), 'utf8'),
     );
-    expect(saved.results.results).toHaveLength(44);
+    expect(saved.results.results).toHaveLength(48);
     const errors = saved.results.results.filter(
       (r: { failureReason: number }) => r.failureReason === 2,
     );
@@ -989,7 +1031,7 @@ describe('the rubrics, run for real against a stub CLI and a Jev on loopback', (
       fs.readFileSync(path.join(out, 'results.json'), 'utf8'),
     );
     const runs = saved.results.results;
-    expect(runs).toHaveLength(22);
+    expect(runs).toHaveLength(24);
     for (const run of runs) {
       const test = cases.find(
         (c) => c.metadata.id === run.testCase.metadata.id,
@@ -1005,7 +1047,7 @@ describe('the rubrics, run for real against a stub CLI and a Jev on loopback', (
     }
     // The reporter reads the same scores, and the rubrics asked, from the real file.
     const read = readRuns(saved).runs;
-    expect(read).toHaveLength(22);
+    expect(read).toHaveLength(24);
     runs.forEach(
       (run: { testCase: { metadata: { id: string } } }, index: number) => {
         const test = cases.find(
@@ -1025,7 +1067,7 @@ describe('the rubrics, run for real against a stub CLI and a Jev on loopback', (
     );
     const core = cases.filter((c) => c.sets.includes('core'));
     const expected = core.reduce((sum, c) => sum + rubricsOf(c).length, 0) * 2;
-    expect(expected).toBe(70);
+    expect(expected).toBe(78);
     expect(jev.requests).toHaveLength(expected);
     expect(
       jev.requests.every((r) => r.authorization === 'Bearer dummy-key-123'),
@@ -1161,7 +1203,7 @@ describe('the rubrics that Jev did not answer, run for real', () => {
       { OPENROUTER_API_KEY: 'dummy-key-123' },
     );
     expect(done.result.status, String(done.result.stderr)).toBe(0);
-    expect(done.judges).toHaveLength(22);
+    expect(done.judges).toHaveLength(24);
     expect(
       done.judges.every((judges) => Object.keys(judges).length === 0),
     ).toBe(true);

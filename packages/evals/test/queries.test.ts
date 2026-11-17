@@ -153,12 +153,13 @@ describe('the names of the queries', () => {
     expect(QUERY_NAMES).toEqual([
       'cheapest-blended',
       'cheapest-input',
+      'free',
       'matching',
       'within-budget',
     ]);
     expect(() => runQuery('cheapest-bogus', TABLE, {})).toThrow(QueryError);
     expect(() => runQuery('cheapest-bogus', TABLE, {})).toThrow(
-      'Unknown oracle query "cheapest-bogus". The known queries are: cheapest-blended, cheapest-input, matching, within-budget.',
+      'Unknown oracle query "cheapest-bogus". The known queries are: cheapest-blended, cheapest-input, free, matching, within-budget.',
     );
   });
 

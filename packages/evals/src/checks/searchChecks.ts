@@ -5,7 +5,7 @@ import { acceptableSlugs } from './oracleSlugs.js';
 import { type ListedModel, listedModels } from './outputs.js';
 import { carries, droppedFilters, searchCalls, sentFilters } from './search.js';
 import { slugTokens } from './slugs.js';
-import { type Check, fail, judgeable, pass } from './verdict.js';
+import { type Check, fail, judgeable, listed, pass } from './verdict.js';
 
 /** Phrases that say that no model matches. An answer that holds one of them, in any case, says so. */
 const NO_MODEL = [
@@ -125,4 +125,35 @@ export const countStated: Check = (output, context) => {
         `The answer states a count the snapshot or the search supports: ${counts.join(', ')}.`,
       )
     : fail(`The answer states none of the counts: ${counts.join(', ')}.`);
+};
+
+/** missing-alternative: the answer names acceptable models from fewer of the case's groups than it needs. */
+export const alternativesPresented: Check = (output, context) => {
+  const run = judgeable(output);
+  if (!run) return pass('Left to an earlier class.');
+  const { alternatives, search = {} } = readCase(context);
+  if (!alternatives) return pass('No alternatives declared.');
+  if (!sentFilters(run, search)) return pass('Left to wrong-search.');
+  const groups = alternatives.groups
+    .map((group) => ({
+      name: group.name,
+      slugs: acceptableSlugs(group.oracle),
+    }))
+    .filter((group) => group.slugs.length > 0);
+  const needed = Math.min(alternatives.min, groups.length);
+  if (needed === 0) return pass('The snapshot holds no acceptable model.');
+  const named = new Set(slugTokens(run.answer));
+  const missed = groups.filter(
+    (group) => !group.slugs.some((slug) => named.has(slug)),
+  );
+  const reached = groups.length - missed.length;
+  return reached >= needed
+    ? pass(
+        `The answer names acceptable models from ${reached} of the ${groups.length} groups.`,
+      )
+    : fail(
+        `The answer names acceptable models from ${reached} of the ${needed} groups the case needs. Missed: ${missed
+          .map((group) => `${group.name} (${listed(group.slugs)})`)
+          .join('; ')}.`,
+      );
 };

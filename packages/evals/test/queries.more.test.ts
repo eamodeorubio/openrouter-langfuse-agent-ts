@@ -293,6 +293,7 @@ describe('the queries, for any snapshot', () => {
     expect(QUERY_NAMES).toEqual([
       'cheapest-blended',
       'cheapest-input',
+      'free',
       'matching',
       'within-budget',
     ]);

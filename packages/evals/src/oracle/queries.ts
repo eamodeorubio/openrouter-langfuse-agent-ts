@@ -163,6 +163,22 @@ const cheapestInput: Query = (models, params) => {
   return lowest(priced);
 };
 
+/** Every model that meets every constraint and costs nothing on either side. A model with a null price is not free. */
+const free: Query = (models, params) => {
+  const name = 'free';
+  known(name, params, SHARED);
+  const constraints = constraintsOf(name, params);
+  return models
+    .filter(
+      (model) =>
+        model.inputPrice === 0 &&
+        model.outputPrice === 0 &&
+        meets(model, constraints),
+    )
+    .map((model) => model.id)
+    .sort();
+};
+
 /** Every model that meets every constraint, and has an input price below `maxInputPrice` when one is given. */
 const matching: Query = (models, params) => {
   const name = 'matching';
@@ -235,6 +251,7 @@ const withinBudget: Query = (models, params) => {
 const QUERIES = new Map<string, Query>([
   ['cheapest-blended', cheapestBlended],
   ['cheapest-input', cheapestInput],
+  ['free', free],
   ['matching', matching],
   ['within-budget', withinBudget],
 ]);

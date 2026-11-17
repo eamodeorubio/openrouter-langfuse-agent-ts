@@ -19,6 +19,7 @@ export {
 export { withinBudget } from './recommendation.js';
 export { wrongAnswer, wrongSearch } from './search.js';
 export {
+  alternativesPresented,
   countStated,
   phantomMatch,
   searchArguments,

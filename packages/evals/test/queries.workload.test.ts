@@ -192,6 +192,7 @@ describe('the query within-budget', () => {
     expect(QUERY_NAMES).toEqual([
       'cheapest-blended',
       'cheapest-input',
+      'free',
       'matching',
       'within-budget',
     ]);

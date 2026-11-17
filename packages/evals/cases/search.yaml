@@ -179,3 +179,50 @@
     - file://rubrics/judge-relevance.yaml
     - file://rubrics/judge-usefulness.yaml
     - file://rubrics/judge-tool-usage.yaml
+- description: Presents acceptable alternatives to a cheapest-model question that does not say free or paid, and not one answer alone
+  vars:
+    question: What is the cheapest model with at least 200,000 tokens of context that supports tools?
+  metadata:
+    id: search/alternatives
+    set:
+      - core
+      - judge
+      - full
+    needsLookup: true
+    alternatives:
+      min: 2
+      groups:
+        - name: free
+          query: free
+          params:
+            minContext: 200000
+            supportedParameters:
+              - tools
+        - name: paid by blend
+          query: cheapest-blended
+          params:
+            minContext: 200000
+            supportedParameters:
+              - tools
+            mix: 3
+        - name: paid by input
+          query: cheapest-input
+          params:
+            minContext: 200000
+            supportedParameters:
+              - tools
+    search:
+      min_context_length: 200000
+      supported_parameters:
+        - tools
+  assert:
+    - type: javascript
+      metric: wrong-search
+      value: file://src/checks/assertions.ts:searchArguments
+    - type: javascript
+      metric: missing-alternative
+      value: file://src/checks/assertions.ts:alternativesPresented
+    - file://rubrics/judge-grounding.yaml
+    - file://rubrics/judge-relevance.yaml
+    - file://rubrics/judge-usefulness.yaml
+    - file://rubrics/judge-tool-usage.yaml
