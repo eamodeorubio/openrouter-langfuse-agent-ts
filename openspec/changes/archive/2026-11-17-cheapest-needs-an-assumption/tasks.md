@@ -16,5 +16,5 @@ One product slice: an assumption for "cheapest" questions that give no usage. Co
 
 ## 2. Archive
 
-- [ ] 2.1 Run `/opsx:verify` on `cheapest-needs-an-assumption`, and fix what it finds.
-- [ ] 2.2 Archive the change as its own commit, `chore: archive cheapest-needs-an-assumption`, once the user has approved it.
+- [x] 2.1 Run `/opsx:verify` on `cheapest-needs-an-assumption`, and fix what it finds.
+- [x] 2.2 Archive the change as its own commit, `chore: archive cheapest-needs-an-assumption`, once the user has approved it.

@@ -9,7 +9,7 @@ The eval case `search/single-search` shows the cost. Haiku searched once by inpu
 - The system message gains one rule. A question about the cheapest model that says nothing about usage is ranked by a blend of input and output price, three input tokens for every output token unless the user says otherwise. The answer says which mix it assumed. When only one price matters, such as input for a long prompt, it ranks by that price alone.
 - The rule names no catalog tool, as the instructions already do not.
 - The description of `sort` in `search_models` says which sorts to use when the user gives no usage: the blended ones, with the default mix.
-- No tool argument, result or sort value changes. No code path changes.
+- No tool argument, result or sort value changes. No behavior of the tool changes. The default mix, `DEFAULT_MIX`, moves from `searchModels.ts` to `priceSort.ts`, so that the instructions can be tested against the same number.
 
 ## Capabilities
 

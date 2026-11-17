@@ -27,7 +27,7 @@ The `sort` description in `searchModels.ts` ends with "For the cheapest model by
 
 **The wording is general, not tied to the case.** The draft: "A question about the cheapest model that says nothing about usage has no single answer, because models differ in their input and output prices. Rank by a blend of both, three input tokens for every output token unless the user says otherwise, and say which mix you assumed. When one price alone matters, such as input for a long prompt, rank by that price alone." It names no tool. The exact words may change while the tests are written; the spec's scenarios fix the meaning.
 
-**The `sort` description gains one sentence.** "With no stated usage, use blended-price-low-to-high or blended-price-high-to-low; the default mix is 3." It repeats the rule where the model chooses a sort. Duplication costs a sentence and reinforces the choice at the point of use.
+**The `sort` description gains one sentence.** "When the user states no usage, use blended-price-low-to-high or blended-price-high-to-low; the default mix is 3." The number comes from the exported `DEFAULT_MIX`, which moved to `priceSort.ts` so that the tool, its description and a test of the instructions share it. The sentence repeats the rule where the model chooses a sort. Duplication costs a sentence and reinforces the choice at the point of use.
 
 ## Risks / Trade-offs
 

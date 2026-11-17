@@ -144,7 +144,7 @@ A `sort` of `input-price-*`, `output-price-*` or `blended-price-*` SHALL order e
 - **THEN** the order is `a/x`, `b/y`, `c/z`
 
 ### Requirement: Arguments describe themselves
-The schema offered to the model SHALL give every argument of `search_models` a description that states what it means, its unit or accepted values, its default, and which other arguments it needs, excludes or interacts with. The description of `sort` SHALL name every value it accepts, say for each who applies it (the API or the tool) and by what it orders. The tool description SHALL say that price sorts and `paid_only` are applied by the tool over every match.
+The schema offered to the model SHALL give every argument of `search_models` a description that states what it means, its unit or accepted values, its default, and which other arguments it needs, excludes or interacts with. The description of `sort` SHALL name every value it accepts, say for each who applies it (the API or the tool) and by what it orders, and name the blended sorts as the choice when the user gives no usage. The tool description SHALL say that price sorts and `paid_only` are applied by the tool over every match.
 
 #### Scenario: Every value is named
 - **WHEN** the schema of `search_models` is read
@@ -161,6 +161,10 @@ The schema offered to the model SHALL give every argument of `search_models` a d
 #### Scenario: Paging
 - **WHEN** the schema is read
 - **THEN** the descriptions of `limit` and `offset` give the range and default, and say that `next_offset` of the previous result is the next `offset`
+
+#### Scenario: Sort when the user gives no usage
+- **WHEN** the schema is read
+- **THEN** the description of `sort` says to use `blended-price-low-to-high` or `blended-price-high-to-low` when the user states no usage, and that the default mix is 3
 
 ### Requirement: Argument errors tell the model what to send
 A validation failure on `sort`, `input_per_output` or `paid_only` SHALL return a tool result that names the argument, states the rule it broke and says what to send instead, so that the next call can succeed without a guess.
