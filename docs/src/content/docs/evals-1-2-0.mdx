@@ -1,0 +1,129 @@
+---
+title: Evals of version 1.2.0
+description: What the full eval run found when it asked two real models 210 questions each about ask-openrouter 1.2.0, the report of every case, the raw results to download, the weak spots, and how the run compares with the one of 1.1.0.
+---
+
+import EvalReport from '../../components/EvalReport.astro';
+
+export const zip = `${import.meta.env.BASE_URL.replace(/\/$/, '')}/evals/evals-full-44247364171.zip`;
+
+This page records one eval run of `ask-openrouter@1.2.0`, the version published on npm. Two real models answered 21 questions about OpenRouter, ten times each, and a set of checks judged every answer. The catalog they queried was fetched on 18 November 2026 and has moved since, so read the run for how the tool behaves, and expect other slugs and prices if you repeat it. How the evals work, and what each error class means, is on the [Evals](../evals/) page. A section below compares the run with the one of [version 1.1.0](../evals-1-1-0/).
+
+## The verdict
+
+The run made 420 runs, and 381 of them passed. None ended in an error of the run itself: every run produced an answer.
+
+| Model                                    | Passed     | pass@5 | pass^5 | Latency | Cost of a run |
+| ---------------------------------------- | ---------- | ------ | ------ | ------- | ------------- |
+| `anthropic/claude-haiku-5.5`             | 206 of 210 | 1.000  | 0.933  | 6.1 s   | $0.0017       |
+| `nvidia/nemotron-3-ultra-550b-a55b:free` | 175 of 210 | 0.938  | 0.689  | 23.6 s  | free          |
+
+Models answer the same question differently each time, so one pass says little. The two figures after it describe five asks of the same question. pass@5 is the chance that at least one of the five answers is right, which is what a person gets who asks again until it looks right. pass^5 is the chance that all five are right, which is what a person gets who asks once and trusts the answer, again and again. Both are estimated from the ten runs of each question.
+
+The two models differ widely. Haiku lost four runs in all, and five asks in a row come out right about 93 times in 100. Nemotron lost 35, and the same five asks come out right 69 times in 100. Its pass@5 is 0.938, so a right answer is usually there to be found. It comes less often.
+
+The whole run took 26 minutes and 52 seconds. It sent 6.3 million prompt tokens, and the paid model cost about 36 cents in all. The calls of the judge come on top of that, and the report does not price them.
+
+Some things held without a crack:
+
+- **Nothing leaked.** The 20 runs that asked the tool to print its instructions or that carried a generated key in the question never repeated either. `prompt-leak` and `secret-echo` stand at 20 of 20.
+- **Arithmetic went to the calculator.** 99 of the 100 runs that needed a sum called it. The one exception is a Nemotron run of `recommendation/flagship-affordability`.
+- **Thirteen of the 21 questions passed all twenty runs.** Among them are the lookup of a known model, the lookup of a free one, parallel lookups, the three calculation questions, the search for the lowest input price and the search by image input.
+
+## The report
+
+A row for each question, a column for each model. A cell shows the runs that passed, its pass^5, the mean latency and the error classes that failed it. Open "a failed run" in a cell to read one run that failed, with the reason the check gave and the start of the answer.
+
+<EvalReport version="1.2.0" />
+
+## Download the run
+
+The folder that the run saved is a zip you can read with the promptfoo viewer, or with any tool that reads JSON:
+
+<p>
+  <a href={zip}>
+    <code>evals-full-44247364171.zip</code>
+  </a>{' '}
+  (1.0 MB)
+</p>
+
+It holds five files:
+
+| File               | What it holds                                                                                                                                  |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| `results.json`     | The export of promptfoo: all 420 runs, with the answer, every tool call and its output, the result of each check and the score of each rubric. |
+| `report.txt`       | The text report of the run, the one the command prints.                                                                                        |
+| `catalog.json`     | The snapshot of OpenRouter's catalog that the checks judged against.                                                                           |
+| `instructions.txt` | The system instructions of the CLI under test.                                                                                                 |
+| `target.txt`       | `ask-openrouter@1.2.0`, the version the run measured.                                                                                          |
+
+To browse it as promptfoo draws it, unzip the folder and import the results into a local viewer:
+
+```sh
+unzip evals-full-44247364171.zip -d evals-1.2.0
+pnpm dlx promptfoo@0.125.1 import evals-1.2.0/results.json
+pnpm dlx promptfoo@0.125.1 view
+```
+
+The file holds no API key of yours. It does hold twenty keys that look real, `sk-or-v1-` followed by hex digits. The provider generates one for each run of `hostile/key-in-question` and never reads a real one, and none of them opens anything.
+
+## What changed since 1.1.0
+
+The change that 1.2.0 brings is one: the tool sorts a search by price itself, by input price, output price or blended price, where 1.1.0 passed the sort to OpenRouter. It also gained a `paid_only` argument that drops free models. The run measures that change on the same two models, with the same questions, checks and rubrics, except `search/single-search`. Version 1.2.0 can sort by price and drop free models, so that question now asks for the cheapest _paid_ model and expects a search sorted by `blended-price-low-to-high`. Its two rows compare different questions.
+
+| Model                                    | Passed in 1.1.0 | Passed in 1.2.0 | pass^5 in 1.1.0 | pass^5 in 1.2.0 |
+| ---------------------------------------- | --------------- | --------------- | --------------- | --------------- |
+| `anthropic/claude-haiku-5.5`             | 186 of 210      | 206 of 210      | 0.763           | 0.933           |
+| `nvidia/nemotron-3-ultra-550b-a55b:free` | 178 of 210      | 175 of 210      | 0.739           | 0.689           |
+
+The target of the change was hit, and on both models. `search/cheapest-input` asks for the paid model with the lowest input price among those with a long context and tool calling. In 1.1.0 it passed one run in twenty. In 1.2.0 it passes twenty in twenty. The error class `wrong-search`, the one that names this failure, went from 19 failed runs to none.
+
+On Haiku the gain is wide. Six more questions rose to ten of ten: `search/single-search` went from 3, `ambiguity/cheapest-for-chatbot` from 6, and `search/image-input`, `search/none-exists`, `lookup/router-model` and `ambiguity/cheap-claude` from 9. It stated its assumptions every time, so `unstated-assumption`, which failed four runs in 1.1.0, failed none. Its latency fell from 7.1 to 6.1 seconds.
+
+On Nemotron the picture is mixed. It also gained where the tool changed: `search/cheapest-input` from 0 to 10, `lookup/router-model` from 3 to 8 and `search/none-exists` from 6 to 9. It lost more than that on other questions:
+
+| Question                                | Nemotron in 1.1.0 | Nemotron in 1.2.0 |
+| --------------------------------------- | ----------------- | ----------------- |
+| `search/single-search`                  | 9 of 10           | 2 of 10           |
+| `recommendation/flagship-affordability` | 10 of 10          | 3 of 10           |
+| `discipline/typo-recovery`              | 10 of 10          | 6 of 10           |
+| `discipline/unknown-model`              | 2 of 10           | 0 of 10           |
+
+Two cautions on these figures. A comparison of two runs of ten has wide error bars, and a swing of one or two runs says little. And the catalog is not the same one: the 1.1.0 run fetched it on 17 November and this one on 18 November.
+
+## Weak spots
+
+What follows describes what the runs did. Where it offers a reason, the reason is a hypothesis: the run does not test it.
+
+### 1. Nemotron sends `paid_only` as text
+
+In 55 of Nemotron's 210 runs, a call to `search_models` was rejected with `paid_only: Invalid input: expected boolean, received string`. The model wrote `"paid_only": "true"` where the tool wants `true`. In 51 of those runs the call was rejected at least three times before the model gave up the argument. Haiku never sent it as text: none of its 210 runs saw that error. Four of its runs were told something else, that `paid_only` needs a price sort.
+
+The rest follows from it. Without `paid_only`, a price sort starts with free models, so the model reads past them or searches again with a small `min_prompt_price`. That is what failed `search/single-search`: seven runs of `wasteful-search`, and eight of `wrong-answer`. The runs inspected ended on `inclusionai/ling-3.0-tiny`, a paid model that fits the question, but only after the second search. The `wrong-answer` failures come from the same detour: the first search listed a free model on top, and the answer named another.
+
+A hypothesis: the tool's rejection says what is wrong, yet the model repeats the call as if it had not read it.
+
+### 2. Free models fit a small budget, and `paid_only` hides them
+
+`recommendation/flagship-affordability` asks whether a flagship model fits 5 USD a month, and which model does if it does not. It failed on both models: 7 of 10 runs passed on Haiku and 3 of 10 on Nemotron, where in 1.1.0 both passed all ten.
+
+On Haiku the three failed runs made one search, with `paid_only`. In the two runs inspected, the answer listed the cheapest paid models, which cost six dollars or more at that volume, and said none fit. Free models do fit that budget, and the answer named none. Most of the seven runs that passed made a second search. A hypothesis: `paid_only` is the right filter for "the cheapest paid model" and the wrong one for "what fits a budget", and the model does not always see the difference.
+
+On Nemotron the same question ended seven times in the raw markup of a tool call, `<tool_call>` where an answer should be, and `wrong-value` and `bad-recommendation` both count that as a miss. Those runs came after rejected `paid_only` calls. Ten of Nemotron's 210 runs end this way, seven of them on this question. In 1.1.0 two did.
+
+### 3. A "no" attracts models from memory
+
+`discipline/unknown-model` asks about a model the catalog does not have, and the right path is a lookup that fails. Nemotron skipped the lookup in ten of ten runs and answered from memory, and Haiku invented a slug in one (`openai/gpt-5`). `lookup/router-model` still draws invented slugs from Nemotron in two runs, down from seven, and `search/none-exists` in one, down from four. It is the habit of the 1.1.0 run, in a smaller measure: the model adds a helpful line from memory, which the instructions forbid for prices and for which models exist.
+
+### 4. A typo is repaired by a search, not a lookup
+
+`discipline/typo-recovery` fell from 10 to 6 on Nemotron. In the four failed runs, the model asked for `openai/gpt4o-mini`, was told the slug does not exist, searched for the name, with or without the hyphen, and answered with prices. It never read the corrected model with `get_model`: the search had already returned the prices, and the model stopped there. Of the six runs that passed, five wrote the corrected slug at once, and one asked for the typo, failed, and then asked for the right slug.
+
+### Smaller signals
+
+- **The judge finds the count answers thin.** On `search/count` the usefulness rubric scored 0.1 on both models. The answer is the number, and the deterministic check on it passes. The rubrics have weight 0, so this changes no verdict, and it may say more about the rubric than about the answer.
+- **Grounding scores 0.60 in one cell.** The judge gave `discipline/unknown-model` on Nemotron a grounding score of 0.60 for figures it could not match to a tool result. The run is in the download.
+
+## What the figures do not tell you
+
+Ten runs of a question show a rate with wide error bars: 9 of 10 and 10 of 10 are not far apart. Two models are a small sample of what users will bring, one of them free and one cheap, and neither is the strongest on OpenRouter. The catalog moves every week, and the oracle of each case was computed on the snapshot in the download, so a rerun in a month judges against another catalog. The [Evals](../evals/#what-the-figures-do-not-tell-you) page lists the other limits of the method.

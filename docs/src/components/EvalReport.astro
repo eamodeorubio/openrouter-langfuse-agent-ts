@@ -1,8 +1,16 @@
 ---
 // A report of one eval run: a row for each case, a column for each model, a
 // cell for each pair.
-import data from '../data/evals-1-1-0.json';
+import run110 from '../data/evals-1-1-0.json';
+import run120 from '../data/evals-1-2-0.json';
 
+interface Props {
+  /** The version of ask-openrouter that the run measured. */
+  version: '1.1.0' | '1.2.0';
+}
+
+const runs = { '1.1.0': run110, '1.2.0': run120 };
+const data = runs[Astro.props.version];
 const models = data.models;
 const short = (id: string) => id.split('/').slice(1).join('/');
 const pct = (n: number, d: number) => `${((100 * n) / d).toFixed(2)}%`;

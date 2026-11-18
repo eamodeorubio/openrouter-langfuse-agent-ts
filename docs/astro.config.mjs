@@ -32,7 +32,12 @@ export default defineConfig({
         },
         {
           label: 'Contributing',
-          items: ['how-changes-are-made', 'evals', 'evals-1-1-0'],
+          items: [
+            'how-changes-are-made',
+            'evals',
+            'evals-1-1-0',
+            'evals-1-2-0',
+          ],
         },
       ],
     }),
