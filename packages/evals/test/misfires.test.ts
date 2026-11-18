@@ -136,6 +136,138 @@ describe('the 1.1.0 misfires', () => {
     );
   });
 
+  it('single-search: a question for the cheapest paid model skips the free models a search without paid_only lists first', () => {
+    const sorted = meta({ search: { sort: 'input-price-low-to-high' } });
+    const listing = call(
+      1,
+      'search_models',
+      { sort: 'input-price-low-to-high' },
+      {
+        total: 4,
+        models: [
+          { id: 'a/free:free', prompt_price: 0, completion_price: 0 },
+          { id: 'b/unpriced', prompt_price: null, completion_price: null },
+          { id: 'c/cheap', prompt_price: 0.02, completion_price: 0.1 },
+          { id: 'd/dear', prompt_price: 1, completion_price: 4 },
+        ],
+      },
+    );
+    const paid = 'Which is the cheapest paid model with tool calling?';
+    const any = 'Which is the cheapest model with tool calling?';
+    const judge = (question: string, answer: string) =>
+      topOfSearch(run(question, answer, [listing]), sorted).pass;
+    expect(judge(paid, 'Use c/cheap.')).toBe(true);
+    expect(judge(paid, 'Use d/dear.')).toBe(false);
+    expect(judge(paid, 'Use a/free:free.')).toBe(false);
+    expect(judge(paid, 'Use b/unpriced.')).toBe(false);
+    expect(judge(any, 'Use a/free:free.')).toBe(true);
+    expect(
+      judge('What would I have paid last month?', 'Use a/free:free.'),
+    ).toBe(true);
+  });
+
+  it('single-search: a model with one price at 0 and the other above it is paid', () => {
+    const sorted = meta({ search: { sort: 'input-price-low-to-high' } });
+    const listing = call(
+      1,
+      'search_models',
+      { sort: 'input-price-low-to-high' },
+      {
+        total: 2,
+        models: [
+          { id: 'a/free-input', prompt_price: 0, completion_price: 2 },
+          { id: 'b/dear', prompt_price: 1, completion_price: 4 },
+        ],
+      },
+    );
+    const question = 'Which paid model reads for free?';
+    expect(
+      topOfSearch(run(question, 'Use a/free-input.', [listing]), sorted).pass,
+    ).toBe(true);
+    expect(
+      topOfSearch(run(question, 'Use b/dear.', [listing]), sorted).pass,
+    ).toBe(false);
+  });
+
+  it.each([
+    ['a/in-only', 1, 0, true],
+    ['b/out-only', 0, 2, true],
+    ['c/no-output-price', 1, null, false],
+    ['d/no-input-price', null, 2, false],
+    ['e/free', 0, 0, false],
+  ])(
+    'single-search: %s, priced %j in and %j out, is paid: %s',
+    (id, input, output, paid) => {
+      const sorted = meta({ search: { sort: 'input-price-low-to-high' } });
+      const listing = call(
+        1,
+        'search_models',
+        { sort: 'input-price-low-to-high' },
+        {
+          total: 2,
+          models: [
+            { id, prompt_price: input, completion_price: output },
+            { id: 'z/last', prompt_price: 9, completion_price: 9 },
+          ],
+        },
+      );
+      const asked = 'Which is the cheapest paid model?';
+      expect(
+        topOfSearch(run(asked, `Use ${id}.`, [listing]), sorted).pass,
+      ).toBe(paid);
+    },
+  );
+
+  it('single-search: a question with more than one space between "paid" and "model" still asks for a paid model', () => {
+    const sorted = meta({ search: { sort: 'input-price-low-to-high' } });
+    const listing = call(
+      1,
+      'search_models',
+      { sort: 'input-price-low-to-high' },
+      {
+        total: 2,
+        models: [
+          { id: 'a/free', prompt_price: 0, completion_price: 0 },
+          { id: 'b/paid', prompt_price: 1, completion_price: 1 },
+        ],
+      },
+    );
+    const asked = 'Which is the cheapest paid  model?';
+    expect(topOfSearch(run(asked, 'Use b/paid.', [listing]), sorted).pass).toBe(
+      true,
+    );
+  });
+
+  it.each([
+    ['Which is the cheapest paid models option?', true],
+    ['Give me the Paid Models, cheapest first.', true],
+    ['Which is the cheapest paid model?', true],
+    ['Which is the cheapest unpaid model?', false],
+    ['Which is the cheapest paid modeling tool?', false],
+    ['What would I have paid last month?', false],
+  ])(
+    'single-search: the question %j asks for a paid model: %s',
+    (asked, paid) => {
+      const sorted = meta({ search: { sort: 'input-price-low-to-high' } });
+      const listing = call(
+        1,
+        'search_models',
+        { sort: 'input-price-low-to-high' },
+        {
+          total: 2,
+          models: [
+            { id: 'a/free', prompt_price: 0, completion_price: 0 },
+            { id: 'b/paid', prompt_price: 1, completion_price: 1 },
+          ],
+        },
+      );
+      // Answering the free model passes only when the question does not skip it.
+      expect(
+        topOfSearch(run(asked, 'Use a/free.', [listing]), sorted).pass,
+      ).toBe(!paid);
+    },
+  );
+
   it('none-exists: "no single model meets all three criteria"', () => {
     withSnapshot();
     const none = meta({

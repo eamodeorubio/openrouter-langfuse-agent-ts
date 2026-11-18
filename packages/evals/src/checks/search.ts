@@ -1,4 +1,4 @@
-import { isObject, parseJson } from '../json.js';
+import { isObject, numberOf, parseJson } from '../json.js';
 import { type Oracle, readCase, type SearchRequirements } from './caseSpec.js';
 import { acceptableSlugs } from './oracleSlugs.js';
 import { type Success, successfulCalls } from './run.js';
@@ -16,7 +16,7 @@ const describeRequirement = (
   return `${name} with ${required.join(', ')}`;
 };
 
-/** Whether a search call sent every required filter. */
+/** Whether a search call sent every required filter. A number may come as the text of one, as the tool reads it. */
 export const carries = (
   call: { arguments: string },
   search: SearchRequirements,
@@ -26,7 +26,7 @@ export const carries = (
   return Object.entries(search).every(([name, required]) => {
     const sent = args[name];
     if (typeof required === 'number') {
-      return typeof sent === 'number' && sent >= required;
+      return (numberOf(sent) ?? Number.NEGATIVE_INFINITY) >= required;
     }
     if (typeof required === 'string') return sent === required;
     return Array.isArray(sent) && required.every((item) => sent.includes(item));
