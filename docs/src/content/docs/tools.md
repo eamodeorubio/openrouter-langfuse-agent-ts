@@ -66,6 +66,8 @@ A model that keeps asking for lookups gets stopped. After eight rounds that end 
 | `zero_data_retention`                                             | only models with zero-data-retention endpoints                              |
 | `limit`, `offset`                                                 | the page: 1 to 50 entries (10 by default), and where it starts              |
 
+Weaker models often send a number or a boolean as text: `"3"` for a number, `"true"` for a boolean. The tool reads either form for every numeric argument and for the two boolean ones, `paid_only` and `zero_data_retention`, and the schema it offers says so. Anything else comes back to the model as an error: text that is not a number, a number the argument does not allow (a fraction where a whole number is needed, a value out of range), a boolean that is not `true`, `false`, `"true"` or `"false"`. The error names the argument, shows what it sent and says what to send, such as `limit: must be a whole number from 1 to 50; got "many".`
+
 ### Sorting by price
 
 OpenRouter has an order it calls `pricing-low-to-high`, and it sorts by the average of the input and the output price. A model that charges almost nothing to read and a great deal to write lands far down the list, so the first row is not the cheapest by either price. An eval question that asked for the lowest input price among long-context models with tool calling failed in nearly every run for this reason: the models took the first row, and the model that costs 0.007 USD per million input tokens sat at the bottom of the page.
