@@ -67,7 +67,7 @@ A case that runs the single-search check SHALL fail with `wasteful-search` when 
 
 #### Scenario: The skip does not depend on the search
 - **WHEN** the question asks for a paid model and the search sent `paid_only: true`
-- **THEN** the models that are not paid are skipped all the same, and the listing holds none
+- **THEN** the models that are not paid are skipped all the same, if the listing holds any
 
 #### Scenario: What is paid
 - **WHEN** the question asks for a paid model and the output lists a model of the row first; a model is paid when both its prices are numbers and at least one is above 0
