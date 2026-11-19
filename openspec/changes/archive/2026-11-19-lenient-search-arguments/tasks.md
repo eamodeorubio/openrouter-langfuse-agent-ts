@@ -27,4 +27,4 @@ The code of both parts exists already, written test first before this spec. The 
 ## 3. Archive
 
 - [x] 3.1 Run `/opsx:verify` on `lenient-search-arguments`, and fix what it finds.
-- [ ] 3.2 Archive the change as its own commit, `chore: archive lenient-search-arguments`, once the user has approved it.
+- [x] 3.2 Archive the change as its own commit, `chore: archive lenient-search-arguments`, once the user has approved it.

@@ -126,6 +126,19 @@ A case that names an oracle query SHALL fail with `wrong-search` when no success
 - **WHEN** the case requires `supported_parameters` to hold `tools` and a call sent `["reasoning", "tools"]`
 - **THEN** the call carries that constraint
 
+#### Scenario: A number sent as text
+- **WHEN** the case requires `min_context_length` of at least 200000 and the call sends the value of the row
+- **THEN** the call carries the constraint when the value is a number, or the text of one as the tool reads it, at or above 200000, as the table gives
+
+| Sent | Carries the constraint |
+| --- | --- |
+| `200000`, `"200000"`, `" 300000 "`, `"3e5"` | yes |
+| `"199999"`, `"plenty"`, `""`, `"0x30D40"`, `"1e999"` | no |
+
+#### Scenario: A number and its text
+- **WHEN** a call sends a number and another call sends the same number as text, with the same other arguments
+- **THEN** the two calls carry the same constraints
+
 #### Scenario: No search call
 - **WHEN** the run only called `get_model` and one output holds an acceptable slug
 - **THEN** the run does not carry `wrong-search`
@@ -167,6 +180,30 @@ A case that runs the single-search check SHALL fail with `wasteful-search` when 
 #### Scenario: A model the search did not list
 - **WHEN** the answer names `e/f`, which the output of the first search does not list
 - **THEN** the run carries `wrong-answer`
+
+#### Scenario: A paid question skips unpaid models
+- **WHEN** the question holds the words `paid model` or `paid models`, so that models that are not paid do not count as listed and the first is the first paid model, as in "the cheapest paid model", the one search sent no `paid_only`, and the output lists a model with prices 0 and 0, a model with a `null` price and `c/d` with prices 0.02 and 0.1, in that order
+- **THEN** the answer `c/d` passes this check, and an answer that names only the first two carries `wrong-answer`
+
+#### Scenario: The skip does not depend on the search
+- **WHEN** the question asks for a paid model and the search sent `paid_only: true`
+- **THEN** the models that are not paid are skipped all the same, if the listing holds any
+
+#### Scenario: What is paid
+- **WHEN** the question asks for a paid model and the output lists a model of the row first; a model is paid when both its prices are numbers and at least one is above 0
+- **THEN** the model counts as paid or not as the table says
+
+| Input price | Output price | Paid |
+| --- | --- | --- |
+| 1 | 0 | yes |
+| 0 | 2 | yes |
+| 0 | 0 | no |
+| 1 | `null` | no |
+| `null` | 2 | no |
+
+#### Scenario: A question that does not ask for a paid model
+- **WHEN** the question holds the word `paid` in another sense, such as "what I paid last month"
+- **THEN** no model is skipped
 
 ### Requirement: Counts
 A case that runs the count check SHALL fail with `wrong-value` when the answer holds neither the number of models the query returns on the snapshot nor the `total` of a successful search that carried the case's constraints. It SHALL fail with `wrong-search` when no search carried them.
