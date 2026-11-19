@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v1.2.0...v1.2.1) (2026-11-19)
+
+
+### Bug Fixes
+
+* accept numbers and booleans sent as text in search_models ([#58](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues/58)) ([f3f9869](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/commit/f3f9869f60db38f44467e344a1d2ad0819c412ee))
+
 ## [1.2.0](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v1.1.0...v1.2.0) (2026-11-17)
 
 
