@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { callCatalog } from './catalog.js';
 import type { CatalogModel } from './catalogCache.js';
 import { allMatches, type CatalogFilters } from './catalogFetch.js';
+import { FLAG_NOTE, flag, NUMERIC_NOTE, numeric } from './lenientArgs.js';
 import {
   DEFAULT_MIX,
   isPaid,
@@ -57,9 +58,14 @@ const quoted = (values: readonly string[]): string =>
 const PRICE_SORT_LIST = quoted(PRICE_SORTS);
 const BLENDED_SORTS = PRICE_SORTS.filter((sort) => sort.startsWith('blended'));
 
+const whole = Number.isInteger;
+const price = numeric(
+  'a price in USD per million tokens, 0 or more',
+  (n) => n >= 0,
+);
+const score = numeric('a score, 0 or more', (n) => n >= 0);
+
 const words = z.array(z.string().min(1)).min(1);
-const price = z.number().min(0);
-const score = z.number().min(0);
 
 /**
  * An argument the model may leave out. Some providers make a model fill every
@@ -114,17 +120,15 @@ const parameters = z
       SORT_DESCRIPTION,
     ),
     input_per_output: optional(
-      z
-        .number()
-        .gt(
-          0,
-          'must be above 0, the input tokens for each output token, such as 3.',
-        ),
-      `Input tokens for each output token, above 0, default ${DEFAULT_MIX}. Only for ${BLENDED_SORTS.join(' and ')}; with any other sort the call fails. Use the ratio the user states.`,
+      numeric(
+        'above 0, the input tokens for each output token, such as 3',
+        (n) => n > 0,
+      ),
+      `Input tokens for each output token, above 0, default ${DEFAULT_MIX}. Only for ${BLENDED_SORTS.join(' and ')}; with any other sort the call fails. Use the ratio the user states. ${NUMERIC_NOTE}`,
     ),
     paid_only: optional(
-      z.boolean(),
-      'true drops free models (input and output price both 0) and models with no price. Needs a price sort: input-, output- or blended-price-*; without one the call fails. total counts the models that remain. false or absent keeps them all.',
+      flag,
+      `${FLAG_NOTE} true: drop free models (input and output price both 0) and models with no price; it needs a price sort (input-, output- or blended-price-*), and without one the call fails. total counts the models that remain. false or absent: keep them all.`,
     ),
     input_modalities: optional(
       words,
@@ -139,24 +143,24 @@ const parameters = z
       'Request parameters the model must support, such as `tools`, `reasoning`, `response_format`.',
     ),
     min_context_length: optional(
-      z.number().int().min(1),
-      'Smallest context window, in tokens.',
+      numeric('a whole number of tokens, 1 or more', (n) => whole(n) && n >= 1),
+      `Smallest context window, in tokens, 1 or more. ${NUMERIC_NOTE}`,
     ),
     min_prompt_price: optional(
       price,
-      'Keep models whose input price is at least this many USD per million tokens, the input price, bound included. A free model has price 0, so a minimum of 0 keeps it. Applies before any sort.',
+      `Keep models whose input price is at least this many USD per million tokens, the input price, bound included. A free model has price 0, so a minimum of 0 keeps it. Applies before any sort. ${NUMERIC_NOTE}`,
     ),
     max_prompt_price: optional(
       price,
-      'Keep models whose input price is at most this many USD per million tokens, the input price, bound included. A free model has price 0, so it passes any maximum. Applies before any sort.',
+      `Keep models whose input price is at most this many USD per million tokens, the input price, bound included. A free model has price 0, so it passes any maximum. Applies before any sort. ${NUMERIC_NOTE}`,
     ),
     min_completion_price: optional(
       price,
-      'Keep models whose output price is at least this many USD per million tokens, the output price, bound included. A free model has price 0, so a minimum of 0 keeps it. Applies before any sort.',
+      `Keep models whose output price is at least this many USD per million tokens, the output price, bound included. A free model has price 0, so a minimum of 0 keeps it. Applies before any sort. ${NUMERIC_NOTE}`,
     ),
     max_completion_price: optional(
       price,
-      'Keep models whose output price is at most this many USD per million tokens, the output price, bound included. A free model has price 0, so it passes any maximum. Applies before any sort.',
+      `Keep models whose output price is at most this many USD per million tokens, the output price, bound included. A free model has price 0, so it passes any maximum. Applies before any sort. ${NUMERIC_NOTE}`,
     ),
     architecture: optional(
       z.string().min(1),
@@ -166,37 +170,40 @@ const parameters = z
     providers: optional(words, 'Names of hosting providers.'),
     min_intelligence_index: optional(
       score,
-      'Lowest Artificial Analysis intelligence index.',
+      `Lowest Artificial Analysis intelligence index. ${NUMERIC_NOTE}`,
     ),
     min_coding_index: optional(
       score,
-      'Lowest Artificial Analysis coding index.',
+      `Lowest Artificial Analysis coding index. ${NUMERIC_NOTE}`,
     ),
     min_agentic_index: optional(
       score,
-      'Lowest Artificial Analysis agentic index.',
+      `Lowest Artificial Analysis agentic index. ${NUMERIC_NOTE}`,
     ),
     min_tool_success_rate: optional(
-      z.number().min(0).max(1),
-      'Lowest tool-calling success rate, from 0 to 1.',
+      numeric('a rate from 0 to 1', (n) => n >= 0 && n <= 1),
+      `Lowest tool-calling success rate, from 0 to 1. ${NUMERIC_NOTE}`,
     ),
     max_age_days: optional(
-      z.number().int().min(0),
-      'Only models released within this many days.',
+      numeric('a whole number of days, 0 or more', (n) => whole(n) && n >= 0),
+      `Only models released within this many days, 0 or more. ${NUMERIC_NOTE}`,
     ),
     zero_data_retention: optional(
-      z.boolean(),
-      'When true, only models with zero-data-retention endpoints.',
+      flag,
+      `${FLAG_NOTE} true: only models with zero-data-retention endpoints. false or absent: no filter.`,
     ),
     limit: optionalWith(
-      z.number().int().min(1).max(MAX_LIMIT),
+      numeric(
+        `a whole number from 1 to ${MAX_LIMIT}`,
+        (n) => whole(n) && n >= 1 && n <= MAX_LIMIT,
+      ),
       DEFAULT_LIMIT,
-      `Models per page, 1 to ${MAX_LIMIT}. The default is ${DEFAULT_LIMIT}.`,
+      `Models per page, 1 to ${MAX_LIMIT}. The default is ${DEFAULT_LIMIT}. ${NUMERIC_NOTE}`,
     ),
     offset: optionalWith(
-      z.number().int().min(0),
+      numeric('a whole number, 0 or more', (n) => whole(n) && n >= 0),
       0,
-      'Models to skip. The default is 0. Use `next_offset` from the previous result to continue.',
+      `Models to skip. The default is 0. Use \`next_offset\` from the previous result to continue. ${NUMERIC_NOTE}`,
     ),
   })
   .strict()

@@ -133,8 +133,38 @@ describe('wrong-search', () => {
       false,
     ],
     [
-      'a context that is text',
+      'a context that is the text of the required one',
       { ...GOOD_ARGS, min_context_length: '200000' },
+      true,
+    ],
+    [
+      'a context that is text with spaces, above the required one',
+      { ...GOOD_ARGS, min_context_length: ' 3e5 ' },
+      true,
+    ],
+    [
+      'a context that is text below the required one',
+      { ...GOOD_ARGS, min_context_length: '199999' },
+      false,
+    ],
+    [
+      'a context that is text and not a number',
+      { ...GOOD_ARGS, min_context_length: 'plenty' },
+      false,
+    ],
+    [
+      'a context that is the text of a number too large to hold',
+      { ...GOOD_ARGS, min_context_length: '1e999' },
+      false,
+    ],
+    [
+      'a context that is hex text of a number above the required one',
+      { ...GOOD_ARGS, min_context_length: '0x30D40' },
+      false,
+    ],
+    [
+      'a context that is empty text',
+      { ...GOOD_ARGS, min_context_length: '' },
       false,
     ],
     [
@@ -149,6 +179,28 @@ describe('wrong-search', () => {
     withSnapshot();
     expect(wrongSearch(success('t/g', [search(args, ['t/g'])]), c1).pass).toBe(
       passes,
+    );
+  });
+
+  it('judges a number and its text alike', () => {
+    withSnapshot();
+    fc.assert(
+      fc.property(
+        fc.integer({ min: 0, max: 5_000_000 }),
+        fc.constantFrom('', ' ', '  '),
+        (context, padding) => {
+          const verdict = (sent: unknown) =>
+            wrongSearch(
+              success('t/g', [
+                search({ ...GOOD_ARGS, min_context_length: sent }, ['t/g']),
+              ]),
+              c1,
+            ).pass;
+          expect(verdict(`${padding}${context}${padding}`)).toBe(
+            verdict(context),
+          );
+        },
+      ),
     );
   });
 

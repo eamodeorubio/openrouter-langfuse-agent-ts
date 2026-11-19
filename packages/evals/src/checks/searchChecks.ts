@@ -79,14 +79,27 @@ const tiesWith = (first: ListedModel, model: ListedModel): boolean =>
   model.promptPrice === first.promptPrice &&
   model.completionPrice === first.completionPrice;
 
-/** wrong-answer: the first search listed a model first, and the answer names neither it nor a model that ties it. */
+/** Whether a listed model costs something: both prices are given and one is above 0. The rule of `paid_only`, copied from `isPaid` in `packages/cli/src/tools/priceSort.ts`: the evals judge the built CLI from outside and do not import it. */
+const isPaid = (model: ListedModel): boolean =>
+  typeof model.promptPrice === 'number' &&
+  typeof model.completionPrice === 'number' &&
+  (model.promptPrice > 0 || model.completionPrice > 0);
+
+/** A question that asks for a paid model rules out the free and the unpriced, whether or not the search said `paid_only`. */
+const asksForPaid = (question: string): boolean =>
+  /\bpaid\s+models?\b/i.test(question);
+
+/** wrong-answer: the first search listed a model first, and the answer names neither it nor a model that ties it. A question for a paid model skips the models that are not paid. */
 export const topOfSearch: Check = (output, context) => {
   const run = judgeable(output);
   if (!run) return pass('Left to an earlier class.');
   const { search = {} } = readCase(context);
   if (!sentFilters(run, search)) return pass('Left to wrong-search.');
   const [call] = searchCalls(run);
-  const [top, ...rest] = call ? listedModels(call.output) : [];
+  const listed = call ? listedModels(call.output) : [];
+  const [top, ...rest] = asksForPaid(run.question)
+    ? listed.filter(isPaid)
+    : listed;
   if (top === undefined) return pass('The search listed no model.');
   const named = new Set(slugTokens(run.answer));
   if (named.has(top.id)) {

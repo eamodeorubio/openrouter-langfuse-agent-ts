@@ -453,6 +453,11 @@ describe('search_models arguments for price sorts', () => {
     [{ paid_only: false }, true],
     [{ sort: 'newest', paid_only: false }, true],
     [{ sort: 'input-price-low-to-high', paid_only: 'yes' }, false],
+    [{ sort: 'input-price-low-to-high', paid_only: 'True' }, false],
+    [{ sort: 'input-price-low-to-high', paid_only: 'true' }, true],
+    [{ sort: 'newest', paid_only: 'true' }, false],
+    [{ sort: 'newest', paid_only: 'false' }, true],
+    [{ paid_only: 'false' }, true],
   ])('%j is valid: %s', (args, valid) => {
     expect(parse(args).success).toBe(valid);
   });
@@ -529,7 +534,7 @@ describe('search_models argument errors', () => {
         input_per_output: 0,
       }),
     ).toBe(
-      'Invalid arguments. input_per_output: must be above 0, the input tokens for each output token, such as 3.',
+      'Invalid arguments. input_per_output: must be above 0, the input tokens for each output token, such as 3; got 0.',
     );
   });
 });
@@ -581,6 +586,13 @@ describe('search_models schema offered to the model', () => {
       /input-, output- or blended-price/,
     );
     expect(description('paid_only')).toMatch(/fails/);
+  });
+
+  it('offers paid_only as a boolean and says plainly what each value does', () => {
+    const text = description('paid_only');
+    expect(text).toMatch(/true or false/);
+    expect(text).toMatch(/true: /);
+    expect(text).toMatch(/false or absent/);
   });
 
   it.each([
