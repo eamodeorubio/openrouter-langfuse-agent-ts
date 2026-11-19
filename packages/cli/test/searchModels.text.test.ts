@@ -33,6 +33,24 @@ const NUMBERS: [name: string, valid: number, invalid: number][] = [
   ['offset', 20, -1],
 ];
 
+/** What each numeric argument must be, as the spec table words it. */
+const PHRASES: Record<string, string> = {
+  input_per_output:
+    'above 0, the input tokens for each output token, such as 3',
+  min_context_length: 'a whole number of tokens, 1 or more',
+  min_prompt_price: 'a price in USD per million tokens, 0 or more',
+  max_prompt_price: 'a price in USD per million tokens, 0 or more',
+  min_completion_price: 'a price in USD per million tokens, 0 or more',
+  max_completion_price: 'a price in USD per million tokens, 0 or more',
+  min_intelligence_index: 'a score, 0 or more',
+  min_coding_index: 'a score, 0 or more',
+  min_agentic_index: 'a score, 0 or more',
+  min_tool_success_rate: 'a rate from 0 to 1',
+  max_age_days: 'a whole number of days, 0 or more',
+  limit: 'a whole number from 1 to 50',
+  offset: 'a whole number, 0 or more',
+};
+
 // A blended sort lets input_per_output stand beside the other arguments.
 const BASE = { sort: 'blended-price-low-to-high' };
 
@@ -61,15 +79,15 @@ describe('search_models numbers sent as text', () => {
   it.each(NUMBERS)(
     'tells the model what %s was given and what to send',
     async (name, _valid, invalid) => {
-      const given = await messageOf({ ...BASE, [name]: String(invalid) });
-      expect(given).toMatch(
-        new RegExp(
-          `^Invalid arguments\\. ${name}: must be .+; got "${invalid}"\\.`,
-        ),
+      const phrase = PHRASES[name];
+      expect(await messageOf({ ...BASE, [name]: String(invalid) })).toBe(
+        `Invalid arguments. ${name}: must be ${phrase}; got "${invalid}".`,
       );
-      const word = await messageOf({ ...BASE, [name]: 'abc' });
-      expect(word).toMatch(
-        new RegExp(`^Invalid arguments\\. ${name}: must be .+; got "abc"\\.`),
+      expect(await messageOf({ ...BASE, [name]: 'abc' })).toBe(
+        `Invalid arguments. ${name}: must be ${phrase}; got "abc".`,
+      );
+      expect(await messageOf({ ...BASE, [name]: [1] })).toBe(
+        `Invalid arguments. ${name}: must be ${phrase}; got [1].`,
       );
     },
   );

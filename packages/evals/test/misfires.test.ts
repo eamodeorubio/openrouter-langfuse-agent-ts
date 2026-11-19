@@ -268,6 +268,30 @@ describe('the 1.1.0 misfires', () => {
     },
   );
 
+  it('single-search: the unpaid models are skipped whether or not the search sent paid_only', () => {
+    const sorted = meta({ search: { sort: 'input-price-low-to-high' } });
+    const models = {
+      total: 3,
+      models: [
+        { id: 'a/free', prompt_price: 0, completion_price: 0 },
+        { id: 'b/unpriced', prompt_price: null, completion_price: null },
+        { id: 'c/cheap', prompt_price: 0.02, completion_price: 0.1 },
+      ],
+    };
+    const asked = 'Which is the cheapest paid model?';
+    for (const sent of [
+      { sort: 'input-price-low-to-high' },
+      { sort: 'input-price-low-to-high', paid_only: true },
+      { sort: 'input-price-low-to-high', paid_only: 'true' },
+    ]) {
+      const listing = call(1, 'search_models', sent, models);
+      const judge = (answer: string) =>
+        topOfSearch(run(asked, answer, [listing]), sorted).pass;
+      expect(judge('Use c/cheap.'), JSON.stringify(sent)).toBe(true);
+      expect(judge('Use a/free.'), JSON.stringify(sent)).toBe(false);
+    }
+  });
+
   it('none-exists: "no single model meets all three criteria"', () => {
     withSnapshot();
     const none = meta({
