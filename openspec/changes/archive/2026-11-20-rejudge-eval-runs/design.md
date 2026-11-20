@@ -28,9 +28,9 @@ The checks are pure functions of the output, the case metadata and the two snaps
 
 **A row with a provider error is copied as it was.** No check ran on it, and none can.
 
-**Failure is loud and leaves nothing behind.** Missing `catalog.json` or `instructions.txt` beside the file, a `metadata.id` that the config no longer holds, an assertion value the command cannot name, and a check that throws all end the command with exit 1 and a message on stderr that names the case, the model and the repeat when a row is at fault. The output directory is written only after every row is judged. A silent skip would let a mixed run pass for a clean one.
+**Failure is loud and leaves nothing behind.** Missing `catalog.json` or `instructions.txt` beside the file, a `metadata.id` that the config no longer holds (the command names the first one it meets), a case id the config holds twice, an assertion value the command cannot name, and a check that throws all end the command with exit 1 and a message on stderr that names the case, the model and the repeat when a row is at fault. The output directory is written only after every row is judged. A silent skip would let a mixed run pass for a clean one.
 
-**The output is a whole run directory.** `rejudged/` holds `results.json`, and copies of `catalog.json` and `instructions.txt`, so that it can be re-judged in turn. `target.txt` is copied with ` (re-judged)` appended, so the line that opens the report says what it reports on. Two reports of one run, judged by different checks, must not pass for the same thing.
+**The output is a whole run directory.** `rejudged/` holds `results.json`, and copies of `catalog.json` and `instructions.txt`, so that it can be re-judged in turn. `target.txt` is copied with ` (re-judged)` appended (once: a file that already ends so keeps one mark, and a `target.txt` left by an earlier re-judge is removed when the input has none), so the line that opens the report says what it reports on. Two reports of one run, judged by different checks, must not pass for the same thing.
 
 **No network, by construction and by test.** The command makes no request. The package's offline setup already refuses any request but loopback, and a test runs the command under it.
 

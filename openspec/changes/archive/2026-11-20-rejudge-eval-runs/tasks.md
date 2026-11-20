@@ -23,12 +23,12 @@ One slice of chore work: the re-judge command. Commit `test:`, as the user calle
 - [x] 1.6 Document the command in `docs/src/content/docs/evals.md` and `packages/evals/README.md`: what it does, what it does not (no rubric, no model call), where the output goes, how to read a flip. Verify: `docs.test.ts` passes and the documented command runs as written on the fixture.
 - [x] 1.7 Run `pnpm check`, `pnpm typecheck` and `pnpm test`. Run `pnpm mutation:evals`; the score stays at or above the `break` threshold. Read every survivor; kill it with a test, or rewrite the code, or disable it with a reason.
 - [x] 1.8 Run `reviewer-code-low` and `reviewer-docs`. Fix every must-fix finding.
-- [ ] 1.9 Write the short report, with the printed flips of 1.5. Wait for the user's approval, which also approves the commit. Commit `test: re-judge a saved eval run with the current checks`.
+- [x] 1.9 Write the short report, with the printed flips of 1.5. Wait for the user's approval, which also approves the commit. Commit `test: re-judge a saved eval run with the current checks`.
 
 ## 2. Archive
 
-- [ ] 2.1 Run `/opsx:verify` on `rejudge-eval-runs` and fix what it finds.
-- [ ] 2.2 Archive as its own commit, `chore: archive rejudge-eval-runs`, once the user has approved it. It is the last commit before merge.
+- [x] 2.1 Run `/opsx:verify` on `rejudge-eval-runs` and fix what it finds.
+- [x] 2.2 Archive as its own commit, `chore: archive rejudge-eval-runs`, once the user has approved it. It is the last commit before merge.
 
 ## Workflow follow-up
 

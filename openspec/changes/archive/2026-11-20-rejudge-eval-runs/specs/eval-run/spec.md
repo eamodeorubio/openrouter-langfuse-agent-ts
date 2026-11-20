@@ -20,7 +20,8 @@
 | no argument, or more than one | 2 | the usage |
 | file missing, unreadable or not a promptfoo results file | 1 | the file |
 | `catalog.json` or `instructions.txt` missing beside the file | 1 | the missing file |
-| a row's `metadata.id` is not a case of the current config | 1 | the ids |
+| a row's `metadata.id` is not a case of the current config | 1 | the id of the first such row |
+| the config holds one case id twice, or cannot be read | 1 | the id, or the file |
 | an assertion of the case is not a `javascript` check the command can name | 1 | the case and the metric |
 | a check throws | 1 | the case, the model and the repeat |
 
