@@ -2,6 +2,7 @@ import fc from 'fast-check';
 import nock from 'nock';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
 import { createClient } from '../src/client.js';
+import { INSTRUCTIONS } from '../src/instructions.js';
 import { createCatalogCache } from '../src/tools/catalogCache.js';
 import { callTool, functionTools, TOOLS } from '../src/tools/registry.js';
 import { searchModels } from '../src/tools/searchModels.js';
@@ -263,7 +264,7 @@ describe('search_models numbers sent as text', () => {
       JSON.stringify({
         min_context_length: ' 200000 ',
         limit: '5',
-        zero_data_retention: 'false',
+        zero_data_retention: 'False',
       }),
       { client, timeoutMs: 60_000, catalog: createCatalogCache() },
     );
@@ -297,7 +298,17 @@ describe('search_models booleans sent as text', () => {
   it.each(['paid_only', 'zero_data_retention'])(
     'tells the model what %s was given and what to send',
     async (name) => {
-      for (const given of ['yes', 'True', '1', '']) {
+      for (const given of [
+        'yes',
+        'Yes',
+        '1',
+        '0',
+        '',
+        ' true',
+        'true ',
+        'truee',
+        'falſe',
+      ]) {
         expect(await messageOf({ ...PRICED, [name]: given })).toBe(
           `Invalid arguments. ${name}: must be true or false, sent as a boolean or as the text "true" or "false"; got ${JSON.stringify(given)}.`,
         );
@@ -307,6 +318,183 @@ describe('search_models booleans sent as text', () => {
       );
     },
   );
+});
+
+describe('search_models booleans sent as text in any letter case', () => {
+  const PRICED = { sort: 'input-price-low-to-high' };
+  const BOOLEANS = ['paid_only', 'zero_data_retention'];
+  const read = (name: string, sent: unknown) => {
+    const parsed = parse({ ...PRICED, [name]: sent });
+    return parsed.success ? (parsed.data as never)[name] : 'refused';
+  };
+
+  it.each(BOOLEANS)('reads %s "True", "TRUE" and "tRuE" as true', (name) => {
+    for (const sent of ['True', 'TRUE', 'tRuE']) {
+      expect(read(name, sent), sent).toBe(true);
+    }
+  });
+
+  it.each(BOOLEANS)(
+    'reads %s "False", "FALSE" and "fAlSe" as false',
+    (name) => {
+      for (const sent of ['False', 'FALSE', 'fAlSe']) {
+        expect(read(name, sent), sent).toBe(false);
+      }
+    },
+  );
+
+  it.each(BOOLEANS)('reads null %s as absent', (name) => {
+    expect(read(name, null)).toBeUndefined();
+  });
+
+  // One case choice for each letter of the word, so that every spelling can occur.
+  const spelling = (word: string) =>
+    fc
+      .tuple(...[...word].map(() => fc.boolean()))
+      .map((upper) =>
+        [...word].map((c, i) => (upper[i] ? c.toUpperCase() : c)).join(''),
+      );
+
+  it.each(BOOLEANS)(
+    'reads every spelling of "true" and of "false" in %s as that boolean (property)',
+    (name) => {
+      fc.assert(
+        fc.property(spelling('true'), spelling('false'), (yes, no) => {
+          expect(read(name, yes)).toBe(true);
+          expect(read(name, no)).toBe(false);
+        }),
+      );
+    },
+  );
+
+  it.each(BOOLEANS)(
+    'refuses any text that is no spelling of "true" or "false" in %s, with the message that shows it (property)',
+    async (name) => {
+      await fc.assert(
+        fc.asyncProperty(
+          fc
+            .oneof(fc.string(), fc.constantFrom('ſ', 'İ', 'ı', 'K'))
+            .filter((text) => !['true', 'false'].includes(text.toLowerCase())),
+          async (given) => {
+            expect(read(name, given)).toBe('refused');
+            expect(await messageOf({ ...PRICED, [name]: given })).toBe(
+              `Invalid arguments. ${name}: must be true or false, sent as a boolean or as the text "true" or "false"; got ${JSON.stringify(given)}.`,
+            );
+          },
+        ),
+      );
+    },
+  );
+
+  it.each(BOOLEANS)('never throws on any value of %s (property)', (name) => {
+    fc.assert(
+      fc.property(fc.anything(), (value) => {
+        expect(() => parse({ ...PRICED, [name]: value })).not.toThrow();
+      }),
+    );
+  });
+
+  // A free model and a paid one, as the API lists them.
+  const template = recordedModelsList.data[0] as Record<string, unknown>;
+  const listing = {
+    data: [
+      { ...template, id: 'f/free', pricing: { prompt: '0', completion: '0' } },
+      {
+        ...template,
+        id: 'p/paid',
+        pricing: { prompt: '0.000000015', completion: '0.000000045' },
+      },
+    ],
+    total_count: 2,
+    links: { next: null },
+  };
+  const search = async (paidOnly: unknown) => {
+    nock(HOST).get('/api/v1/models').query(true).reply(200, listing);
+    const result = await callTool(
+      TOOLS,
+      'search_models',
+      JSON.stringify({ ...PRICED, paid_only: paidOnly }),
+      { client, timeoutMs: 60_000, catalog: createCatalogCache() },
+    );
+    if (!result.ok) throw new Error(result.message);
+    return JSON.stringify(result.value);
+  };
+
+  it('does not change the call: "True", "TRUE" and true give the same result', async () => {
+    const reference = await search(true);
+    expect(await search('True')).toBe(reference);
+    expect(await search('TRUE')).toBe(reference);
+  });
+
+  it('drops free models for paid_only "True", as for true, and keeps them for "False"', async () => {
+    const listed = async (paidOnly: unknown) =>
+      (
+        JSON.parse(await search(paidOnly)) as { models: { id: string }[] }
+      ).models.map((model) => model.id);
+    expect(await listed('True')).toEqual(['p/paid']);
+    expect(await listed('False')).toEqual(['f/free', 'p/paid']);
+  });
+});
+
+describe('search_models advice on paid_only', () => {
+  interface Node {
+    description?: string;
+  }
+  const [tool] = functionTools([searchModels]) as unknown as {
+    function: {
+      description: string;
+      parameters: { properties: Record<string, Node> };
+    };
+  }[];
+  const properties = tool?.function.parameters.properties ?? {};
+  const texts: [string, string][] = [
+    ['the tool description', tool?.function.description ?? ''],
+    ...Object.entries(properties).map(([name, node]): [string, string] => [
+      name,
+      node.description ?? '',
+    ]),
+    ['the system message', INSTRUCTIONS],
+  ];
+  const sentences = (text: string): string[] =>
+    text.split(/(?<=[.;])\s+/).filter((sentence) => sentence !== '');
+  const advice = /\b(?:use|add|set|send|pass)\b[^.;]*\bpaid_only\b/i;
+
+  it.each(['sort', 'paid_only'])(
+    'says in the description of %s to use paid_only only when the user asks for a paid model',
+    (name) => {
+      const text = properties[name]?.description ?? '';
+      expect(text).toMatch(/only when the user asks for a paid model/i);
+      expect(text).toMatch(/a free model is (?:otherwise )?a valid answer/i);
+    },
+  );
+
+  // A guard on the wording, not a proof: advice phrased with another verb would pass.
+  it('ties every sentence that advises paid_only to the user asking for a paid model', () => {
+    const advising = texts.flatMap(([where, text]) =>
+      sentences(text)
+        .filter((sentence) => advice.test(sentence))
+        .map((sentence) => [where, sentence] as const),
+    );
+    expect(advising.length).toBeGreaterThan(0);
+    for (const [where, sentence] of advising) {
+      expect(sentence, where).toMatch(/asks for a paid model/i);
+    }
+  });
+
+  it('no longer says to add paid_only to skip free models', () => {
+    for (const [where, text] of texts) {
+      expect(text, where).not.toMatch(/add paid_only to skip free models/i);
+    }
+  });
+
+  it('names no model slug in the advice', () => {
+    const advising = texts
+      .flatMap(([, text]) => sentences(text))
+      .filter((sentence) => /paid_only|free model/i.test(sentence));
+    for (const sentence of advising) {
+      expect(sentence).not.toMatch(/\b[a-z0-9-]+\/[a-z0-9.:-]+\b/i);
+    }
+  });
 });
 
 describe('search_models schema for text values', () => {
@@ -345,6 +533,7 @@ describe('search_models schema for text values', () => {
         expect.arrayContaining(['boolean', 'string']),
       );
       expect(properties[name]?.description).toMatch(/"true" or "false"/);
+      expect(properties[name]?.description).toMatch(/any letter case/);
     },
   );
 });
