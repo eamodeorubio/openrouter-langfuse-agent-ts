@@ -211,8 +211,8 @@ importers:
         specifier: 6.0.2
         version: 6.0.2(@opentelemetry/api@1.9.1)
       '@openrouter/sdk':
-        specifier: ^1.4.25
-        version: 1.4.25
+        specifier: ^1.5.99
+        version: 1.5.99
       '@opentelemetry/api':
         specifier: 1.9.1
         version: 1.9.1
@@ -1803,8 +1803,8 @@ packages:
   '@opencode-ai/sdk@1.19.5':
     resolution: {integrity: sha512-+bqu8gHiwmq96T9q5G34uLNHWCInIMsrE3hytCNHj1cVaxjY0AGJyNCT1rkeeZwgPU7A5TMTNwN+0XxCO2vqDg==}
 
-  '@openrouter/sdk@1.4.25':
-    resolution: {integrity: sha512-H218lYMy9WhU5cMigUvW/k+e1BimCqTTP+9PqssdDXnQ0gFCeEME0HTsFGPbR6UgJgyYh2hTct43/9pMcBem5A==}
+  '@openrouter/sdk@1.5.99':
+    resolution: {integrity: sha512-1zbZCI7aB/35CTGQQmWMqOAfyU23FKaZKFW4OheSwsqfZPtZ8jvBFIY227XZWieHQE1GbNcaWjEVNXI4F+8K6g==}
 
   '@opentelemetry/api-logs@0.223.0':
     resolution: {integrity: sha512-Oepm6etVPFCn0VWB1t833iOTgz1eYBDUPxcrOR/XvwzD1+Ag9VzSPSrrKAFNJ/haatj+8CXbG47pZXvdNQKDJw==}
@@ -7230,7 +7230,7 @@ snapshots:
       cross-spawn: 7.0.6
     optional: true
 
-  '@openrouter/sdk@1.4.25':
+  '@openrouter/sdk@1.5.99':
     dependencies:
       zod: 4.6.7
 
