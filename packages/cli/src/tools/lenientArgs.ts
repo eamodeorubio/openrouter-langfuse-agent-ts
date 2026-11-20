@@ -9,17 +9,36 @@ import { z } from 'zod';
 const shown = (value: unknown): string =>
   JSON.stringify(value) ?? String(value);
 
+const flagError = (input: unknown): string =>
+  `must be true or false, sent as a boolean or as the text "true" or "false"; got ${shown(input)}.`;
+
 /**
- * A boolean, or the text "true" or "false". Weaker models, nemotron among
- * them, send text for a boolean. Nothing else is read as one, and the error
- * says what to send.
+ * A boolean, or the text "true" or "false" in any letter case. Weaker models,
+ * nemotron among them, send text for a boolean, and spell it "True" or "False".
+ * Nothing else is read as one, and the error says what to send. The text is
+ * lower-cased and compared, never matched with a case-folding pattern: that
+ * would read "falſe" (long s) as false.
  */
 export const flag = z
-  .union([z.boolean(), z.enum(['true', 'false'])], {
-    error: (issue) =>
-      `must be true or false, sent as a boolean or as the text "true" or "false"; got ${shown(issue.input)}.`,
+  .union([z.boolean(), z.string()], {
+    error: (issue) => flagError(issue.input),
   })
-  .transform((value) => value === true || value === 'true');
+  .transform((value, context) => {
+    if (typeof value === 'boolean') {
+      return value;
+    }
+    const text = value.toLowerCase();
+    if (text === 'true' || text === 'false') {
+      return text === 'true';
+    }
+    context.issues.push({
+      // Stryker disable next-line StringLiteral: equivalent because an empty code does not type-check
+      code: 'custom',
+      input: value,
+      message: flagError(value),
+    });
+    return z.NEVER;
+  });
 
 /** Text that spells a decimal number: a sign, digits with an optional point, an optional exponent. Hex, `Infinity` and thousands separators are not numbers here. The evals package keeps a copy in `packages/evals/src/json.ts`: change both together. */
 const NUMBER_TEXT = /^[-+]?(?:\d+\.?\d*|\.\d+)(?:e[-+]?\d+)?$/i;
@@ -65,4 +84,4 @@ export const NUMERIC_NOTE =
   'A number; numeric text such as "3" is read as one.';
 
 export const FLAG_NOTE =
-  'true or false, as a boolean or as the text "true" or "false".';
+  'true or false, as a boolean or as the text "true" or "false" in any letter case.';

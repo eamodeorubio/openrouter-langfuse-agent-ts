@@ -98,11 +98,15 @@ const unknownSort = (value: unknown): string => {
   return `"${shown}" is not offered.${replacement} The values are: ${quoted(SORTS)}.`;
 };
 
+/** The one rule on `paid_only`, which both the `sort` and the `paid_only` descriptions state, so that they cannot drift. */
+const PAID_ONLY_ADVICE =
+  'Use paid_only only when the user asks for a paid model; when the question does not ask for one, a free model is a valid answer, so leave it out.';
+
 const SORT_DESCRIPTION = [
   'How to order the results.',
   'Orders the API applies: most-popular, top-weekly, newest (creation date), context-high-to-low, throughput-high-to-low, latency-low-to-high, intelligence-high-to-low, coding-high-to-low, agentic-high-to-low, design-arena-elo-high-to-low. Models without a score come last.',
   'Orders this tool applies over every match: input-price-low-to-high and input-price-high-to-low (by input price), output-price-low-to-high and output-price-high-to-low (by output price), blended-price-low-to-high and blended-price-high-to-low (input and output weighted by input_per_output). Prices are USD per million tokens. A free model has price 0 and comes first in a low-to-high order. A model with no price comes last. Equal prices come in id order.',
-  `For the cheapest model by one price the user names, sort by it and set limit to 1; add paid_only to skip free models. When the user states no usage, use blended-price-low-to-high or blended-price-high-to-low; the default mix is ${DEFAULT_MIX}.`,
+  `For the cheapest model by one price the user names, sort by it and set limit to 1. ${PAID_ONLY_ADVICE} When the user states no usage, use blended-price-low-to-high or blended-price-high-to-low; the default mix is ${DEFAULT_MIX}.`,
 ].join(' ');
 
 const parameters = z
@@ -128,7 +132,7 @@ const parameters = z
     ),
     paid_only: optional(
       flag,
-      `${FLAG_NOTE} true: drop free models (input and output price both 0) and models with no price; it needs a price sort (input-, output- or blended-price-*), and without one the call fails. total counts the models that remain. false or absent: keep them all.`,
+      `${FLAG_NOTE} true: drop free models (input and output price both 0) and models with no price; it needs a price sort (input-, output- or blended-price-*), and without one the call fails. total counts the models that remain. false or absent: keep them all. ${PAID_ONLY_ADVICE}`,
     ),
     input_modalities: optional(
       words,

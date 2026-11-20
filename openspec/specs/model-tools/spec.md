@@ -227,7 +227,7 @@ A price sort SHALL read every match of the API filters through as many pages as 
 - **THEN** the call returns a tool result that asks the model to narrow the filters, and nothing is kept
 
 ### Requirement: Numbers and booleans may be sent as text
-`search_models` SHALL read every numeric argument as a number or as the text of one, and every boolean argument (`paid_only`, `zero_data_retention`) as a boolean or as the text `"true"` or `"false"`. It SHALL apply the range of the argument to the value it read, and SHALL send the API the number or boolean, never the text. Text counts as a number when, after trimming spaces, it is a decimal with an optional sign, an optional point and an optional exponent, and the value is finite.
+`search_models` SHALL read every numeric argument as a number or as the text of one, and every boolean argument (`paid_only`, `zero_data_retention`) as a boolean or as the text `true` or `false` in any letter case. It SHALL apply the range of the argument to the value it read, and SHALL send the API the number or boolean, never the text. Text counts as a number when, after trimming spaces, it is a decimal with an optional sign, an optional point and an optional exponent, and the value is finite.
 
 #### Scenario: Numeric text
 - **WHEN** the model sends the text of the row for a numeric argument
@@ -260,14 +260,38 @@ A price sort SHALL read every match of the API filters through as many pages as 
 
 | Value | Result |
 | --- | --- |
-| `true`, `"true"` | read as `true` |
-| `false`, `"false"` | read as `false` |
-| `"True"`, `"yes"`, `"1"`, `""`, `1` | validation failure |
+| `true`, `"true"`, `"True"`, `"TRUE"`, `"tRuE"` | read as `true` |
+| `false`, `"false"`, `"False"`, `"FALSE"`, `"fAlSe"` | read as `false` |
+| `"yes"`, `"1"`, `"0"`, `""`, `" true"`, `"truee"`, `"falſe"`, `1`, `0` | validation failure |
+| `null` | read as absent |
+
+#### Scenario: Refused booleans keep the error
+- **WHEN** the model sends `paid_only: "Yes"`
+- **THEN** the error is `paid_only: must be true or false, sent as a boolean or as the text "true" or "false"; got "Yes".`
+
+#### Scenario: Case does not change the call
+- **WHEN** `paid_only` is sent as `"True"`, `"TRUE"` and `true` with the same other arguments
+- **THEN** the three calls return the same result and send the same request
 
 #### Scenario: A number and its text agree
 - **WHEN** a number and its text are sent for the same numeric argument
 - **THEN** both calls are valid or both fail, and the value read is the same
 
 #### Scenario: The API gets the number
-- **WHEN** the model sends `min_context_length: " 200000 "`, `limit: "5"` and `zero_data_retention: "false"`
+- **WHEN** the model sends `min_context_length: " 200000 "`, `limit: "5"` and `zero_data_retention: "False"`
 - **THEN** the request carries `context=200000` and `limit=5`, and no `zdr`
+
+### Requirement: Advice on paid_only is conditional
+The schema of `search_models` SHALL advise `paid_only` only when the user asks for a paid model, and SHALL say that when the question does not ask for one, a free model is a valid answer and `paid_only` is left out. No description of the tool, and no line of the system message, SHALL advise `paid_only` without that condition. No description or message SHALL name an eval case, a question or a model id.
+
+#### Scenario: Both descriptions state the condition
+- **WHEN** the schema is read
+- **THEN** the descriptions of `sort` and of `paid_only` each say to use `paid_only` only when the user asks for a paid model, and that a free model is otherwise a valid answer
+
+#### Scenario: No unconditional advice
+- **WHEN** the tool description, the descriptions of every argument and the system message are read
+- **THEN** every sentence that tells the model to use or add `paid_only` is tied to the user asking for a paid model, and the text `add paid_only to skip free models` does not appear
+
+#### Scenario: Descriptions say the text is read in any letter case
+- **WHEN** the schema is read
+- **THEN** the descriptions of `paid_only` and `zero_data_retention` say that the text `"true"` or `"false"` is read in any letter case

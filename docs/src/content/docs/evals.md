@@ -71,6 +71,32 @@ Before the first case, the run starts the version once with `--version`, so that
 
 The report starts with a line that names what it measured, `target: ask-openrouter@1.1.0` or `target: local build (packages/cli/dist/index.js)`. A run narrowed with `--model` adds the models, as in `target: local build (packages/cli/dist/index.js), models: anthropic/claude-haiku-5.5`. The run saves the same text as `target.txt` beside the results, so a rerun of the reporter shows the line too.
 
+## Judging a run again
+
+A run is judged once, by the checks of the day. Fix a check next week and the old run still carries the old verdict, so a new run and an old one no longer measure the same thing. One case showed it: a check once failed Nemotron's runs that named the right model, because a search without `paid_only` listed free models first. The check was fixed. The saved run kept its failures.
+
+The saved results hold what the deterministic checks read: the output of every run, the catalog snapshot and the instructions of the CLI. So a run can be judged again, at no cost and with no request:
+
+```sh
+pnpm --filter ask-openrouter-evals run rejudge results/<timestamp>/results.json
+```
+
+The command points the checks at the `catalog.json` and `instructions.txt` beside the file, so each run is judged against its own snapshot. It matches every row to its case by `metadata.id`, in the config of the branch you are on, and runs that case's checks on the saved output. It never calls a model. The judge rubrics keep the scores they had, and a run that ended in a provider error is copied as it was.
+
+The result lands in a `rejudged/` folder beside the input, as a whole run folder: `results.json`, the snapshot, the instructions and, when the input has one, a `target.txt` that ends in `(re-judged)`. The usual `report` reads it, and its first line says what it reads. The input is never touched. A second re-judge of the same file replaces the files of `rejudged/` one by one.
+
+The command prints every flip, one line for each check whose verdict changed, and a count:
+
+```
+search/single-search | nvidia/nemotron-3-ultra-550b-a55b:free | repeat 1 | wrong-answer | fail → pass
+...
+8 flips in 420 rows.
+```
+
+The line gives the case, the model, the repeat as the results file numbers it (from 0), the check, and its verdict before and after. A check that the config has gained or lost since the run shows `absent` on the side that lacks it. Fixing an early check can make a later one judge a run it used to skip, so one row can flip two checks. A flip changes the pass count only when no other check fails the run.
+
+It stops, with a message on stderr, exit code 1 and no output, when it cannot judge honestly: a file that is not a promptfoo results file, a missing snapshot or instructions file, a case that the config no longer holds or holds twice, an assertion that is not one of the package's checks, or a check that throws. A missing or unknown argument exits with 2. A baseline that old needs the commit that had its cases. Re-judge two runs with the same checks before you compare them.
+
 ## The judge rubrics
 
 The checks of the taxonomy are deterministic: they look for a figure, a slug, a call. They cannot tell whether an answer is relevant, or whether it would help anyone decide. Four rubrics ask for that. Each is one file under `packages/evals/rubrics/`, and a case lists the rubrics that grade it by naming those files in its checks, so the wording of a question lives in one place. A rubric is asked only where it has something to judge. `judge-grounding` and `judge-tool-usage` grade every case that reads from the tools, which leaves out `calculation/given-prices`, `hostile/prompt-injection` and the two `ambiguity` cases. `judge-relevance` grades every case but `hostile/prompt-injection`. `judge-usefulness` also skips the two `ambiguity` cases, whose good answer is a question, and so those two get `judge-relevance` alone.
