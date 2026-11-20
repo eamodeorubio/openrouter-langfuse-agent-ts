@@ -18,15 +18,15 @@ Rules that hold for every task: no description, instruction or code names an eva
 - [x] 1.3 Write the failing schema tests: the `sort` and `paid_only` descriptions state the condition (user asks for a paid model; otherwise a free model is valid); the text `add paid_only to skip free models` is absent; every sentence of the tool description, the argument descriptions and the system message that mentions `paid_only` is conditional; the descriptions of both boolean arguments say any letter case; no description or message holds a case id or a model slug. Covers: Advice on paid_only is conditional.
 - [x] 1.4 Run the new tests and verify each fails for the right reason: the old sentence, and `"True"` refused.
 - [x] 1.5 Implement: `flag` over `z.boolean()` and `z.string()` with a lower-cased comparison and the existing error; `FLAG_NOTE` says any letter case; reword the last sentence of `SORT_DESCRIPTION` and the `paid_only` description. Verify: the tests of 1.1 to 1.3 pass.
-- [x] 1.6 Update `docs/src/content/docs/tools.md`: the `paid_only` row (use it when the user asks for a paid model) and the paragraph on text values (boolean text in any letter case; the refusals that remain). Verify: `docs.test.ts` passes, and the text agrees with the schema.
+- [x] 1.6 Update `docs/src/content/docs/tools.md`: the paragraph on text values (boolean text in any letter case; the refusals that remain) and one sentence on the advice in the paragraph on sorting by price. The `paid_only` table row describes the filter and stays. Verify: `docs.test.ts` passes, and the text agrees with the schema.
 - [x] 1.7 Run `pnpm check`, `pnpm typecheck` and `pnpm test`. Run `pnpm mutation`; the score stays at or above the `break` threshold. Read every survivor, and kill it with a test, or rewrite the code, or disable it with a reason.
 - [x] 1.8 Run `reviewer-code-high`, `reviewer-code-low` and `reviewer-docs`. Fix every must-fix finding.
-- [ ] 1.9 Write the full report. Wait for the user's approval, which also approves the commit. Commit `fix: advise paid_only only for a paid question and read text booleans in any case`.
+- [x] 1.9 Write the full report. Wait for the user's approval, which also approves the commit. Commit `fix: advise paid_only only for a paid question and read text booleans in any case`.
 
 ## 2. Archive
 
-- [ ] 2.1 Run `/opsx:verify` on `paid-only-hint-and-text-booleans` and fix what it finds.
-- [ ] 2.2 Archive as its own commit, `chore: archive paid-only-hint-and-text-booleans`, once the user has approved it. It is the last commit before merge.
+- [x] 2.1 Run `/opsx:verify` on `paid-only-hint-and-text-booleans` and fix what it finds.
+- [x] 2.2 Archive as its own commit, `chore: archive paid-only-hint-and-text-booleans`, once the user has approved it. It is the last commit before merge.
 
 ## Verification after the release
 

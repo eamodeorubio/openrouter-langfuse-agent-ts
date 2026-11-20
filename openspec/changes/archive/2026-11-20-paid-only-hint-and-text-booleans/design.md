@@ -19,7 +19,7 @@
 
 ## Decisions
 
-**The condition is a single sentence, in two places.** The `sort` description ends with: "For the cheapest model by one price the user names, sort by it and set limit to 1. Add paid_only only when the user asks for a paid model; when they do not, a free model is a valid answer, so leave it out." The `paid_only` description gains the same rule after what the filter does. The model reads the first while it picks a sort and the second while it fills the argument. Both say the same, and a test pins the pair so one cannot drift. Alternative: put it in the instructions. The instructions never mention the argument, and a rule about one argument belongs with the argument.
+**The condition is a single sentence, in two places.** Both descriptions embed one constant, `PAID_ONLY_ADVICE`: "Use paid_only only when the user asks for a paid model; when the question does not ask for one, a free model is a valid answer, so leave it out." In `sort` it follows "sort by it and set limit to 1."; in `paid_only` it follows what the filter does. The model reads the first while it picks a sort and the second while it fills the argument. Both say the same, and a test pins the pair so one cannot drift. Alternative: put it in the instructions. The instructions never mention the argument, and a rule about one argument belongs with the argument.
 
 **The sentence states the user's condition, not the case.** "The user asks for a paid model" covers "paid", "not free" and "no free tier". It does not mention budgets, since a budget is a reason to prefer a free model, not a reason to filter it out; the model decides that from the question.
 

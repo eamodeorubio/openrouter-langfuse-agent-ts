@@ -12,7 +12,7 @@ The second is spelling. 1.2.1 reads the texts `"true"` and `"false"`, and refuse
 - Every boolean argument, `paid_only` and `zero_data_retention`, reads the text `true` or `false` in any letter case. `"True"`, `"FALSE"` and `"tRuE"` are read. Anything else is still refused with the existing error: `"yes"`, `"1"`, `""`, a number.
 - The descriptions of both arguments say that the text is read in any letter case.
 - The fix is general. No description, instruction or line of code names an eval case, a question or a model id.
-- `docs/src/content/docs/tools.md` follows: the row of `paid_only`, and the paragraph on text values.
+- `docs/src/content/docs/tools.md` follows: the paragraph on text values, and one sentence in the paragraph on sorting by price. The table row of `paid_only` describes the filter and stays as it was; the advice lives in the prose and in the schema.
 - No eval case and no check changes in this pull request. If a check proves to need a change, the work stops, and the change goes in its own pull request with a re-judge of the baselines first.
 
 The other descriptions of `search_models` and `packages/cli/src/instructions.ts` were checked for the same unconditional advice. The tool description and the `paid_only` description state what the filter does and give no advice, and the instructions never mention `paid_only` or free models. Only the last sentence of `sort` needs the condition.
