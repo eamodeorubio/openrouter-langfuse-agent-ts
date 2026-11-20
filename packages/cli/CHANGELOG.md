@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.2](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v1.2.1...v1.2.2) (2026-11-20)
+
+
+### Bug Fixes
+
+* advise paid_only only for a paid question and read text booleans in any case ([#60](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues/60)) ([fd9381c](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/commit/fd9381c619c6acbfa5956c900c5dc8d374826077))
+
 ## [1.2.1](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v1.2.0...v1.2.1) (2026-11-19)
 
 
