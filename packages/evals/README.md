@@ -97,6 +97,18 @@ The version must be exact and from 1.1.0. A tag, a range or a pre-release is ref
 
 The run starts the version once first, so that its download stays out of the latency, and stops with a message that names it if that fails. It reads the instructions that `prompt-leak` compares answers with from the installed package, so each version is judged against its own. The report starts with the line `target: ask-openrouter@1.1.0`, and `target.txt` beside the results holds the same text. The [docs page](https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/evals/) says more.
 
+## Judging a run again
+
+A run is judged once, by the checks of the day. When a check changes, `rejudge` judges a saved run again with the checks of the working tree, so that two runs can be compared under one set of rules. It makes no model call and no request:
+
+```sh
+pnpm --filter ask-openrouter-evals run rejudge results/<timestamp>/results.json
+```
+
+It sets `EVAL_CATALOG` and `EVAL_INSTRUCTIONS` to the `catalog.json` and `instructions.txt` beside the file, matches each row to its case of the current config by `metadata.id`, and runs the `javascript` checks of `defaultTest` and of the case on the saved output. The judge rubrics keep their saved scores, and a row that ended in a provider error is copied. The result is a whole run folder, `rejudged/` beside the input, that `report` reads: `results.json`, the snapshot, the instructions and a `target.txt` that ends in `(re-judged)`. The input is not modified.
+
+Each check whose verdict changed is printed as `case | model | repeat | check | before → after`, with the repeat as the file numbers it, from 0, then a count such as `8 flips in 420 rows.`. `absent` marks a check that one side lacks. A case the config no longer holds, a missing snapshot, an assertion that is not a check of `src/checks/assertions.ts` and a check that throws stop the command with exit 1 and write nothing. A wrong argument exits with 2. The code is in [`src/rejudge/`](src/rejudge). The [docs page](https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/evals/) says more.
+
 ## The judge rubrics
 
 Four rubrics, `judge-grounding`, `judge-relevance`, `judge-usefulness` and `judge-tool-usage`, ask Jev 1.14, a decision model that OpenRouter serves as `typesafe/jev-1.14`, one yes/no question each about a run. Each is a file under [`rubrics/`](rubrics), and a case lists the ones that grade it. Jev answers with the probability of yes, and each rubric states its own threshold in its file: 0.53 for relevance and grounding and 0.73 for usefulness and tool usage, the middle of the range that agreed best with Claude Opus 5.5. The provider has a threshold of 0 and passes every score, and the report reads each rubric's threshold from the saved results. Every rubric has weight 0 in its file, so a score is recorded and reported and never fails a run. Under the cost line of each case the report shows the share of scored runs at or above the threshold of its rubric, and how many runs went unscored.
