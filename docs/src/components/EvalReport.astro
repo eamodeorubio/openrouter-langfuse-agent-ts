@@ -3,13 +3,20 @@
 // cell for each pair.
 import run110 from '../data/evals-1-1-0.json';
 import run120 from '../data/evals-1-2-0.json';
+import run121 from '../data/evals-1-2-1.json';
+import run122 from '../data/evals-1-2-2.json';
 
 interface Props {
   /** The version of ask-openrouter that the run measured. */
-  version: '1.1.0' | '1.2.0';
+  version: '1.1.0' | '1.2.0' | '1.2.1' | '1.2.2';
 }
 
-const runs = { '1.1.0': run110, '1.2.0': run120 };
+const runs = {
+  '1.1.0': run110,
+  '1.2.0': run120,
+  '1.2.1': run121,
+  '1.2.2': run122,
+};
 const data = runs[Astro.props.version];
 const models = data.models;
 const short = (id: string) => id.split('/').slice(1).join('/');
