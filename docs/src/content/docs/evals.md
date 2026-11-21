@@ -65,6 +65,8 @@ A full run against 1.1.0, with its report, its weak spots and the raw results to
 
 The run against 1.2.0 sits on the page [Evals of version 1.2.0](../evals-1-2-0/), with a comparison against the one of 1.1.0.
 
+The runs against 1.2.1 and 1.2.2 sit on the pages [Evals of version 1.2.1](../evals-1-2-1/) and [Evals of version 1.2.2](../evals-1-2-2/), each with a comparison against the run before it.
+
 The version must be exact and from 1.1.0, the first that lists its tool calls in `--json`, which the checks read. `latest`, `^1.1.0`, `1.1`, a pre-release and any text that is not three whole numbers are refused before a request goes out, with exit code 2. A tag would let two runs a week apart measure different code. And the text goes straight into the command that starts the CLI, so only a plain version is allowed.
 
 Before the first case, the run starts the version once with `--version`, so that the download does not count toward the latency of any case. It waits up to three minutes for it, using the `pnpm` on your path, or the command that `EVAL_PNPM` names. If the warm-up fails, or the version that answers is another one, the run stops with a message that names the version and sends no request. The instructions that `prompt-leak` compares answers with are read from the package that `pnpm dlx` installed, so each version is judged against its own.
