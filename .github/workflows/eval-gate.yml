@@ -50,7 +50,11 @@ jobs:
   eval-gate:
     name: eval gate
     needs: changes
-    if: needs.changes.outputs.eval == 'true'
+    # It runs when a file matched, and also when `changes` did not succeed: a job
+    # whose `needs` failed is skipped, a skipped job counts as passed for a
+    # required check, and the one case that measured nothing must not look like
+    # the case with nothing to measure. A cancelled run starts nothing.
+    if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.eval == 'true') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     # Holds OPENROUTER_API_KEY: a dedicated key with a hard credit limit, open to
@@ -66,6 +70,20 @@ jobs:
     steps:
       - name: Choose the results folder
         run: echo "OUT=$RUNNER_TEMP/eval-gate" >> "$GITHUB_ENV"
+      # The verdict of a filter job that failed. No step below has always(), so
+      # none of them runs after this one: nothing is installed or built, and no
+      # model is asked. The summary and the upload still run.
+      - name: Say that the filter job failed
+        if: needs.changes.result != 'success'
+        run: |
+          line='verdict: inconclusive (the filter job failed, so it is not known whether the gate concerns this pull request; run the workflow again)'
+          echo "::error::$line"
+          {
+            echo '## Eval gate'
+            echo
+            echo "$line"
+          } >> "$GITHUB_STEP_SUMMARY"
+          exit 1
       - uses: actions/checkout@v7
         with:
           persist-credentials: false
@@ -107,9 +125,11 @@ jobs:
         if: always()
         env:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          FILTER_RESULT: ${{ needs.changes.result }}
         run: |
           {
-            if [ "$HAS_KEY" = 'true' ]; then echo '## Eval gate'; fi
+            # A failed filter or a missing key has written the heading already.
+            if [ "$HAS_KEY" = 'true' ] && [ "$FILTER_RESULT" = 'success' ]; then echo '## Eval gate'; fi
             echo
             echo "- Commit: \`$HEAD_SHA\`, tested as the merge commit \`$GITHUB_SHA\`"
             if [ -f "$OUT/target.txt" ]; then echo "- Target: $(head -n 1 "$OUT/target.txt")"; fi

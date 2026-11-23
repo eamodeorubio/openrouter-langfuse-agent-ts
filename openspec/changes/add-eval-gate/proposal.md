@@ -8,7 +8,7 @@ A gate on every pull request that touches the agent or its evals catches that ki
 
 ## What Changes
 
-- A new workflow, `.github/workflows/eval-gate.yml`, runs on pull requests. When the pull request changes the CLI or the evals, it builds the CLI, runs the core set against `anthropic/claude-haiku-5.5` ten times per case, and fails the job when the gate says so. When it changes neither, the job is skipped, which a required check counts as passed.
+- A new workflow, `.github/workflows/eval-gate.yml`, runs on pull requests. When the pull request changes the CLI or the evals, it builds the CLI, runs the core set against `anthropic/claude-haiku-5.5` ten times per case, and fails the job when the gate says so. When it changes neither, the job is skipped, which a required check counts as passed. When the filter job `changes` fails, the gate job still runs, asks no model, and ends inconclusive.
 - A new command in `packages/evals`, `gate`, reads a results file and a gate file and decides: pass, fail or inconclusive. The decision rests on pass^k per case, since a user of the CLI gets one attempt and needs it to be right every time. pass@k measures retries the CLI does not make, and the gate ignores it.
 - A new file, `packages/evals/gate.yaml`, holds the model, the repeats, the k, one floor for each case, and a floor for the mean pass^k over the cases. A case with no floor is refused, so a new case comes with its floor. A change to a floor is a reviewed diff.
 - Provider errors never fail the gate by themselves. A breach that clears when the errored runs count as passed is inconclusive, and the job says to run it again.

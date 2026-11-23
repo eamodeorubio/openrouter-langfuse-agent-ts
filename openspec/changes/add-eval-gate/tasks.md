@@ -45,6 +45,14 @@ Commit: `ci: run the eval gate on pull requests that touch the agent or its eval
 - [x] 3.5 Run `reviewer-code-low` and `reviewer-docs`. Fix every must-fix finding.
 - [x] 3.6 Write the short report. It states that the workflow itself was not run, since it needs a pull request and a key. Wait for user approval, which also approves the commit. Commit.
 
+### A failed filter job ends the gate inconclusive
+
+Commit: `ci: end the eval gate inconclusive when the filter job fails`. Added after slice 3, once the spec was revised. Same row as slice 3. It also carries the matching test of the filter file (`path.matchesGlob`, in `gate.workflow.test.ts`) and the sentence of `design.md` that describes it.
+
+- [x] 3.7 Update `packages/evals/test/gate.workflow.test.ts` first. Cover "The filter job failed" and the changed "The filter job" of `eval-gate`: the `if:` of `eval gate` names `!cancelled()`, the result of `changes` and its output `eval`; its first step runs when `needs.changes.result != 'success'`, writes `::error::` and the summary with the line `verdict: inconclusive (the filter job failed, ...)`, and exits 1; no step before the paid ones, the setup steps included, runs after it, since none has `always()`; the paid steps keep their guard on `HAS_KEY`; the summary step writes no second heading when the filter failed. Verify it fails.
+- [x] 3.8 Change `.github/workflows/eval-gate.yml` as `design.md`, "A failed filter job is inconclusive" and "The workflow", describe. In `packages/evals/README.md`, "The gate on pull requests", replace the advice to require `changes` as well with: `eval gate` alone is enough, since a failed filter job ends it inconclusive; and describe that verdict. Use the `beautiful-prose` skill with the settings of AGENTS.md. Verify the test of 3.7 passes.
+- [x] 3.9 Run `pnpm check`, `pnpm typecheck`, `pnpm test` and `pnpm docs:build`, then `reviewer-code-low` and `reviewer-docs`, and fix every must-fix finding. Write the short report, which states that the workflow was not run. Wait for user approval, which also approves the commit. Commit.
+
 ## 4. Archive
 
 - [ ] 4.1 Verify the change with `/opsx:verify` and fix what it finds.

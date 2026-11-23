@@ -84,6 +84,12 @@ Exit codes: 0 pass, 1 fail, 4 inconclusive, 2 for every input the command cannot
 
 A provider error says nothing about the agent. Counting errored runs as passed gives the best result the run could have had. If even that breaches, the agent is at fault and the verdict is fail. If it clears, the errors may be the cause and the verdict is inconclusive. The job fails either way, since a required check must not pass on a run that measured nothing, and the line tells the reader to run it again.
 
+### A failed filter job is inconclusive
+
+If `changes` fails, say on an API error of `dorny/paths-filter` or a failed checkout, nobody knows whether the gate concerns the pull request. That is the same case as provider errors that hide the answer: nothing was measured, so the verdict is inconclusive and the check must be red. A job that `needs` a failed job is skipped by default, and a skipped job counts as passed for a required check. Left alone, the one case that measured nothing would look exactly like the case with nothing to measure, and a pull request could merge unjudged with a single required check.
+
+So `eval gate` also runs when `changes` did not succeed. Its first step then writes an error annotation and a summary line, `verdict: inconclusive (the filter job failed, so it is not known whether the gate concerns this pull request; run the workflow again)`, and exits 1. No later step runs, since none has `always()`: nothing is installed or built and no model is asked. The key does not matter here, because the failed filter outranks the empty key. A cancelled run does not start the job, so a push that replaces a run leaves no red check behind.
+
 ### The rubrics of weight 0 are removed in the hook
 
 A gated run on Haiku would send up to 350 requests to Jev, whose scores never change a verdict and which the gate does not read. They cost money, add latency, and are one more service that can fail.
@@ -102,7 +108,7 @@ Alternatives: a second config file without rubrics would duplicate every case. A
 
 GitHub's `paths:` filter skips the whole workflow, and a required check from a skipped workflow stays pending: the pull request cannot merge. So the workflow runs on every pull request, and the decision sits in a job of its own. A job skipped by its `if:` counts as passed for a required check.
 
-The globs live in `.github/eval-gate-paths.yml`, under one filter, `eval`, and nowhere else. `dorny/paths-filter` reads them in the first job, `changes`, from the changed files that the GitHub API lists for the pull request. It lists the changed files through the API, so it needs no history and no install, and finishes in seconds. It does read the filter file from disk, so the job checks the repository out first, without keeping the token. A rule written as data reads at a glance, and repeating it in a test would only copy it. A light test pins the entries that matter and the kinds of path that must stay out, and the pull requests themselves show whether the gate ran.
+The globs live in `.github/eval-gate-paths.yml`, under one filter, `eval`, and nowhere else. `dorny/paths-filter` reads them in the first job, `changes`, from the changed files that the GitHub API lists for the pull request. It lists the changed files through the API, so it needs no history and no install, and finishes in seconds. It does read the filter file from disk, so the job checks the repository out first, without keeping the token. A rule written as data reads at a glance, and repeating it in a test would only copy it. A test pins the entries that matter and applies the globs to changed-file lists, the "Concerned" and "Not concerned" scenarios of the spec, with Node's `path.matchesGlob`. It cannot prove that `dorny/paths-filter` reads the file the same way, so the pull requests themselves show whether the gate ran. The action sets picomatch's `dot` option, matches a deleted file as it matches any other, and filters by status only when a filter asks for it.
 
 The filter holds positive globs only, so that the default quantifier, any match, is the whole rule:
 
@@ -136,13 +142,14 @@ Two jobs in `.github/workflows/eval-gate.yml`, separate from `ci.yml` because th
 
 `changes`: `permissions: contents: read` and `pull-requests: read`, two steps: `actions/checkout` with `persist-credentials: false`, then `dorny/paths-filter` with `filters: .github/eval-gate-paths.yml`. Its output `eval` is `true` or `false`.
 
-`eval gate`: `needs: changes`, `if: needs.changes.outputs.eval == 'true'`, `environment: eval-gate`, `permissions: contents: read`, `timeout-minutes: 30`.
+`eval gate`: `needs: changes`, `if: ${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.eval == 'true') }}`, `environment: eval-gate`, `permissions: contents: read`, `timeout-minutes: 30`.
 
+0. First, `if: needs.changes.result != 'success'`: the step of "A failed filter job is inconclusive". It exits 1, so the steps below, which have no `always()`, do not run.
 1. Checkout, pnpm, Node from `.nvmrc`, `pnpm install --frozen-lockfile`.
 2. GitHub refuses `secrets` in a step's `if:`, so the job's `env:` holds `HAS_KEY: ${{ secrets.OPENROUTER_API_KEY != '' }}`, which is `true` or `false` and never the key. If `HAS_KEY` is not `true`, one step writes a warning annotation and the summary line, and the steps below do not run.
 3. `pnpm build`, then `pnpm --filter ask-openrouter-evals run eval --set core --model anthropic/claude-haiku-5.5 --repeat 10 --k 3 --skip-weightless-rubrics --out "$OUT" | tee "$OUT/report.txt"`, with the key in the `env:` of this step alone.
 4. `pnpm --filter ask-openrouter-evals run gate "$OUT/results.json" | tee "$OUT/gate.txt"`, with `set -o pipefail`.
-5. Always: the summary (commit, gate output, report) and `actions/upload-artifact` of `$OUT`, named `eval-gate-<run id>`, kept 90 days.
+5. Always: the summary (commit, gate output, report) and `actions/upload-artifact` of `$OUT`, named `eval-gate-<run id>`, kept 90 days. When the filter failed, the first step has written the heading and the line, so the summary step writes no second heading.
 
 The model, repeats and k are written in the workflow and in `gate.yaml`. The gate refuses a results file whose model or n differ from its file, so a drift between the two fails loudly.
 
@@ -164,12 +171,13 @@ Forks and Dependabot get no secrets on `pull_request`. Their job passes without 
 - [The catalog moves every week] → The oracle is computed per run from its own snapshot, so the checks stay valid. A catalog change can still make a case harder. That is noise the floors must absorb, and the A/A measurement should span several days to see it.
 - [Each push costs money] → About 0.20 USD, no judge calls, and a new push cancels the run before it. The credit limit caps the month.
 - [A rubric given a weight above 0 later starts to count in the gate] → Intended: once a rubric decides verdicts, the gate must ask it. Its floors then need measuring again.
+- [A failed filter job turns every pull request red until the workflow runs again] → Intended: failing closed is the cost of never merging unjudged. It also makes one required check enough: `eval gate`.
 - [A gated pull request that changes `gate.yaml` can lower its own floors] → The diff shows it, and the review is the guard.
 
 ## Migration Plan
 
 1. Merge the pull request. The job runs on later pull requests and is not required.
 2. The maintainer creates the `eval-gate` environment and its key. Until then the job passes with the warning that no key is set.
-3. After a trial period, and after the A/A measurement has set the floors, the maintainer makes `eval gate` a required check.
+3. After a trial period, and after the A/A measurement has set the floors, the maintainer makes `eval gate` a required check. It is the only one needed: a failed `changes` job ends it inconclusive, and a skipped one means that no file matched.
 
 Rollback: delete `eval-gate.yml`. Nothing else depends on it.

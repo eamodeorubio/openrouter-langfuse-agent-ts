@@ -1,4 +1,7 @@
+import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 
@@ -116,10 +119,81 @@ describe('the filter job', () => {
     );
   });
 
-  it('is followed by the gate job, which runs only when a file matched', () => {
+  it('is followed by the gate job, which runs when a file matched or when this job did not succeed, and never in a cancelled run', () => {
     expect(gate.needs).toBe('changes');
-    expect(gate.if).toBe("needs.changes.outputs.eval == 'true'");
+    expect(gate.if).toBe(
+      `\${{ !cancelled() && (needs.changes.result != 'success' || needs.changes.outputs.eval == 'true') }}`,
+    );
     expect(gate.name).toBe('eval gate');
+  });
+});
+
+describe('a failed filter job', () => {
+  const FILTER_FAILED = "needs.changes.result != 'success'";
+  const LINE =
+    'verdict: inconclusive (the filter job failed, so it is not known whether the gate concerns this pull request; run the workflow again)';
+
+  it('ends the gate inconclusive in its first real step: an error, the line in the summary, and a failure', () => {
+    const failed = step(gate, /filter job failed/i);
+    expect(failed.if).toBe(FILTER_FAILED);
+    expect(failed.run).toContain(LINE);
+    // The error annotation and the summary both carry the one line.
+    expect(failed.run).toContain('"::error::$line"');
+    expect(failed.run).toMatch(/echo "\$line"\n.*>> "\$GITHUB_STEP_SUMMARY"/s);
+    expect(failed.run).toMatch(/^\s*exit 1\s*$/m);
+  });
+
+  it('comes right after the choice of the results folder, before anything is installed or built', () => {
+    const names = gate.steps.map((s) => s.name ?? s.uses ?? '');
+    expect(names[0]).toMatch(/results folder/i);
+    expect(names[1]).toMatch(/filter job failed/i);
+  });
+
+  it('leaves nothing but the summary and the upload to run after it', () => {
+    const afterFailure = gate.steps
+      .slice(2)
+      .filter((s) => s.if?.includes('always()'));
+    expect(afterFailure.map((s) => s.name)).toEqual([
+      'Write the job summary',
+      'Keep the results',
+    ]);
+    // A step with no status function has the implicit success(), so the failure above skips it.
+    // Any of them on another step, `!cancelled()` and `failure()` too, would run it after the failure.
+    const published = new Set(['Write the job summary', 'Keep the results']);
+    for (const s of gate.steps.slice(2)) {
+      expect(s.if ?? '', s.name ?? s.uses).not.toContain(FILTER_FAILED);
+      if (!published.has(s.name ?? '')) {
+        expect(s.if ?? '', s.name ?? s.uses).not.toMatch(
+          /\b(always|failure|cancelled|success)\(\)/,
+        );
+      }
+    }
+  });
+
+  it('exits 1 when its script runs, with the error on stdout and the line in the summary', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'eval-gate-'));
+    const summary = path.join(dir, 'summary.md');
+    const ran = spawnSync(
+      'bash',
+      ['-c', step(gate, /filter job failed/i).run ?? ''],
+      {
+        encoding: 'utf8',
+        env: { ...process.env, GITHUB_STEP_SUMMARY: summary },
+      },
+    );
+    expect(ran.status).toBe(1);
+    expect(ran.stdout).toBe(`::error::${LINE}\n`);
+    expect(fs.readFileSync(summary, 'utf8')).toBe(`## Eval gate\n\n${LINE}\n`);
+    fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('is not hidden by a missing key, and keeps the summary free of a second heading', () => {
+    const summary = step(gate, /summary/i);
+    expect(summary.env?.FILTER_RESULT).toBe(`\${{ needs.changes.result }}`);
+    expect(summary.run).toMatch(
+      /"\$HAS_KEY" = 'true' \] && \[ "\$FILTER_RESULT" = 'success'/,
+    );
+    expect(step(gate, /key/i).if).toBe("env.HAS_KEY != 'true'");
   });
 });
 
@@ -245,6 +319,46 @@ describe('the filter file', () => {
     '.nvmrc',
   ])('concerns %s, which can change what a run measures', (glob) => {
     expect(filters.eval).toContain(glob);
+  });
+
+  /**
+   * Whether a changed file matches a glob of the filter, as the job `changes` decides it. A file of any status counts, a deleted one too.
+   * The action matches with picomatch and its `dot` option, and Node's matcher is a close relative, not the same: the globs here are plain paths, `*` and `**`, where the two agree.
+   */
+  const concerns = (file: string) =>
+    filters.eval.some((glob) => path.matchesGlob(file, glob));
+
+  it.each([
+    'packages/cli/src/instructions.ts',
+    'packages/cli/src/tools/deep/nested.ts',
+    'packages/cli/package.json',
+    'packages/cli/tsconfig.build.json',
+    'tsconfig.base.json',
+    'packages/evals/src/gate/decide.ts',
+    'packages/evals/cases/search.yaml',
+    'packages/evals/rubrics/judge-relevance.yaml',
+    'packages/evals/promptfooconfig.yaml',
+    'packages/evals/gate.yaml',
+    '.github/workflows/eval-gate.yml',
+    '.github/eval-gate-paths.yml',
+    '.nvmrc',
+  ])('runs the gate for a pull request that changes %s', (file) => {
+    expect(concerns(file)).toBe(true);
+  });
+
+  it.each([
+    'README.md',
+    'packages/cli/test/ask.test.ts',
+    'packages/evals/test/gate.cli.test.ts',
+    'packages/evals/README.md',
+    'packages/evals/stryker.config.json',
+    'packages/cli/stryker.config.json',
+    'docs/src/content/docs/evals.md',
+    'pnpm-lock.yaml',
+    '.github/workflows/ci.yml',
+    'AGENTS.md',
+  ])('skips the gate for a pull request that changes only %s', (file) => {
+    expect(concerns(file)).toBe(false);
   });
 
   it('leaves out the tests, the docs, the Stryker configs and the lockfile', () => {

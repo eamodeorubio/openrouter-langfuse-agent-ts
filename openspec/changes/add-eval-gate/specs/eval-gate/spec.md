@@ -145,7 +145,7 @@ The paths that concern the gate SHALL be the globs of one file, `.github/eval-ga
 - **THEN** the gate job is skipped
 
 ### Requirement: The gate workflow
-`.github/workflows/eval-gate.yml` SHALL run on `pull_request` of types `opened`, `synchronize` and `reopened`, and on no other event. A first job, `changes`, SHALL match the changed files against the filter file, with no environment and no secret. A second job, `eval gate`, SHALL need it and run only when a file matched. A newer run for the same pull request SHALL cancel the one in progress.
+`.github/workflows/eval-gate.yml` SHALL run on `pull_request` of types `opened`, `synchronize` and `reopened`, and on no other event. A first job, `changes`, SHALL match the changed files against the filter file, with no environment and no secret. A second job, `eval gate`, SHALL need it and run when a file matched, and as the next requirement says when `changes` fails. A newer run for the same pull request SHALL cancel the one in progress.
 
 #### Scenario: Triggers
 - **WHEN** the workflow test loads the file
@@ -157,17 +157,28 @@ The paths that concern the gate SHALL be the globs of one file, `.github/eval-ga
 
 #### Scenario: The filter job
 - **WHEN** the workflow test loads the file
-- **THEN** the job `changes` names no environment and no secret, and the job `eval gate` holds `needs: changes` and an `if:` on its output
+- **THEN** the job `changes` names no environment and no secret, and the job `eval gate` holds `needs: changes` and an `if:` on its output and on the result of `changes`
+
+### Requirement: A failed filter job is inconclusive
+When `changes` does not succeed, `eval gate` SHALL run, unless the workflow run was cancelled, so that a pull request is never left unjudged without a trace. It SHALL build nothing, ask no model, write an error annotation and a summary with the line `verdict: inconclusive (the filter job failed, so it is not known whether the gate concerns this pull request; run the workflow again)`, and fail. A missing key SHALL NOT change this.
+
+#### Scenario: The filter job failed
+- **WHEN** the job `changes` fails, whatever the pull request changes
+- **THEN** `eval gate` runs, its first step writes that line and fails, and no later step runs but the summary and the upload
+
+#### Scenario: A cancelled run
+- **WHEN** a newer push cancels the workflow run
+- **THEN** `eval gate` does not start, and no red check is left behind
 
 ### Requirement: The gated run
-When the job `eval gate` runs and the key is present, it SHALL build the CLI, run `eval --set core --model <gate model> --repeat 10 --k 3 --skip-weightless-rubrics`, then `gate` on the results, and SHALL fail when `gate` exits non-zero or the run does not finish.
+When the job `eval gate` runs, `changes` succeeded and the key is present, it SHALL build the CLI, run `eval --set core --model <gate model> --repeat 10 --k 3 --skip-weightless-rubrics`, then `gate` on the results, and SHALL fail when `gate` exits non-zero or the run does not finish.
 
 #### Scenario: Gated
 - **WHEN** a pull request changes `packages/cli/src/instructions.ts`
 - **THEN** the job runs the eval and the gate, and its status is that of the gate
 
 ### Requirement: The key of the gate
-The job SHALL read `OPENROUTER_API_KEY` from the secrets of the GitHub environment `eval-gate`, and pass it only to the step that runs the eval, through `env:`. When the key is empty, as for a fork or Dependabot, the job SHALL send no request, pass, and say in its summary and in a warning annotation that the gate did not run for want of a key.
+The job SHALL read `OPENROUTER_API_KEY` from the secrets of the GitHub environment `eval-gate`, and pass it only to the step that runs the eval, through `env:`. When `changes` succeeded and the key is empty, as for a fork or Dependabot, the job SHALL send no request, pass, and say in its summary and in a warning annotation that the gate did not run for want of a key.
 
 #### Scenario: Key scope
 - **WHEN** the workflow test loads the file
