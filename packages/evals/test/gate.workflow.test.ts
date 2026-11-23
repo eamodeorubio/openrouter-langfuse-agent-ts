@@ -1,0 +1,255 @@
+import fs from 'node:fs';
+import { describe, expect, it } from 'vitest';
+import { parse } from 'yaml';
+
+const github = new URL('../../../.github/', import.meta.url);
+const read = (file: string) => fs.readFileSync(new URL(file, github), 'utf8');
+
+const GATE = 'workflows/eval-gate.yml';
+const text = read(GATE);
+
+interface Step {
+  name?: string;
+  id?: string;
+  if?: string;
+  uses?: string;
+  run?: string;
+  env?: Record<string, string>;
+  with?: Record<string, string>;
+}
+interface Job {
+  name?: string;
+  needs?: string;
+  if?: string;
+  environment?: string;
+  permissions?: Record<string, string>;
+  'timeout-minutes'?: number;
+  env?: Record<string, string>;
+  outputs?: Record<string, string>;
+  steps: Step[];
+}
+const workflow = parse(text) as {
+  on: Record<string, { types?: string[] }>;
+  concurrency: { group: string; 'cancel-in-progress': boolean };
+  jobs: Record<string, Job>;
+};
+const changes = workflow.jobs.changes as Job;
+const gate = workflow.jobs['eval-gate'] as Job;
+
+const step = (job: Job, name: RegExp): Step => {
+  const found = job.steps.find((candidate) => name.test(candidate.name ?? ''));
+  expect(found, `no step ${name}`).toBeDefined();
+  return found as Step;
+};
+
+/** The step of a job that uses an action, whatever its version. */
+const using = (job: Job, action: string): Step => {
+  const found = job.steps.find((candidate) =>
+    candidate.uses?.startsWith(`${action}@`),
+  );
+  expect(found, `no step that uses ${action}`).toBeDefined();
+  return found as Step;
+};
+
+/** The lines of a file without comments, which explain the code and are not part of it. */
+const code = (source: string) =>
+  source
+    .split('\n')
+    .filter((line) => !line.trim().startsWith('#'))
+    .join('\n');
+
+const SECRET = 'secrets.OPENROUTER_API_KEY';
+
+describe('the triggers of the eval gate workflow', () => {
+  it('runs on pull_request, opened, synchronize and reopened, and on no other event', () => {
+    expect(Object.keys(workflow.on)).toEqual(['pull_request']);
+    expect(workflow.on.pull_request?.types).toEqual([
+      'opened',
+      'synchronize',
+      'reopened',
+    ]);
+  });
+
+  it('never uses pull_request_target, which would run the code of a fork with the key', () => {
+    expect(code(text)).not.toContain('pull_request_target');
+  });
+
+  it('lets a new push cancel the run of the same pull request, and only that one', () => {
+    expect(workflow.concurrency.group).toBe(
+      `eval-gate-\${{ github.event.pull_request.number }}`,
+    );
+    expect(workflow.concurrency['cancel-in-progress']).toBe(true);
+  });
+});
+
+describe('the filter job', () => {
+  it('names no environment and no secret, and may only read the pull request and the repository', () => {
+    expect(changes.environment).toBeUndefined();
+    expect(code(JSON.stringify(changes))).not.toContain('secrets.');
+    expect(changes.permissions).toEqual({
+      contents: 'read',
+      'pull-requests': 'read',
+    });
+  });
+
+  it('matches the changed files against .github/eval-gate-paths.yml, with an action pinned to a commit', () => {
+    const matching = using(changes, 'dorny/paths-filter');
+    expect(matching.uses).toMatch(/^dorny\/paths-filter@[0-9a-f]{40}$/);
+    expect(matching.with?.filters).toBe('.github/eval-gate-paths.yml');
+    expect(text).toMatch(/dorny\/paths-filter@[0-9a-f]{40} # v\d+\.\d+\.\d+/);
+  });
+
+  it('checks the repository out without keeping the token, since the filter file is read from disk', () => {
+    expect(
+      using(changes, 'actions/checkout').with?.['persist-credentials'],
+    ).toBe(false);
+    expect(using(gate, 'actions/checkout').with?.['persist-credentials']).toBe(
+      false,
+    );
+  });
+
+  it('exposes whether anything matched as its output eval', () => {
+    const filter = using(changes, 'dorny/paths-filter');
+    expect(filter.id).toBeDefined();
+    expect(changes.outputs?.eval).toBe(
+      `\${{ steps.${filter.id}.outputs.eval }}`,
+    );
+  });
+
+  it('is followed by the gate job, which runs only when a file matched', () => {
+    expect(gate.needs).toBe('changes');
+    expect(gate.if).toBe("needs.changes.outputs.eval == 'true'");
+    expect(gate.name).toBe('eval gate');
+  });
+});
+
+describe('the eval gate job', () => {
+  it('uses the environment eval-gate, may only read the repository, and stops after 30 minutes', () => {
+    expect(gate.environment).toBe('eval-gate');
+    expect(gate.permissions).toEqual({ contents: 'read' });
+    expect(gate['timeout-minutes']).toBe(30);
+  });
+
+  it('reads whether the key is set without holding it, and skips the paid steps when it is not', () => {
+    expect(gate.env?.HAS_KEY).toBe(`\${{ ${SECRET} != '' }}`);
+    for (const name of [/build the cli/i, /run the evals/i, /judge the run/i]) {
+      expect(step(gate, name).if, `${name}`).toBe("env.HAS_KEY == 'true'");
+    }
+    const warning = step(gate, /key/i);
+    expect(warning.if).toBe("env.HAS_KEY != 'true'");
+    expect(warning.run).toContain('::warning::');
+    expect(warning.run).toContain('GITHUB_STEP_SUMMARY');
+  });
+
+  it('gives the secret to the step that runs the eval alone', () => {
+    const runEval = step(gate, /run the evals/i);
+    expect(runEval.env?.OPENROUTER_API_KEY).toBe(`\${{ ${SECRET} }}`);
+    const body = code(text);
+    expect(body.match(/\$\{\{ secrets\.OPENROUTER_API_KEY \}\}/g)).toHaveLength(
+      1,
+    );
+    expect(body.match(/secrets\.OPENROUTER_API_KEY/g)).toHaveLength(2);
+    for (const other of gate.steps.filter((s) => s !== runEval)) {
+      expect(JSON.stringify(other), other.name).not.toContain('secrets.');
+    }
+  });
+
+  it('asks the core set of the gate model, ten times, k 3, without the rubrics of weight 0', () => {
+    const runEval = step(gate, /run the evals/i);
+    expect(runEval.run).toContain(
+      '--set core --model anthropic/claude-haiku-5.5 --repeat 10 --k 3 --skip-weightless-rubrics',
+    );
+    expect(runEval.run).toContain('set -o pipefail');
+    expect(runEval.run).toContain('run eval');
+  });
+
+  it('asks the model, the repeats and the k that gate.yaml judges', () => {
+    const config = parse(
+      fs.readFileSync(new URL('../gate.yaml', import.meta.url), 'utf8'),
+    ) as { model: string; repeat: number; k: number };
+    const { run } = step(gate, /run the evals/i);
+    expect(run).toContain(`--model ${config.model}`);
+    expect(run).toContain(`--repeat ${config.repeat}`);
+    expect(run).toContain(`--k ${config.k}`);
+  });
+
+  it('runs the gate on the results of the eval, and keeps the exit code of the gate', () => {
+    const { run } = step(gate, /judge the run/i);
+    expect(run).toContain('run gate "$OUT/results.json"');
+    expect(run).toContain('tee "$OUT/gate.txt"');
+    expect(run).toContain('set -o pipefail');
+  });
+
+  it('writes the results of the eval into the folder that the summary and the artifact read', () => {
+    const { run } = step(gate, /run the evals/i);
+    expect(run).toContain('--out "$OUT"');
+    expect(run).toContain('tee "$OUT/report.txt"');
+  });
+
+  it('builds the CLI, then runs the eval, then the gate, and publishes after them', () => {
+    const at = (name: RegExp) => gate.steps.indexOf(step(gate, name));
+    expect(at(/build the cli/i)).toBeLessThan(at(/run the evals/i));
+    expect(at(/run the evals/i)).toBeLessThan(at(/judge the run/i));
+    expect(at(/judge the run/i)).toBeLessThan(at(/summary/i));
+    expect(at(/summary/i)).toBeLessThan(at(/keep the results/i));
+  });
+
+  it('writes the summary and keeps the results even when a step failed', () => {
+    const summary = step(gate, /summary/i);
+    expect(summary.if).toBe('always()');
+    expect(summary.run).toContain('$GITHUB_STEP_SUMMARY');
+    expect(summary.run).toContain('$OUT/gate.txt');
+    expect(summary.run).toContain('$OUT/report.txt');
+    expect(summary.env?.HEAD_SHA).toBe(
+      `\${{ github.event.pull_request.head.sha }}`,
+    );
+    const upload = step(gate, /keep the results/i);
+    expect(upload.if).toBe('always()');
+    expect(upload.uses).toMatch(/^actions\/upload-artifact@/);
+    expect(upload.with?.name).toBe(`eval-gate-\${{ github.run_id }}`);
+    expect(upload.with?.path).toBe(`\${{ env.OUT }}`);
+    expect(upload.with?.['retention-days']).toBe(90);
+  });
+
+  it('passes inputs and outputs to the shell as variables, never pasted into a script', () => {
+    for (const s of gate.steps) {
+      expect(s.run ?? '', s.name).not.toMatch(/\$\{\{/);
+    }
+  });
+});
+
+describe('the CI workflow', () => {
+  it('starts no eval run and names no key of the evals', () => {
+    const ci = code(read('workflows/ci.yml'));
+    expect(ci).not.toMatch(/run eval\b/);
+    expect(ci).not.toContain('OPENROUTER_API_KEY');
+  });
+});
+
+describe('the filter file', () => {
+  const filters = parse(read('eval-gate-paths.yml')) as { eval: string[] };
+
+  it('holds the filter eval, a list of globs', () => {
+    expect(Object.keys(filters)).toEqual(['eval']);
+    expect(filters.eval.length).toBeGreaterThan(0);
+  });
+
+  it.each([
+    'packages/cli/src/**',
+    'tsconfig.base.json',
+    'packages/evals/src/**',
+    'packages/evals/cases/**',
+    'packages/evals/gate.yaml',
+    '.github/workflows/eval-gate.yml',
+    '.github/eval-gate-paths.yml',
+    '.nvmrc',
+  ])('concerns %s, which can change what a run measures', (glob) => {
+    expect(filters.eval).toContain(glob);
+  });
+
+  it('leaves out the tests, the docs, the Stryker configs and the lockfile', () => {
+    for (const glob of filters.eval) {
+      expect(glob, glob).not.toMatch(/\/test\/|^docs|README|stryker|pnpm-lock/);
+    }
+  });
+});

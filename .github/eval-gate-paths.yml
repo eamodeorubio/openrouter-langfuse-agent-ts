@@ -1,0 +1,23 @@
+# Which changed files concern the eval gate (.github/workflows/eval-gate.yml).
+# A pull request that changes any of them runs the gate, which costs money. This
+# file is the one place the rule lives. It holds what can change what an eval
+# run measures: the CLI and its build, the evals and their gate, and the Node
+# version. Tests, docs, Stryker configs and pnpm-lock.yaml are left out on
+# purpose. A bump of a runtime dependency of the CLI changes its package.json,
+# and that path is in. A deleted file matches too, since a removed case
+# changes the run.
+eval:
+  - packages/cli/src/**
+  - packages/cli/scripts/**
+  - packages/cli/package.json
+  - packages/cli/tsconfig*.json
+  - tsconfig.base.json
+  - packages/evals/src/**
+  - packages/evals/cases/**
+  - packages/evals/rubrics/**
+  - packages/evals/promptfooconfig.yaml
+  - packages/evals/package.json
+  - packages/evals/gate.yaml
+  - .github/workflows/eval-gate.yml
+  - .github/eval-gate-paths.yml
+  - .nvmrc

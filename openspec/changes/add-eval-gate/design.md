@@ -102,7 +102,7 @@ Alternatives: a second config file without rubrics would duplicate every case. A
 
 GitHub's `paths:` filter skips the whole workflow, and a required check from a skipped workflow stays pending: the pull request cannot merge. So the workflow runs on every pull request, and the decision sits in a job of its own. A job skipped by its `if:` counts as passed for a required check.
 
-The globs live in `.github/eval-gate-paths.yml`, under one filter, `eval`, and nowhere else. `dorny/paths-filter` reads them in the first job, `changes`, from the changed files that the GitHub API lists for the pull request. It needs no checkout and no install, and finishes in seconds. A rule written as data reads at a glance, and repeating it in a test would only copy it. It is not tested: the pull requests themselves show whether the gate ran.
+The globs live in `.github/eval-gate-paths.yml`, under one filter, `eval`, and nowhere else. `dorny/paths-filter` reads them in the first job, `changes`, from the changed files that the GitHub API lists for the pull request. It lists the changed files through the API, so it needs no history and no install, and finishes in seconds. It does read the filter file from disk, so the job checks the repository out first, without keeping the token. A rule written as data reads at a glance, and repeating it in a test would only copy it. A light test pins the entries that matter and the kinds of path that must stay out, and the pull requests themselves show whether the gate ran.
 
 The filter holds positive globs only, so that the default quantifier, any match, is the whole rule:
 
@@ -112,6 +112,7 @@ eval:
   - packages/cli/scripts/**
   - packages/cli/package.json
   - packages/cli/tsconfig*.json
+  - tsconfig.base.json
   - packages/evals/src/**
   - packages/evals/cases/**
   - packages/evals/rubrics/**
@@ -133,7 +134,7 @@ Tests sit under `test/`, outside every glob, and so do the docs, the READMEs, th
 
 Two jobs in `.github/workflows/eval-gate.yml`, separate from `ci.yml` because the gate has a secret, a cost and an environment.
 
-`changes`: `permissions: pull-requests: read`, one step, `dorny/paths-filter` with `filters: .github/eval-gate-paths.yml`. Its output `eval` is `true` or `false`.
+`changes`: `permissions: contents: read` and `pull-requests: read`, two steps: `actions/checkout` with `persist-credentials: false`, then `dorny/paths-filter` with `filters: .github/eval-gate-paths.yml`. Its output `eval` is `true` or `false`.
 
 `eval gate`: `needs: changes`, `if: needs.changes.outputs.eval == 'true'`, `environment: eval-gate`, `permissions: contents: read`, `timeout-minutes: 30`.
 

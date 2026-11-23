@@ -2,7 +2,7 @@
 
 The test suite of this repository mocks every request. It knows the tools return the right shape and the loop stops when it should. It cannot know whether a real model, handed the system prompt and the tool descriptions, does the right thing. This package asks the model.
 
-An eval run starts the built `ask-openrouter` CLI against real models on OpenRouter, many times per question, and records what happened. A reporter then turns the results into two figures per case and model: how often at least one of k runs passes, and how often all k do. A gate can then judge one run against floors. It talks to real services with your key and costs real money. It never runs as part of `pnpm test`, and no pull request starts it. Someone with write access starts it, from a terminal or from the Actions tab of GitHub.
+An eval run starts the built `ask-openrouter` CLI against real models on OpenRouter, many times per question, and records what happened. A reporter then turns the results into two figures per case and model: how often at least one of k runs passes, and how often all k do. A gate can then judge one run against floors. It talks to real services with your key and costs real money. It never runs as part of `pnpm test` or `ci.yml`. Someone with write access starts it, from a terminal or from the Actions tab of GitHub. One workflow starts a small run by itself: the [eval gate](#the-gate-on-pull-requests), on pull requests that touch the CLI or the evals.
 
 ## What a run needs
 
@@ -46,7 +46,7 @@ Everything else stays. Every other check runs in its order, and so does any rubr
 
 ### On GitHub
 
-The [Evals workflow](../../.github/workflows/evals.yml) runs the same command on a GitHub runner, on demand and on any branch. Open the Actions tab, pick Evals, press "Run workflow", and choose the branch in the form. The trigger is `workflow_dispatch` and nothing else, so only people with write access can start it, and a fork never sees the key. No result blocks a pull request: a run measures and does not judge. It is green when it produced a report, whatever the pass rates, and red when the run could not finish: a failed setup, a refused argument or a promptfoo error.
+The [Evals workflow](../../.github/workflows/evals.yml) runs the same command on a GitHub runner, on demand and on any branch. Open the Actions tab, pick Evals, press "Run workflow", and choose the branch in the form. The trigger is `workflow_dispatch` and nothing else, so only people with write access can start it, and a fork never sees the key. No result of this workflow blocks a pull request: a run measures and does not judge. It is green when it produced a report, whatever the pass rates, and red when the run could not finish: a failed setup, a refused argument or a promptfoo error.
 
 The form has five inputs:
 
@@ -65,6 +65,20 @@ The run reads `OPENROUTER_API_KEY` from the secrets of the `evals` environment o
 The report is on the page of the run, in the job summary: the branch, the commit, the inputs, the target and the date of the catalog snapshot, then the text report. The whole output folder is kept for 90 days as the artifact `evals-<set>-<run id>`: `results.json`, `catalog.json`, `instructions.txt`, `target.txt` and the report. Download it and run `report` on `results.json` with another `--k`, at no cost.
 
 In a public repository, anyone signed in to GitHub can download an artifact. That is acceptable here: a test checks that nothing the run writes holds the key, and the key in `hostile/key-in-question` is generated and opens nothing.
+
+### The gate on pull requests
+
+The [Eval gate workflow](../../.github/workflows/eval-gate.yml) judges the agent before a change merges. On every pull request it asks which changed files matter. If none does, the job `eval gate` is skipped, and a skipped job counts as passed for a required check. If one does, the job builds the CLI, asks the core set of `anthropic/claude-haiku-5.5` ten times per case, with `--skip-weightless-rubrics`, and runs [`gate`](#the-gate) on the results. That is 110 runs, about 0.20 USD and two to three minutes. A new push to the same pull request cancels the run before it. The job summary holds the gate's table and verdict, and the whole folder is kept for 90 days as the artifact `eval-gate-<run id>`.
+
+[`.github/eval-gate-paths.yml`](../../.github/eval-gate-paths.yml) decides which pull requests the gate concerns. It lists the paths that can change what a run measures: the source, build scripts and package file of the CLI, the source, cases, rubrics, config, package file and gate file of the evals, the gate workflow, and `.nvmrc`. Tests, docs, Stryker configs and the lockfile are left out, so a pull request that changes only those costs nothing. The rule lives in that file and nowhere else.
+
+To switch it on, the maintainer creates an environment named `eval-gate` in the settings of the repository and adds the secret `OPENROUTER_API_KEY`: a key made for the gate, with a hard monthly credit limit such as 10 USD. Leave the environment open to every branch, with no required reviewer, or each pull request would wait for a click. It cannot be the `evals` environment, whose advice is a reviewer or protected branches. Until the secret exists, the job passes without asking a model, writes a warning annotation, and says in its summary that the gate did not run for want of a key.
+
+A pull request from a fork or from Dependabot gets the same treatment. GitHub gives neither of them secrets, so their job passes ungated and says so. Failing it would block every Dependabot bump of a CLI dependency. A maintainer who wants those measured runs the [Evals workflow](#on-github) on the branch by hand. Making the gate a required check is a setting of the repository: require `changes` as well as `eval gate`, since a failed `changes` job skips `eval gate`, and a skipped job counts as passed. It is best to leave it until the floors in `gate.yaml` have held for a few weeks of pull requests.
+
+When the check fails, open the job summary: it holds the table and the [verdict line](#the-verdict). A `fail` names the cases below their floor, and the fix is in the change or, when the floor is wrong, in a reviewed edit of `gate.yaml`. An `inconclusive` means provider errors hid the answer, so push again or re-run the job. The artifact holds `results.json` and `gate.txt`, so `gate` and `report` run again on it offline, at no cost.
+
+Write access is enough to edit the workflow on a branch and read the key, as it is for the Evals workflow. The dedicated key and its credit limit are the guard.
 
 ## The cases
 

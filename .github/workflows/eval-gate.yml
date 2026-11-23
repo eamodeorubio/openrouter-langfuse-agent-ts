@@ -1,0 +1,139 @@
+name: Eval gate
+
+# Runs the core evals against Claude Haiku on every pull request that changes
+# the CLI or the evals, and fails the check when the gate (packages/evals/gate.yaml)
+# says a case or the mean fell below its floor. It costs about 0.20 USD a push.
+# It is not part of ci.yml: it has a secret, a cost and an environment.
+#
+# The trigger is pull_request and never pull_request_target, which would run the
+# code of a fork with the key. A fork and Dependabot get no secrets, so their
+# run passes without asking a model and says so. Write access can still edit
+# this file on a branch and read the key, so the key is dedicated and capped.
+#
+# The workflow runs on every pull request, and the job `eval gate` is skipped
+# when no changed file matches .github/eval-gate-paths.yml. A skipped job counts
+# as passed for a required check, which a `paths:` filter on the workflow would
+# not: that would leave the check pending forever.
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+permissions: {}
+
+concurrency:
+  # A new push replaces the paid run of the commit before it. Pull requests do
+  # not share a cap on Haiku, so different pull requests run side by side.
+  group: eval-gate-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  # Holds no environment and no secret, so the key never reaches an action of a
+  # third party. The filter file is read from disk, so the repository is checked
+  # out, and the token is not kept.
+  changes:
+    name: changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+    outputs:
+      eval: ${{ steps.filter.outputs.eval }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
+        id: filter
+        with:
+          filters: .github/eval-gate-paths.yml
+
+  eval-gate:
+    name: eval gate
+    needs: changes
+    if: needs.changes.outputs.eval == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    # Holds OPENROUTER_API_KEY: a dedicated key with a hard credit limit, open to
+    # every branch and with no required reviewer, or each pull request would wait
+    # on a click.
+    environment: eval-gate
+    permissions:
+      contents: read
+    env:
+      # GitHub does not allow `secrets` in the `if:` of a step. This is `true` or
+      # `false` and never the key.
+      HAS_KEY: ${{ secrets.OPENROUTER_API_KEY != '' }}
+    steps:
+      - name: Choose the results folder
+        run: echo "OUT=$RUNNER_TEMP/eval-gate" >> "$GITHUB_ENV"
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      # Reads the pnpm version from "packageManager" in package.json.
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Say that no key is set
+        if: env.HAS_KEY != 'true'
+        run: |
+          echo '::warning::The eval gate did not run: no OPENROUTER_API_KEY reached this job. A fork and Dependabot get no secrets, and the eval-gate environment may hold no key.'
+          {
+            echo '## Eval gate'
+            echo
+            echo 'The gate did not run for want of a key. No model was asked.'
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Build the CLI
+        if: env.HAS_KEY == 'true'
+        run: pnpm build
+      - name: Run the evals
+        if: env.HAS_KEY == 'true'
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          set -o pipefail
+          mkdir -p "$OUT"
+          # The report is on stdout, the progress on stderr. tee keeps the report for the summary.
+          pnpm --filter ask-openrouter-evals run eval --set core --model anthropic/claude-haiku-5.5 --repeat 10 --k 3 --skip-weightless-rubrics --out "$OUT" | tee "$OUT/report.txt"
+      - name: Judge the run with the gate
+        if: env.HAS_KEY == 'true'
+        run: |
+          set -o pipefail
+          pnpm --filter ask-openrouter-evals run gate "$OUT/results.json" | tee "$OUT/gate.txt"
+      # The steps below run after a failure too, and publish what the run wrote.
+      - name: Write the job summary
+        if: always()
+        env:
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          {
+            if [ "$HAS_KEY" = 'true' ]; then echo '## Eval gate'; fi
+            echo
+            echo "- Commit: \`$HEAD_SHA\`, tested as the merge commit \`$GITHUB_SHA\`"
+            if [ -f "$OUT/target.txt" ]; then echo "- Target: $(head -n 1 "$OUT/target.txt")"; fi
+            if [ -s "$OUT/gate.txt" ]; then
+              echo
+              echo '````'
+              cat "$OUT/gate.txt"
+              echo '````'
+            fi
+            if [ -s "$OUT/report.txt" ]; then
+              echo
+              echo '````'
+              cat "$OUT/report.txt"
+              echo '````'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+      # The results let anyone rerun `report` or `gate` at no cost. In a public
+      # repository, anyone signed in to GitHub can download them. The key is
+      # never written to them, and a test checks it.
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: eval-gate-${{ github.run_id }}
+          path: ${{ env.OUT }}
+          if-no-files-found: warn
+          retention-days: 90
