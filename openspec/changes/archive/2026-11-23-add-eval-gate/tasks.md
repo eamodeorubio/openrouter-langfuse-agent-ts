@@ -55,8 +55,8 @@ Commit: `ci: end the eval gate inconclusive when the filter job fails`. Added af
 
 ## 4. Archive
 
-- [ ] 4.1 Verify the change with `/opsx:verify` and fix what it finds.
-- [ ] 4.2 Once the user approves, archive it as `chore: archive add-eval-gate`, as the last commit before merge.
+- [x] 4.1 Verify the change with `/opsx:verify` and fix what it finds.
+- [x] 4.2 Once the user approves, archive it as `chore: archive add-eval-gate`, as the last commit before merge.
 
 ## Workflow follow-up
 
