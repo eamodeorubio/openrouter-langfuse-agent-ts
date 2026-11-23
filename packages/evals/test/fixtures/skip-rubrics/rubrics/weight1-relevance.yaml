@@ -1,0 +1,7 @@
+# A rubric at weight 1: it counts, and a score under its threshold fails the run.
+type: llm-rubric
+metric: judge-relevance
+weight: 1
+threshold: 0.5
+value: Does the answer address the question that was asked?
+transform: file://../../../src/judge/state.ts:relevance

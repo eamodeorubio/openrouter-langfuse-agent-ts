@@ -1,0 +1,7 @@
+# A rubric at weight 0: it records a score and never decides a run.
+type: llm-rubric
+metric: judge-relevance
+weight: 0
+threshold: 0.5
+value: Does the answer address the question that was asked?
+transform: file://../../../src/judge/state.ts:relevance

@@ -34,6 +34,16 @@ The list narrows the config's own. Every id must be one of the models in [`promp
 
 A narrowed run says so on the first line of its report, `target: local build (...), models: anthropic/claude-haiku-5.5`, and in `target.txt`. That line is how you tell the artifacts of two such runs apart. It also changes one thing you might not expect: the free model that a case's `{free_model}` placeholder picks avoids only the models in the run. A run of the paid model alone may therefore use the free model of the config as the free answer.
 
+To leave the judge out of a run, add `--skip-weightless-rubrics`:
+
+```sh
+pnpm --filter ask-openrouter-evals run eval --skip-weightless-rubrics
+```
+
+Every judge rubric has weight 0 today, so its score is recorded and never decides a run. The flag removes each `llm-rubric` of weight 0, from every case and from the defaults, before the first request. Jev, the judge model (see [The judge rubrics](#the-judge-rubrics)), gets no call, so the run spends nothing on it and loses no time waiting for it.
+
+Everything else stays. Every other check runs in its order, and so does any rubric with a weight above 0 or with none, since promptfoo reads a missing weight as 1 and such a rubric would decide the verdict. While every rubric has weight 0, the pass, fail and error counts of each cell come out as they would without the flag. The report has no judge lines, because no rubric ran, and it says so on its first line, which ends `rubrics of weight 0 skipped`, after any `models:` part. `target.txt` ends the same way. The runner hands the choice to the setup in the environment variable `EVAL_SKIP_WEIGHTLESS_RUBRICS`, set to `1`.
+
 ### On GitHub
 
 The [Evals workflow](../../.github/workflows/evals.yml) runs the same command on a GitHub runner, on demand and on any branch. Open the Actions tab, pick Evals, press "Run workflow", and choose the branch in the form. The trigger is `workflow_dispatch` and nothing else, so only people with write access can start it, and a fork never sees the key. No result blocks a pull request: a run measures and does not judge. It is green when it produced a report, whatever the pass rates, and red when the run could not finish: a failed setup, a refused argument or a promptfoo error.

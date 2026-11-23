@@ -1,0 +1,16 @@
+- description: A case with two rubrics at weight 0
+  metadata: { id: a, set: core }
+  vars: { question: 'ok' }
+  assert:
+    - file://rubrics/weight0-relevance.yaml
+    - file://rubrics/weight0-usefulness.yaml
+- description: A case with one rubric at weight 0
+  metadata: { id: b, set: core }
+  vars: { question: 'ok' }
+  assert:
+    - file://rubrics/weight0-relevance.yaml
+- description: A case that fails its check, with one rubric at weight 0
+  metadata: { id: c, set: core }
+  vars: { question: 'wrong' }
+  assert:
+    - file://rubrics/weight0-relevance.yaml

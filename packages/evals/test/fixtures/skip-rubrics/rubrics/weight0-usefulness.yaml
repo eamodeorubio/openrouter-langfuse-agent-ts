@@ -1,0 +1,7 @@
+# A second rubric at weight 0.
+type: llm-rubric
+metric: judge-usefulness
+weight: 0
+threshold: 0.5
+value: Would the answer help the person who asked?
+transform: file://../../../src/judge/state.ts:usefulness

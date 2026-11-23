@@ -1,0 +1,22 @@
+# A config for the skip-weightless-rubrics test: the real provider, a stub CLI (EVAL_CLI), the judge provider
+# on a loopback Jev server (EVAL_JUDGE_URL), one model and two cases. Its rubrics are in rubrics/.
+extensions:
+  - file://../../../src/hooks.ts:extensionHook
+prompts: ['{{question}}']
+providers:
+  - id: file://../../../src/provider/cli.ts
+    label: cli
+defaultTest:
+  options:
+    provider:
+      id: file://../../../src/judge/provider.ts
+      config:
+        threshold: 0
+  vars:
+    model:
+      - m/one
+  assert:
+    - type: javascript
+      metric: wrong-value
+      value: output.answer.includes('GOOD')
+tests: file://no-weight.cases.yaml

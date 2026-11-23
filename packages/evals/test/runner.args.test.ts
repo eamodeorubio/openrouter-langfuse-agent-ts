@@ -120,3 +120,30 @@ describe('--model', () => {
     expect(parse(['--model'])).toBe('Unexpected argument: --model');
   });
 });
+
+describe('--skip-weightless-rubrics', () => {
+  it('is a flag with no value, and absent when it is not given', () => {
+    expect(parse(['--skip-weightless-rubrics'])).toMatchObject({
+      skipWeightlessRubrics: true,
+    });
+    expect(parse([])).not.toHaveProperty('skipWeightlessRubrics');
+  });
+
+  it('does not take the next argument as its value', () => {
+    expect(
+      parse(['--skip-weightless-rubrics', '--repeat', '3', '--k', '1,3']),
+    ).toMatchObject({ skipWeightlessRubrics: true, repeat: 3 });
+  });
+
+  it('may come anywhere among the other options', () => {
+    expect(
+      parse(['--repeat', '3', '--k', '1', '--skip-weightless-rubrics']),
+    ).toMatchObject({ skipWeightlessRubrics: true, repeat: 3 });
+  });
+
+  it('refuses a value glued to it as an unexpected argument', () => {
+    expect(parse(['--skip-weightless-rubrics=1'])).toBe(
+      'Unexpected argument: --skip-weightless-rubrics=1',
+    );
+  });
+});

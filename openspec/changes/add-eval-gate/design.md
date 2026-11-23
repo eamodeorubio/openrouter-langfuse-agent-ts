@@ -92,7 +92,7 @@ The `beforeAll` hook in `src/hooks.ts` already returns a rewritten suite when `-
 
 A rubric counts as weight 0 only when its `weight` is the number 0. promptfoo gives a missing weight the value 1, so a rubric with no `weight` key counts and stays.
 
-The cases name their rubrics as `file://rubrics/judge-*.yaml`. Whether promptfoo hands the hook those strings or the loaded objects is not known yet. Task 2.1 settles it first, with an integration test that prints what the hook receives. If the hook sees strings, the function resolves each `file://rubrics/` path against the package root and reads its `type` and `weight` with the `yaml` package. Any other `file://` string stays as it is.
+The cases name their rubrics as `file://rubrics/judge-*.yaml`. A probe in task 2.1 settled what the hook receives: promptfoo has already loaded each file, so `suite.tests[].assert` holds objects such as `{ type: 'llm-rubric', metric, weight, threshold, value, transform }`, not strings. The function therefore only filters the `assert` lists, and reads no file.
 
 The flag also appears in `target.txt`, so that the report of a gated run says why it has no judge lines.
 

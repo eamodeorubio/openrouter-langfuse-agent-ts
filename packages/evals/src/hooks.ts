@@ -17,6 +17,7 @@ import {
   writeSnapshot,
 } from './oracle/snapshot.js';
 import { PublishedError, publishedEntry, warmUp } from './published.js';
+import { SKIP_RUBRICS_ENV, withoutWeightlessRubrics } from './rubrics.js';
 import { cliVersionProblem, TARGET_FILE } from './target.js';
 
 /** The exit code of a run that stopped in its setup, before the first request. The runner hands it on without a line of its own. */
@@ -64,14 +65,17 @@ const describeTarget = (
   version: string | undefined,
   cli: string,
   models: string[] | undefined,
+  rubricsSkipped: boolean,
 ): string => {
   const target =
     version === undefined
       ? `local build (${path.relative(repositoryRoot, cli)})`
       : `ask-openrouter@${version}`;
-  return models === undefined
-    ? target
-    : `${target}, models: ${models.join(', ')}`;
+  return [
+    target,
+    ...(models === undefined ? [] : [`models: ${models.join(', ')}`]),
+    ...(rubricsSkipped ? ['rubrics of weight 0 skipped'] : []),
+  ].join(', ');
 };
 
 /**
@@ -79,8 +83,9 @@ const describeTarget = (
  * the CLI and the snapshot of the catalog, written beside the results, and the
  * environment that the providers and the checks read them from. Throws a
  * `PublishedError`, an `InstructionsError` or a `SnapshotError` that says why.
- * Returns the suite that promptfoo is to run when `--model` narrowed it, and
- * nothing when the run asks every model of the config.
+ * Returns the suite that promptfoo is to run when `--model` narrowed it or
+ * `--skip-weightless-rubrics` thinned it, and nothing when the run asks every
+ * model of the config and keeps every assertion.
  */
 export const setup = async (
   suite: unknown,
@@ -103,6 +108,10 @@ export const setup = async (
   const narrowed =
     filter === undefined ? undefined : narrowModels(suite, filter);
   if (typeof narrowed === 'string') throw new SetupError(narrowed);
+  // Strict on purpose: the runner sets exactly 1. The suite is the one promptfoo
+  // has loaded, `tests` a list of objects, so there is no unloaded `file://`
+  // reference here that the removal would silently miss.
+  const skipRubrics = env[SKIP_RUBRICS_ENV] === '1';
   let cli = resolveCli();
   if (version !== undefined) {
     await deps.warm(version);
@@ -114,13 +123,16 @@ export const setup = async (
   fs.mkdirSync(out, { recursive: true });
   fs.writeFileSync(
     path.join(out, TARGET_FILE),
-    describeTarget(version, cli, narrowed?.models),
+    describeTarget(version, cli, narrowed?.models, skipRubrics),
   );
   env[INSTRUCTIONS_ENV] = writeInstructions(out, await deps.instructions(cli));
   env[CATALOG_ENV] = writeSnapshot(out, await deps.snapshot());
   // So that no repeat picks one of the models under test as the free model.
   env.EVAL_MODELS = (narrowed?.models ?? modelsOf(suite)).join(',');
-  return narrowed === undefined ? undefined : { suite: narrowed.suite };
+  const handed = skipRubrics
+    ? withoutWeightlessRubrics(narrowed?.suite ?? suite)
+    : narrowed?.suite;
+  return handed === undefined ? undefined : { suite: handed };
 };
 
 /**

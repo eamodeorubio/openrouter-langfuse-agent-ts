@@ -1,0 +1,11 @@
+- description: A case with judge-relevance at weight 1 and judge-usefulness at weight 0
+  metadata: { id: a, set: core }
+  vars: { question: 'ok' }
+  assert:
+    - file://rubrics/weight1-relevance.yaml
+    - file://rubrics/weight0-usefulness.yaml
+- description: A case with judge-usefulness at weight 0 alone
+  metadata: { id: b, set: core }
+  vars: { question: 'ok' }
+  assert:
+    - file://rubrics/weight0-usefulness.yaml
