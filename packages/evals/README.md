@@ -2,7 +2,7 @@
 
 The test suite of this repository mocks every request. It knows the tools return the right shape and the loop stops when it should. It cannot know whether a real model, handed the system prompt and the tool descriptions, does the right thing. This package asks the model.
 
-An eval run starts the built `ask-openrouter` CLI against real models on OpenRouter, many times per question, and records what happened. A reporter then turns the results into two figures per case and model: how often at least one of k runs passes, and how often all k do. It talks to real services with your key and costs real money. It never runs as part of `pnpm test`, and no pull request starts it. Someone with write access starts it, from a terminal or from the Actions tab of GitHub.
+An eval run starts the built `ask-openrouter` CLI against real models on OpenRouter, many times per question, and records what happened. A reporter then turns the results into two figures per case and model: how often at least one of k runs passes, and how often all k do. A gate can then judge one run against floors. It talks to real services with your key and costs real money. It never runs as part of `pnpm test`, and no pull request starts it. Someone with write access starts it, from a terminal or from the Actions tab of GitHub.
 
 ## What a run needs
 
@@ -108,6 +108,51 @@ pnpm --filter ask-openrouter-evals run rejudge results/<timestamp>/results.json
 It sets `EVAL_CATALOG` and `EVAL_INSTRUCTIONS` to the `catalog.json` and `instructions.txt` beside the file, matches each row to its case of the current config by `metadata.id`, and runs the `javascript` checks of `defaultTest` and of the case on the saved output. The judge rubrics keep their saved scores, and a row that ended in a provider error is copied. The result is a whole run folder, `rejudged/` beside the input, that `report` reads: `results.json`, the snapshot, the instructions and a `target.txt` that ends in `(re-judged)`. The input is not modified.
 
 Each check whose verdict changed is printed as `case | model | repeat | check | before → after`, with the repeat as the file numbers it, from 0, then a count such as `8 flips in 420 rows.`. `absent` marks a check that one side lacks. A case the config no longer holds, a missing snapshot, an assertion that is not a check of `src/checks/assertions.ts` and a check that throws stop the command with exit 1 and write nothing. A wrong argument exits with 2. The code is in [`src/rejudge/`](src/rejudge). The [docs page](https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/evals/) says more.
+
+## The gate
+
+`eval` measures and does not judge. It exits 0 whenever it produced a report, however low the pass rates. `gate` is the judge: it reads one results file and one gate file, makes no request, and answers pass, fail or inconclusive.
+
+```sh
+pnpm --filter ask-openrouter-evals run gate results/<timestamp>/results.json
+pnpm --filter ask-openrouter-evals run gate results/<timestamp>/results.json --config other-gate.yaml
+```
+
+### What it decides on
+
+The gate reads pass^k and nothing else. The CLI answers once. A user does not ask again until an answer looks right, so pass@k, the chance that one of k tries passes, measures a retry the CLI never offers. pass^k is the chance that k separate users all get a right answer, and that is what the tool owes each of them. The estimator is the one the report prints, and with n fixed, pass^k depends on the passes alone. With n at 10 and k at 3:
+
+| Passes of 10 | 10     | 9      | 8      | 7      | 6      | 5      | 4      |
+| ------------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
+| pass^3       | 1.0000 | 0.7000 | 0.4667 | 0.2917 | 0.1667 | 0.0833 | 0.0333 |
+
+Each floor is a pass^k value from 0 to 1. A case breaches when its pass^k falls below its floor. A value equal to the floor passes. The model breaches when the mean pass^k of its cases, each with equal weight, falls below the floor of the mean. The case floors catch one case that collapses. The mean catches the slight fall everywhere, which no single floor, set low enough to let noise through, would see.
+
+### The verdict
+
+Nothing breaches: `pass`, exit 0. Something breaches: the gate counts every run that ended in a provider error as passed and judges again. If a breach remains, the verdict is `fail`, exit 1, since the best result the run could have had still falls short. If none remains, the errors may be the cause, and the verdict is `inconclusive`, exit 4: run it again. A provider error never turns a pass into a fail or an inconclusive. Exit 2 means the gate could not judge at all: a file it cannot read, a wrong argument, or results that do not match the gate file. Exit 3 is left to `eval`, where it means a failed setup.
+
+The output is one row per case, sorted by id, a `mean` row, and a last line that carries the verdict:
+
+```
+search/none-exists  c=7/10  err=0  pass^3=0.2917  floor 0.4000  below
+mean                pass^3=0.9356  floor 0.8500  ok
+verdict: fail (1 case below its floor)
+```
+
+### The gate file
+
+[`gate.yaml`](gate.yaml) holds exactly these keys, and the gate refuses a file with a missing, mistyped or out-of-range key, or with a key it does not know:
+
+| Key      | Meaning                                                                          |
+| -------- | -------------------------------------------------------------------------------- |
+| `model`  | The one model the gate judges. A results file with another model is refused.     |
+| `repeat` | The runs of each case. A cell with another n is refused.                         |
+| `k`      | The k of pass^k, from 1 to `repeat`.                                             |
+| `mean`   | The floor of the mean pass^k over the cases, from 0 to 1.                        |
+| `cases`  | One floor from 0 to 1 for each case of the core set, by id. No default, no gaps. |
+
+A case with no floor is refused, and so is a floor for a case the results lack, so a pull request that adds a core case adds its floor too. The seeds are 0.4 for every case, which means 8 passes of 10 or more, 0.05 for `ambiguity/cheapest-for-chatbot`, which means 5 or more, and 0.85 for the mean. They come from three published runs of ten, 1.2.0 to 1.2.2, and are guesses until an A/A measurement of the noise (runs of the same code, to see how far they differ) replaces them. A change to a floor is a reviewed diff.
 
 ## The judge rubrics
 
