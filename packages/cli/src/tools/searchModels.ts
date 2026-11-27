@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { INDEX_SORTS, INDEX_SORTS_LEGEND, rankedScore } from './benchmarks.js';
 import { callCatalog } from './catalog.js';
 import type { CatalogModel } from './catalogCache.js';
 import {
@@ -48,7 +49,7 @@ const API_SORTS = [
   'context-high-to-low',
   'throughput-high-to-low',
   'latency-low-to-high',
-  'intelligence-high-to-low',
+  ...INDEX_SORTS,
   'design-arena-elo-high-to-low',
 ] as const;
 
@@ -108,7 +109,8 @@ const PAID_ONLY_ADVICE =
 
 const SORT_DESCRIPTION = [
   'How to order the results.',
-  'Orders the API applies: most-popular, top-weekly, newest (creation date), context-high-to-low, throughput-high-to-low, latency-low-to-high, intelligence-high-to-low, design-arena-elo-high-to-low. Models without a score come last.',
+  'Orders the API applies: most-popular, top-weekly, newest (creation date), context-high-to-low, throughput-high-to-low, latency-low-to-high, design-arena-elo-high-to-low. Models without a score come last.',
+  INDEX_SORTS_LEGEND,
   'Orders this tool applies over every match: input-price-low-to-high and input-price-high-to-low (by input price), output-price-low-to-high and output-price-high-to-low (by output price), blended-price-low-to-high and blended-price-high-to-low (input and output weighted by input_per_output). Prices are USD per million tokens. A free model has price 0 and comes first in a low-to-high order. A model with no price comes last. Equal prices come in id order.',
   `For the cheapest model by one price the user names, sort by it and set limit to 1. ${PAID_ONLY_ADVICE} When the user states no usage, use blended-price-low-to-high or blended-price-high-to-low; the default mix is ${DEFAULT_MIX}.`,
 ].join(' ');
@@ -265,7 +267,10 @@ interface Page {
 }
 
 /** One page of the catalog as the model reads it: compact entries, prices per million tokens, no descriptions. */
-const shapePage = (offset: number, { models, total, hasNext }: Page) => ({
+const shapePage = (
+  { offset, sort }: Args,
+  { models, total, hasNext }: Page,
+) => ({
   total,
   offset,
   next_offset: nextOffset(offset, models.length, hasNext),
@@ -281,6 +286,7 @@ const shapePage = (offset: number, { models, total, hasNext }: Page) => ({
     supports_reasoning: model.reasoning !== undefined,
     intelligence_index:
       model.benchmarks?.artificialAnalysis?.intelligenceIndex ?? null,
+    ...rankedScore(sort, model.benchmarks?.artificialAnalysis),
     created: isoDate(model.created),
   })),
 });
@@ -290,7 +296,7 @@ const localPage = (args: Args, matches: CatalogModel[]) => {
   const models = matches.slice(args.offset, args.offset + args.limit);
   return {
     ok: true as const,
-    value: shapePage(args.offset, {
+    value: shapePage(args, {
       models,
       total: matches.length,
       hasNext: args.offset + models.length < matches.length,
@@ -338,7 +344,7 @@ const priceSorted = async (
 export const searchModels: Tool<typeof parameters> = {
   name: 'search_models',
   description:
-    'Search the OpenRouter catalog with filters and a sort order. Returns one page of compact entries: id, context length, prices in USD per million tokens, modalities, reasoning support and the intelligence index. Price sorts and paid_only are applied by this tool over every match, so the first row of a price sort is the cheapest by that price. Use get_model for the details of one entry.',
+    'Search the OpenRouter catalog with filters and a sort order. Returns one page of compact entries: id, context length, prices in USD per million tokens, modalities, reasoning support and the intelligence index, with the score of an index sort beside it. Price sorts and paid_only are applied by this tool over every match, so the first row of a price sort is the cheapest by that price. Use get_model for the details of one entry.',
   parameters,
   run(args, context) {
     const { client } = context;
@@ -361,7 +367,7 @@ export const searchModels: Tool<typeof parameters> = {
           requestOptions(context),
         ),
       ({ result }) =>
-        shapePage(args.offset, {
+        shapePage(args, {
           models: result.data,
           total: result.totalCount,
           hasNext: result.links.next !== null,

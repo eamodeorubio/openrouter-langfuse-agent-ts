@@ -103,7 +103,8 @@ describe('search_models arguments', () => {
       searchModels.description,
       z.toJSONSchema(searchModels.parameters, { io: 'input' }),
     ]);
-    expect(offered).not.toMatch(/coding|agentic/i);
+    // The text may say that no index measures coding alone.
+    expect(offered).not.toMatch(/coding_index|coding-high|agentic/i);
   });
 
   it('reads null as absent for every optional argument, because some providers fill them all', () => {

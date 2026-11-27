@@ -115,16 +115,6 @@ describe('get_model', () => {
     });
     expect(value.benchmarks.artificial_analysis).toEqual({
       intelligence_index: 10,
-      finance_and_accounting_index: null,
-      strategy_and_ops_index: null,
-      legal_index: null,
-      healthcare_and_medical_index: null,
-      engineering_index: null,
-      economics_index: null,
-      cyber_index: null,
-      openness_index: null,
-      multilingual_index: null,
-      decision_index: null,
     });
   });
 
