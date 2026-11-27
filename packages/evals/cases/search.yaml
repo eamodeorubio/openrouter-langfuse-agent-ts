@@ -179,3 +179,27 @@
     - file://rubrics/judge-relevance.yaml
     - file://rubrics/judge-usefulness.yaml
     - file://rubrics/judge-tool-usage.yaml
+- description: Finds the model with the highest legal benchmark score, which the catalog holds for each model
+  vars:
+    question: Which model on OpenRouter has the highest Artificial Analysis legal benchmark score?
+  metadata:
+    id: search/best-legal
+    set:
+      - judge
+      - full
+    needsLookup: true
+    oracle:
+      query: top-index
+      params:
+        index: legal_index
+  assert:
+    - type: javascript
+      metric: wrong-search
+      value: file://src/checks/assertions.ts:wrongSearch
+    - type: javascript
+      metric: wrong-answer
+      value: file://src/checks/assertions.ts:wrongAnswer
+    - file://rubrics/judge-grounding.yaml
+    - file://rubrics/judge-relevance.yaml
+    - file://rubrics/judge-usefulness.yaml
+    - file://rubrics/judge-tool-usage.yaml

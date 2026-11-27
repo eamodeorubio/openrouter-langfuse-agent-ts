@@ -24,6 +24,8 @@ export interface CatalogModel {
   inputPrice: number | null;
   /** USD per million tokens. */
   outputPrice: number | null;
+  /** The Artificial Analysis scores the API gave as numbers, under its names. Absent when it gave none, and in a snapshot saved before they were kept. */
+  scores?: Record<string, number>;
 }
 
 export interface Snapshot {
@@ -56,12 +58,24 @@ const texts = (value: unknown): string[] =>
     ? value.filter((item): item is string => typeof item === 'string')
     : [];
 
+const scoresOf = (benchmarks: unknown): Record<string, number> | undefined => {
+  const entry = isObject(benchmarks)
+    ? benchmarks.artificial_analysis
+    : undefined;
+  if (!isObject(entry)) return undefined;
+  const scores = Object.entries(entry).filter(
+    (score): score is [string, number] => finite(score[1]),
+  );
+  return scores.length > 0 ? Object.fromEntries(scores) : undefined;
+};
+
 const toModel = (entry: unknown): CatalogModel | undefined => {
   if (!isObject(entry) || typeof entry.id !== 'string' || entry.id === '') {
     return undefined;
   }
   const pricing = isObject(entry.pricing) ? entry.pricing : {};
   const architecture = isObject(entry.architecture) ? entry.architecture : {};
+  const scores = scoresOf(entry.benchmarks);
   return {
     id: entry.id,
     contextLength: finite(entry.context_length) ? entry.context_length : null,
@@ -70,6 +84,7 @@ const toModel = (entry: unknown): CatalogModel | undefined => {
     outputModalities: texts(architecture.output_modalities),
     inputPrice: perMillion(pricing.prompt),
     outputPrice: perMillion(pricing.completion),
+    ...(scores && { scores }),
   };
 };
 
@@ -158,6 +173,10 @@ const isPrice = (value: unknown): boolean => value === null || finite(value);
 const isTexts = (value: unknown): boolean =>
   Array.isArray(value) && value.every((item) => typeof item === 'string');
 
+const isScores = (value: unknown): boolean =>
+  value === undefined ||
+  (isObject(value) && Object.values(value).every(finite));
+
 const isModel = (value: unknown): value is CatalogModel =>
   isObject(value) &&
   typeof value.id === 'string' &&
@@ -166,7 +185,8 @@ const isModel = (value: unknown): value is CatalogModel =>
   isTexts(value.inputModalities) &&
   isTexts(value.outputModalities) &&
   isPrice(value.inputPrice) &&
-  isPrice(value.outputPrice);
+  isPrice(value.outputPrice) &&
+  isScores(value.scores);
 
 /** Reads a snapshot file back. Throws a `SnapshotError` that names the file when it is missing or is not a snapshot. */
 export const loadSnapshot = (file: string): Snapshot => {
@@ -186,7 +206,7 @@ export const loadSnapshot = (file: string): Snapshot => {
     !body.models.every(isModel)
   ) {
     throw new SnapshotError(
-      `The snapshot ${file} is not a snapshot: it needs a fetch time and a list of models with their prices, parameters and modalities. A snapshot taken by an earlier version of the evals lacks the modalities: run the eval again to take a new one.`,
+      `The snapshot ${file} is not a snapshot: it needs a fetch time and a list of models with their prices, parameters and modalities, and numbers for any scores. A snapshot taken by an earlier version of the evals lacks the modalities: run the eval again to take a new one.`,
     );
   }
   return { fetchedAt: body.fetchedAt, models: body.models };
