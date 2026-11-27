@@ -1,6 +1,12 @@
 {
   "data": {
     "id": "openai/gpt-oss-20b",
+    "endpoints": [
+      "/api/v1/chat/completions",
+      "/api/v1/completions",
+      "/api/v1/messages",
+      "/api/v1/responses"
+    ],
     "canonical_slug": "openai/gpt-oss-20b",
     "hugging_face_id": "openai/gpt-oss-20b",
     "name": "OpenAI: gpt-oss-20b",
@@ -74,6 +80,16 @@
         }
       ],
       "artificial_analysis": {
+        "finance_and_accounting_index": null,
+        "strategy_and_ops_index": null,
+        "legal_index": null,
+        "healthcare_and_medical_index": null,
+        "engineering_index": null,
+        "economics_index": null,
+        "cyber_index": null,
+        "openness_index": null,
+        "multilingual_index": null,
+        "decision_index": null,
         "intelligence_index": 10,
         "coding_index": null,
         "agentic_index": null
