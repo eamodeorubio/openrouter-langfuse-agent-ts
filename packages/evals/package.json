@@ -23,12 +23,12 @@
     "calibrate": "tsx src/calibrate/main.ts"
   },
   "devDependencies": {
-    "@stryker-mutator/core": "^10.0.0",
-    "@stryker-mutator/vitest-runner": "^10.0.0",
-    "@types/node": "^26.6.5",
+    "@stryker-mutator/core": "^10.1.1",
+    "@stryker-mutator/vitest-runner": "^10.1.1",
+    "@types/node": "^26.6.6",
     "@vitest/coverage-v8": "4.1.12",
-    "fast-check": "^4.10.2",
-    "promptfoo": "0.125.1",
+    "fast-check": "^4.11.0",
+    "promptfoo": "0.126.0",
     "tsx": "^4.23.15",
     "typescript": "^7.0.2",
     "vitest": "4.1.12",
