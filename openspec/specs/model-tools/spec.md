@@ -19,7 +19,7 @@ Defines the two tools the model uses to read OpenRouter's catalog: `get_model` f
 - **THEN** the CLI requests `GET /api/v1/model/openai/gpt-5:free`
 
 ### Requirement: get_model result
-`get_model` SHALL return these fields of the API's model: `id`, `name`, `description`, `created` (ISO date), `knowledge_cutoff`, `expiration_date`, `context_length`, `max_completion_tokens`, `input_modalities`, `output_modalities`, `tokenizer`, `supported_parameters`, `pricing`, `reasoning`, `benchmarks`. Fields the API omits SHALL be omitted. It SHALL return no other field.
+`get_model` SHALL return these fields of the API's model: `id`, `name`, `description`, `created` (ISO date), `knowledge_cutoff`, `expiration_date`, `context_length`, `max_completion_tokens`, `input_modalities`, `output_modalities`, `tokenizer`, `supported_parameters`, `pricing`, `reasoning`, `benchmarks`. Fields the API omits SHALL be omitted. It SHALL return no other field. `benchmarks` SHALL NOT hold `coding_index` or `agentic_index`.
 
 #### Scenario: Known model
 - **WHEN** the API returns a model with pricing, reasoning and benchmarks
@@ -28,6 +28,10 @@ Defines the two tools the model uses to read OpenRouter's catalog: `get_model` f
 #### Scenario: Which prices
 - **WHEN** the API pricing holds `prompt`, `completion`, `input_cache_read`, `request`, `image`, `web_search` and `overrides`
 - **THEN** `pricing` holds `prompt`, `completion`, `input_cache_read` and `overrides`, each token price in USD per million tokens, and no per-request, image, audio or web-search price
+
+#### Scenario: Retired indexes
+- **WHEN** the API returns `coding_index` and `agentic_index`, null or not
+- **THEN** `benchmarks.artificial_analysis` holds neither and keeps the other indexes
 
 ### Requirement: Prices in USD per million tokens
 Every price a tool returns SHALL be a number in USD per million tokens, converted from the API's per-token decimal string by an exact decimal shift. A price that is not a non-negative decimal string, such as the `-1` of a routing model, SHALL become `null`.
@@ -64,7 +68,7 @@ Every price a tool returns SHALL be a number in USD per million tokens, converte
 | `min_prompt_price`, `max_prompt_price` | number ≥ 0 | keep models whose input price is at least, or at most, this many USD per million tokens |
 | `min_completion_price`, `max_completion_price` | number ≥ 0 | the same for the output price |
 | `architecture`, `authors`, `providers` | string, string list, string list | family, author slugs, hosting providers |
-| `min_intelligence_index`, `min_coding_index`, `min_agentic_index` | number ≥ 0 | benchmark floors |
+| `min_intelligence_index` | number ≥ 0 | benchmark floor |
 | `min_tool_success_rate` | number 0 to 1 | tool-calling reliability floor |
 | `max_age_days` | integer ≥ 0 | newest models only |
 | `zero_data_retention` | boolean | only models with zero-data-retention endpoints |
@@ -110,8 +114,19 @@ Every price a tool returns SHALL be a number in USD per million tokens, converte
 | `paid_only: true` with any other sort or none | validation failure |
 | `paid_only: false` with any sort or none | valid, no effect |
 
+#### Scenario: Retired benchmarks
+- **WHEN** the model sends the argument of a row
+- **THEN** the call fails validation, and no request is made
+
+| Argument |
+| --- |
+| `sort: "coding-high-to-low"` |
+| `sort: "agentic-high-to-low"` |
+| `min_coding_index: 30` |
+| `min_agentic_index: 20` |
+
 ### Requirement: search_models result
-`search_models` SHALL return `total` (matches in the catalog), `offset`, `next_offset` (`null` on the last page) and `models`, in the order of the sort: the API's for an API sort, the tool's for a price sort. Each model holds `id`, `name`, `context_length`, `max_completion_tokens`, `prompt_price`, `completion_price`, `input_modalities`, `output_modalities`, `supports_reasoning`, `intelligence_index`, `coding_index`, `agentic_index` and `created`. It SHALL NOT hold the description.
+`search_models` SHALL return `total` (matches in the catalog), `offset`, `next_offset` (`null` on the last page) and `models`, in the order of the sort: the API's for an API sort, the tool's for a price sort. Each model holds `id`, `name`, `context_length`, `max_completion_tokens`, `prompt_price`, `completion_price`, `input_modalities`, `output_modalities`, `supports_reasoning`, `intelligence_index` and `created`. It SHALL NOT hold the description, `coding_index` or `agentic_index`.
 
 #### Scenario: Page of two
 - **WHEN** the API returns 2 models of 37 matches for `offset: 0`
@@ -248,7 +263,7 @@ A price sort SHALL read every match of the API filters through as many pages as 
 | `input_per_output` | `above 0, the input tokens for each output token, such as 3` |
 | `min_context_length` | `a whole number of tokens, 1 or more` |
 | `min_prompt_price`, `max_prompt_price`, `min_completion_price`, `max_completion_price` | `a price in USD per million tokens, 0 or more` |
-| `min_intelligence_index`, `min_coding_index`, `min_agentic_index` | `a score, 0 or more` |
+| `min_intelligence_index` | `a score, 0 or more` |
 | `min_tool_success_rate` | `a rate from 0 to 1` |
 | `max_age_days` | `a whole number of days, 0 or more` |
 | `limit` | `a whole number from 1 to 50` |

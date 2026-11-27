@@ -21,6 +21,8 @@
 
 **Filter `get_model` in the tool.** The SDK still parses both fields as null. The tool drops them by name before it converts the keys.
 
+The change `expose-benchmark-indexes` later replaced that filter: `get_model` now keeps only the listed indexes that have a score, so a retired one is dropped for not being listed.
+
 **No special error text.** The model only sees the sorts the schema offers, so a retired name should be rare.
 
 ## Risks / Trade-offs
