@@ -39,6 +39,7 @@ export default defineConfig({
             'evals-1-2-0',
             'evals-1-2-1',
             'evals-1-2-2',
+            'evals-1-3-0',
           ],
         },
       ],
