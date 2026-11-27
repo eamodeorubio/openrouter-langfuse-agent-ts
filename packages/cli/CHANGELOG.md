@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.3](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v1.2.2...v1.2.3) (2026-11-27)
+
+
+### Bug Fixes
+
+* make searches by category work ([#66](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues/66)) ([eb78b60](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/commit/eb78b608989c2558647d57bfad0c4c09cac74ac5))
+
 ## [1.2.2](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v1.2.1...v1.2.2) (2026-11-20)
 
 
