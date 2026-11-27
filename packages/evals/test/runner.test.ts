@@ -302,7 +302,7 @@ describe('a run', () => {
   it('stops with a message and the usage on a bad argument, and runs nothing', async () => {
     expect(await run(['--bogus'], io, fakePromptfoo(0))).toBe(2);
     expect(stderr).toBe(
-      'Unexpected argument: --bogus\nUsage: run [--set core|judge|full] [--config <file>] [--repeat <n>] [--k 1,3,5] [--out <dir>] [--cli-version <x.y.z>] [--model <id[,id...]>]\n',
+      'Unexpected argument: --bogus\nUsage: run [--set core|judge|full] [--config <file>] [--repeat <n>] [--k 1,3,5] [--out <dir>] [--cli-version <x.y.z>] [--model <id[,id...]>] [--skip-weightless-rubrics]\n',
     );
     expect(spawned).toEqual([]);
   });
@@ -446,6 +446,18 @@ describe('a run', () => {
       fakePromptfoo(0),
     );
     expect(spawned[2]?.env.EVAL_MODELS_FILTER).toBe('');
+  });
+
+  it('tells the hook to skip the rubrics of weight 0 only with the flag, whatever the shell holds', async () => {
+    vi.stubEnv('EVAL_SKIP_WEIGHTLESS_RUBRICS', '1');
+    await run(['--out', out, '--repeat', '5'], io, fakePromptfoo(0));
+    expect(spawned[0]?.env).not.toHaveProperty('EVAL_SKIP_WEIGHTLESS_RUBRICS');
+    await run(
+      ['--out', out, '--repeat', '5', '--skip-weightless-rubrics'],
+      io,
+      fakePromptfoo(0),
+    );
+    expect(spawned[1]?.env.EVAL_SKIP_WEIGHTLESS_RUBRICS).toBe('1');
   });
 
   it('needs no build for a published version', async () => {

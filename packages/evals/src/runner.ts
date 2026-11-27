@@ -7,6 +7,7 @@ import type { Io } from './io.js';
 import { MODEL_FILTER_ENV } from './models.js';
 import { report } from './report/cli.js';
 import { DEFAULT_KS, parseKs } from './report/ks.js';
+import { SKIP_RUBRICS_ENV } from './rubrics.js';
 import { SET_NAMES, type SetName } from './sets.js';
 import { cliVersionProblem } from './target.js';
 
@@ -30,9 +31,11 @@ export interface RunOptions {
   cliVersion?: string;
   /** The models to ask, as written: a comma list that the setup checks against the config. Absent for every model of the config. */
   model?: string;
+  /** Remove the judge rubrics of weight 0 before the first request. Absent when the run keeps every assertion. */
+  skipWeightlessRubrics?: true;
 }
 
-const USAGE = `Usage: run [--set ${SET_NAMES.join('|')}] [--config <file>] [--repeat <n>] [--k 1,3,5] [--out <dir>] [--cli-version <x.y.z>] [--model <id[,id...]>]\n`;
+const USAGE = `Usage: run [--set ${SET_NAMES.join('|')}] [--config <file>] [--repeat <n>] [--k 1,3,5] [--out <dir>] [--cli-version <x.y.z>] [--model <id[,id...]>] [--skip-weightless-rubrics]\n`;
 
 /** Reads the arguments of the eval script. Returns the options, or the message that explains the mistake. */
 export const parseRunArgs = (
@@ -46,6 +49,7 @@ export const parseRunArgs = (
   let k: string | undefined;
   let cliVersion: string | undefined;
   let model: string | undefined;
+  let skipWeightlessRubrics = false;
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i] as string;
     const value = argv[i + 1];
@@ -75,6 +79,8 @@ export const parseRunArgs = (
     } else if (arg === '--model' && value !== undefined) {
       model = value;
       i++;
+    } else if (arg === '--skip-weightless-rubrics') {
+      skipWeightlessRubrics = true;
     } else if (arg === '--k' && value !== undefined) {
       k = value;
       i++;
@@ -99,6 +105,7 @@ export const parseRunArgs = (
     ...(k === undefined ? {} : { k }),
     ...(cliVersion === undefined ? {} : { cliVersion }),
     ...(model === undefined ? {} : { model }),
+    ...(skipWeightlessRubrics ? { skipWeightlessRubrics: true as const } : {}),
   };
 };
 
@@ -170,6 +177,9 @@ export const run = async (
   // The models to keep, or none: a filter left in the shell must not narrow a run that asked for none.
   if (options.model === undefined) delete env[MODEL_FILTER_ENV];
   else env[MODEL_FILTER_ENV] = options.model;
+  // The same for the rubrics: a value left in the shell must not thin a run that did not ask for it.
+  if (options.skipWeightlessRubrics) env[SKIP_RUBRICS_ENV] = '1';
+  else delete env[SKIP_RUBRICS_ENV];
   const promptfoo = deps.spawn(PROMPTFOO, promptfooArgs(options), {
     stdio: ['ignore', 2, 2],
     env,

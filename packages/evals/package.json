@@ -16,6 +16,7 @@
     "test:coverage": "vitest run --coverage",
     "eval": "tsx src/run.ts",
     "report": "tsx src/report/main.ts",
+    "gate": "tsx src/gate/main.ts",
     "rejudge": "tsx src/rejudge/main.ts",
     "mutation": "stryker run",
     "mutation:full": "stryker run --force",

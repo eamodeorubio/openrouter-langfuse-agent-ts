@@ -2,7 +2,7 @@
 
 The test suite of this repository mocks every request. It knows the tools return the right shape and the loop stops when it should. It cannot know whether a real model, handed the system prompt and the tool descriptions, does the right thing. This package asks the model.
 
-An eval run starts the built `ask-openrouter` CLI against real models on OpenRouter, many times per question, and records what happened. A reporter then turns the results into two figures per case and model: how often at least one of k runs passes, and how often all k do. It talks to real services with your key and costs real money. It never runs as part of `pnpm test`, and no pull request starts it. Someone with write access starts it, from a terminal or from the Actions tab of GitHub.
+An eval run starts the built `ask-openrouter` CLI against real models on OpenRouter, many times per question, and records what happened. A reporter then turns the results into two figures per case and model: how often at least one of k runs passes, and how often all k do. A gate can then judge one run against floors. It talks to real services with your key and costs real money. It never runs as part of `pnpm test` or `ci.yml`. Someone with write access starts it, from a terminal or from the Actions tab of GitHub. One workflow starts a small run by itself: the [eval gate](#the-gate-on-pull-requests), on pull requests that touch the CLI or the evals.
 
 ## What a run needs
 
@@ -34,9 +34,19 @@ The list narrows the config's own. Every id must be one of the models in [`promp
 
 A narrowed run says so on the first line of its report, `target: local build (...), models: anthropic/claude-haiku-5.5`, and in `target.txt`. That line is how you tell the artifacts of two such runs apart. It also changes one thing you might not expect: the free model that a case's `{free_model}` placeholder picks avoids only the models in the run. A run of the paid model alone may therefore use the free model of the config as the free answer.
 
+To leave the judge out of a run, add `--skip-weightless-rubrics`:
+
+```sh
+pnpm --filter ask-openrouter-evals run eval --skip-weightless-rubrics
+```
+
+Every judge rubric has weight 0 today, so its score is recorded and never decides a run. The flag removes each `llm-rubric` of weight 0, from every case and from the defaults, before the first request. Jev, the judge model (see [The judge rubrics](#the-judge-rubrics)), gets no call, so the run spends nothing on it and loses no time waiting for it.
+
+Everything else stays. Every other check runs in its order, and so does any rubric with a weight above 0 or with none, since promptfoo reads a missing weight as 1 and such a rubric would decide the verdict. While every rubric has weight 0, the pass, fail and error counts of each cell come out as they would without the flag. The report has no judge lines, because no rubric ran, and it says so on its first line, which ends `rubrics of weight 0 skipped`, after any `models:` part. `target.txt` ends the same way. The runner hands the choice to the setup in the environment variable `EVAL_SKIP_WEIGHTLESS_RUBRICS`, set to `1`.
+
 ### On GitHub
 
-The [Evals workflow](../../.github/workflows/evals.yml) runs the same command on a GitHub runner, on demand and on any branch. Open the Actions tab, pick Evals, press "Run workflow", and choose the branch in the form. The trigger is `workflow_dispatch` and nothing else, so only people with write access can start it, and a fork never sees the key. No result blocks a pull request: a run measures and does not judge. It is green when it produced a report, whatever the pass rates, and red when the run could not finish: a failed setup, a refused argument or a promptfoo error.
+The [Evals workflow](../../.github/workflows/evals.yml) runs the same command on a GitHub runner, on demand and on any branch. Open the Actions tab, pick Evals, press "Run workflow", and choose the branch in the form. The trigger is `workflow_dispatch` and nothing else, so only people with write access can start it, and a fork never sees the key. No result of this workflow blocks a pull request: a run measures and does not judge. It is green when it produced a report, whatever the pass rates, and red when the run could not finish: a failed setup, a refused argument or a promptfoo error.
 
 The form has five inputs:
 
@@ -55,6 +65,22 @@ The run reads `OPENROUTER_API_KEY` from the secrets of the `evals` environment o
 The report is on the page of the run, in the job summary: the branch, the commit, the inputs, the target and the date of the catalog snapshot, then the text report. The whole output folder is kept for 90 days as the artifact `evals-<set>-<run id>`: `results.json`, `catalog.json`, `instructions.txt`, `target.txt` and the report. Download it and run `report` on `results.json` with another `--k`, at no cost.
 
 In a public repository, anyone signed in to GitHub can download an artifact. That is acceptable here: a test checks that nothing the run writes holds the key, and the key in `hostile/key-in-question` is generated and opens nothing.
+
+### The gate on pull requests
+
+The [Eval gate workflow](../../.github/workflows/eval-gate.yml) judges the agent before a change merges. On every pull request it asks which changed files matter. If none does, the job `eval gate` is skipped, and a skipped job counts as passed for a required check. If one does, the job builds the CLI, asks the core set of `anthropic/claude-haiku-5.5` ten times per case, with `--skip-weightless-rubrics`, and runs [`gate`](#the-gate) on the results. That is 110 runs, about 0.20 USD and two to three minutes. A new push to the same pull request cancels the run before it. The job summary holds the gate's table and verdict, and the whole folder is kept for 90 days as the artifact `eval-gate-<run id>`.
+
+[`.github/eval-gate-paths.yml`](../../.github/eval-gate-paths.yml) decides which pull requests the gate concerns. It lists the paths that can change what a run measures: the source, build scripts and package file of the CLI, the source, cases, rubrics, config, package file and gate file of the evals, the gate workflow, and `.nvmrc`. Tests, docs, Stryker configs and the lockfile are left out, so a pull request that changes only those costs nothing. The rule lives in that file and nowhere else.
+
+To switch it on, the maintainer creates an environment named `eval-gate` in the settings of the repository and adds the secret `OPENROUTER_API_KEY`: a key made for the gate, with a hard monthly credit limit such as 10 USD. Leave the environment open to every branch, with no required reviewer, or each pull request would wait for a click. It cannot be the `evals` environment, whose advice is a reviewer or protected branches. Until the secret exists, the job passes without asking a model, writes a warning annotation, and says in its summary that the gate did not run for want of a key.
+
+A pull request from a fork or from Dependabot gets the same treatment. GitHub gives neither of them secrets, so their job passes ungated and says so. Failing it would block every Dependabot bump of a CLI dependency. A maintainer who wants those measured runs the [Evals workflow](#on-github) on the branch by hand. Making the gate a required check is a setting of the repository, and `eval gate` is the only check to require.
+
+The job `changes` can fail too, for instance on an API error. Then nobody knows whether the pull request concerns the gate, so `eval gate` still runs, asks no model, and ends inconclusive: red, with the line `verdict: inconclusive (the filter job failed, ...; run the workflow again)`. Skipping it would show green, since a required check counts a skipped job as passed. It is best to leave the requirement until the floors in `gate.yaml` have held for a few weeks of pull requests.
+
+When the check fails, open the job summary: it holds the table and the [verdict line](#the-verdict). A `fail` names the cases below their floor, and the fix is in the change or, when the floor is wrong, in a reviewed edit of `gate.yaml`. An `inconclusive` means provider errors hid the answer, so push again or re-run the job. It also means the filter job failed, and then you re-run the whole workflow, since re-running `eval gate` alone would reuse the failed result. The artifact holds `results.json` and `gate.txt`, so `gate` and `report` run again on it offline, at no cost.
+
+Write access is enough to edit the workflow on a branch and read the key, as it is for the Evals workflow. The dedicated key and its credit limit are the guard.
 
 ## The cases
 
@@ -108,6 +134,51 @@ pnpm --filter ask-openrouter-evals run rejudge results/<timestamp>/results.json
 It sets `EVAL_CATALOG` and `EVAL_INSTRUCTIONS` to the `catalog.json` and `instructions.txt` beside the file, matches each row to its case of the current config by `metadata.id`, and runs the `javascript` checks of `defaultTest` and of the case on the saved output. The judge rubrics keep their saved scores, and a row that ended in a provider error is copied. The result is a whole run folder, `rejudged/` beside the input, that `report` reads: `results.json`, the snapshot, the instructions and a `target.txt` that ends in `(re-judged)`. The input is not modified.
 
 Each check whose verdict changed is printed as `case | model | repeat | check | before → after`, with the repeat as the file numbers it, from 0, then a count such as `8 flips in 420 rows.`. `absent` marks a check that one side lacks. A case the config no longer holds, a missing snapshot, an assertion that is not a check of `src/checks/assertions.ts` and a check that throws stop the command with exit 1 and write nothing. A wrong argument exits with 2. The code is in [`src/rejudge/`](src/rejudge). The [docs page](https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/evals/) says more.
+
+## The gate
+
+`eval` measures and does not judge. It exits 0 whenever it produced a report, however low the pass rates. `gate` is the judge: it reads one results file and one gate file, makes no request, and answers pass, fail or inconclusive.
+
+```sh
+pnpm --filter ask-openrouter-evals run gate results/<timestamp>/results.json
+pnpm --filter ask-openrouter-evals run gate results/<timestamp>/results.json --config other-gate.yaml
+```
+
+### What it decides on
+
+The gate reads pass^k and nothing else. The CLI answers once. A user does not ask again until an answer looks right, so pass@k, the chance that one of k tries passes, measures a retry the CLI never offers. pass^k is the chance that k separate users all get a right answer, and that is what the tool owes each of them. The estimator is the one the report prints, and with n fixed, pass^k depends on the passes alone. With n at 10 and k at 3:
+
+| Passes of 10 | 10     | 9      | 8      | 7      | 6      | 5      | 4      |
+| ------------ | ------ | ------ | ------ | ------ | ------ | ------ | ------ |
+| pass^3       | 1.0000 | 0.7000 | 0.4667 | 0.2917 | 0.1667 | 0.0833 | 0.0333 |
+
+Each floor is a pass^k value from 0 to 1. A case breaches when its pass^k falls below its floor. A value equal to the floor passes. The model breaches when the mean pass^k of its cases, each with equal weight, falls below the floor of the mean. The case floors catch one case that collapses. The mean catches the slight fall everywhere, which no single floor, set low enough to let noise through, would see.
+
+### The verdict
+
+Nothing breaches: `pass`, exit 0. Something breaches: the gate counts every run that ended in a provider error as passed and judges again. If a breach remains, the verdict is `fail`, exit 1, since the best result the run could have had still falls short. If none remains, the errors may be the cause, and the verdict is `inconclusive`, exit 4: run it again. A provider error never turns a pass into a fail or an inconclusive. Exit 2 means the gate could not judge at all: a file it cannot read, a wrong argument, or results that do not match the gate file. Exit 3 is left to `eval`, where it means a failed setup.
+
+The output is one row per case, sorted by id, a `mean` row, and a last line that carries the verdict:
+
+```
+search/none-exists  c=7/10  err=0  pass^3=0.2917  floor 0.4000  below
+mean                pass^3=0.9356  floor 0.8300  ok
+verdict: fail (1 case below its floor)
+```
+
+### The gate file
+
+[`gate.yaml`](gate.yaml) holds exactly these keys, and the gate refuses a file with a missing, mistyped or out-of-range key, or with a key it does not know:
+
+| Key      | Meaning                                                                          |
+| -------- | -------------------------------------------------------------------------------- |
+| `model`  | The one model the gate judges. A results file with another model is refused.     |
+| `repeat` | The runs of each case. A cell with another n is refused.                         |
+| `k`      | The k of pass^k, from 1 to `repeat`.                                             |
+| `mean`   | The floor of the mean pass^k over the cases, from 0 to 1.                        |
+| `cases`  | One floor from 0 to 1 for each case of the core set, by id. No default, no gaps. |
+
+A case with no floor is refused, and so is a floor for a case the results lack, so a pull request that adds a core case adds its floor too. The floors are 0.4 for nine cases, which means 8 passes of 10 or more, 0.25 for `recommendation/budget-chatbot`, which means 7 or more, 0.02 for `ambiguity/cheapest-for-chatbot`, which means 4 or more, and 0.83 for the mean. They come from an A/A measurement of the noise: ten runs of 1.2.2 on `main`, 23 to 27 November 2026, a hundred answers per case. Each floor sits where a healthy case would breach it less than once in a thousand runs, by simulation from those answers. The ambiguity case is the noisiest, and its floor catches only a collapse, not a slow slide. A change to a floor is a reviewed diff.
 
 ## The judge rubrics
 

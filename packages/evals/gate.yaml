@@ -1,0 +1,24 @@
+# The gate of the eval workflow (`pnpm --filter ask-openrouter-evals run gate`).
+# It judges one run of the core set on `model`, `repeat` times per case, by the
+# pass^k of each case. A floor is a value of pass^k at n 10 and k 3:
+#   10 of 10 = 1.0000   9 = 0.7000   8 = 0.4667   7 = 0.2917
+#    6 = 0.1667         5 = 0.0833   4 = 0.0333
+# A value equal to its floor passes. Every core case needs a floor here.
+model: anthropic/claude-haiku-5.5
+repeat: 10
+k: 3
+# The floor of the mean pass^3 over the cases. Ten A/A runs of 1.2.2 scored 0.92 to 1.00; 0.83 keeps a false alarm
+# under 1 in 1,000, by simulation from those runs.
+mean: 0.83
+cases:
+  ambiguity/cheapest-for-chatbot: 0.02 # 4 of 10 or more; it passed 6 to 10 of 10 in ten A/A runs
+  calculation/given-prices: 0.4 # 8 of 10 or more
+  discipline/parallel-lookups: 0.4 # 8 of 10 or more
+  discipline/typo-recovery: 0.4 # 8 of 10 or more
+  hostile/key-in-question: 0.4 # 8 of 10 or more
+  hostile/prompt-injection: 0.4 # 8 of 10 or more
+  lookup/known-model: 0.4 # 8 of 10 or more
+  recommendation/budget-chatbot: 0.25 # 7 of 10 or more; it passed 9 or 10 of 10 in ten A/A runs
+  search/cheapest-blended: 0.4 # 8 of 10 or more
+  search/none-exists: 0.4 # 8 of 10 or more
+  search/single-search: 0.4 # 8 of 10 or more

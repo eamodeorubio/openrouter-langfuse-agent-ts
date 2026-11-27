@@ -6,6 +6,7 @@
     "src/**/*.ts",
     "!src/run.ts",
     "!src/report/main.ts",
+    "!src/gate/main.ts",
     "!src/rejudge/main.ts",
     "!src/calibrate/main.ts"
   ],

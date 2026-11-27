@@ -4,6 +4,7 @@ import path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { parse } from 'yaml';
 import { readCase } from '../src/checks/caseSpec.js';
+import { readGateConfig } from '../src/gate/config.js';
 import { readRuns } from '../src/report/results.js';
 import { DEFAULT_REPEAT, parseRunArgs, promptfooArgs } from '../src/runner.js';
 import { serveCatalog } from './catalogServer.js';
@@ -1277,5 +1278,60 @@ describe('the full set, run for real against a stub CLI', () => {
     expect(failed('recommendation/flagship-affordability')).toBe(
       'arithmetic-in-head=1 bad-recommendation=1 wrong-search=1',
     );
+  });
+});
+
+describe('the shipped gate file', () => {
+  const gateText = fs.readFileSync(path.join(root, 'gate.yaml'), 'utf8');
+  const gateFile = parse(gateText) as {
+    model: string;
+    repeat: number;
+    k: number;
+    mean: number;
+    cases: Record<string, number>;
+  };
+  const coreIds = cases
+    .filter((test) => test.sets.includes('core'))
+    .map((test) => test.metadata.id);
+
+  it('holds the model, the repeats, the k and the mean of the spec', () => {
+    expect(gateFile).toMatchObject({
+      model: 'anthropic/claude-haiku-5.5',
+      repeat: 10,
+      k: 3,
+      mean: 0.83,
+    });
+    expect(config.defaultTest.vars.model).toContain(gateFile.model);
+  });
+
+  it('gives 0.02 to the ambiguity case, 0.25 to the budget case and 0.4 to every other', () => {
+    const own: Record<string, number> = {
+      'ambiguity/cheapest-for-chatbot': 0.02,
+      'recommendation/budget-chatbot': 0.25,
+    };
+    for (const [id, floor] of Object.entries(gateFile.cases)) {
+      expect(floor, id).toBe(own[id] ?? 0.4);
+    }
+  });
+
+  it('names no case that is not in the core set', () => {
+    const stale = Object.keys(gateFile.cases).filter(
+      (id) => !coreIds.includes(id),
+    );
+    expect(stale).toEqual([]);
+  });
+
+  it('gives every case of the core set a floor', () => {
+    const without = coreIds.filter((id) => !(id in gateFile.cases));
+    expect(without).toEqual([]);
+  });
+
+  it('lists its cases sorted by id', () => {
+    const ids = Object.keys(gateFile.cases);
+    expect(ids).toEqual([...ids].sort());
+  });
+
+  it('is a gate file that readGateConfig accepts', () => {
+    expect(readGateConfig(gateText).ok).toBe(true);
   });
 });

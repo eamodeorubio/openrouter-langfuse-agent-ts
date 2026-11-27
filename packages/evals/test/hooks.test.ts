@@ -388,6 +388,95 @@ describe('the setup of a run', () => {
       );
     });
   });
+
+  describe('the rubrics of weight 0', () => {
+    const rubric = (metric: string, weight?: number) => ({
+      type: 'llm-rubric',
+      metric,
+      ...(weight === undefined ? {} : { weight }),
+    });
+    const check = { type: 'javascript', metric: 'wrong-value' };
+    const rubrics = {
+      defaultTest: {
+        vars: { model: ['a/one', 'b/two'] },
+        assert: [check],
+      },
+      tests: [
+        { assert: [rubric('judge-zero', 0), rubric('judge-one', 1), check] },
+        { assert: [rubric('judge-none')] },
+      ],
+    };
+    const thinned = {
+      ...rubrics,
+      tests: [
+        { assert: [rubric('judge-one', 1), check] },
+        { assert: [rubric('judge-none')] },
+      ],
+    };
+
+    it('removes them from the suite it hands to promptfoo when the run says to skip them', async () => {
+      env.EVAL_SKIP_WEIGHTLESS_RUBRICS = '1';
+      expect(await setup(rubrics, env, deps())).toEqual({ suite: thinned });
+    });
+
+    it('combines the removal with the narrowing of --model in one suite', async () => {
+      env.EVAL_SKIP_WEIGHTLESS_RUBRICS = '1';
+      env.EVAL_MODELS_FILTER = 'b/two';
+      expect(await setup(rubrics, env, deps())).toEqual({
+        suite: {
+          ...thinned,
+          defaultTest: { ...thinned.defaultTest, vars: { model: ['b/two'] } },
+        },
+      });
+      expect(env.EVAL_MODELS).toBe('b/two');
+    });
+
+    it('returns nothing, as before, when the run does not say so', async () => {
+      expect(await setup(rubrics, env, deps())).toBeUndefined();
+    });
+
+    it.each(['', '0', 'true', 'yes'])(
+      'skips nothing for the value %j, which the runner never sets',
+      async (value) => {
+        env.EVAL_SKIP_WEIGHTLESS_RUBRICS = value;
+        expect(await setup(rubrics, env, deps())).toBeUndefined();
+      },
+    );
+
+    it('does not modify the suite it was given', async () => {
+      env.EVAL_SKIP_WEIGHTLESS_RUBRICS = '1';
+      const before = structuredClone(rubrics);
+      await setup(rubrics, env, deps());
+      expect(rubrics).toEqual(before);
+    });
+
+    it('ends target.txt with the words that say so, after the models, for a local build and a published version', async () => {
+      const target = () =>
+        fs.readFileSync(path.join(out, 'target.txt'), 'utf8');
+      env.EVAL_SKIP_WEIGHTLESS_RUBRICS = '1';
+      await setup(rubrics, env, deps());
+      expect(target()).toMatch(
+        /^local build \(.+\), rubrics of weight 0 skipped$/,
+      );
+      env.EVAL_CLI_VERSION = '1.1.0';
+      await setup(rubrics, env, deps());
+      expect(target()).toBe(
+        'ask-openrouter@1.1.0, rubrics of weight 0 skipped',
+      );
+      env.EVAL_MODELS_FILTER = 'a/one';
+      await setup(rubrics, env, deps());
+      expect(target()).toBe(
+        'ask-openrouter@1.1.0, models: a/one, rubrics of weight 0 skipped',
+      );
+    });
+
+    it('leaves target.txt as it was when the run does not say so', async () => {
+      await setup(rubrics, env, deps());
+      expect(
+        fs.readFileSync(path.join(out, 'target.txt'), 'utf8'),
+      ).not.toContain('skipped');
+    });
+  });
 });
 
 describe('the snapshot of a run', () => {

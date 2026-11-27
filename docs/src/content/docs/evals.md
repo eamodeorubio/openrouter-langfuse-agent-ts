@@ -5,7 +5,7 @@ description: How the evals test the agent against real models, the error taxonom
 
 The tests of this repository mock every request. They know that a tool returns the right shape and that the loop stops when it should. They cannot know whether a real model, given the system prompt and the tool descriptions, does the right thing. The evals ask the model.
 
-An eval run starts the built `ask-openrouter` CLI against real models on OpenRouter, many times for each question, and writes down what happened. It talks to real services with your key and it costs real money, which depends on the models and which the report prints. So it never runs as part of `pnpm test`, and no pull request starts it. It starts when you start it, from a terminal or from the Actions tab of GitHub.
+An eval run starts the built `ask-openrouter` CLI against real models on OpenRouter, many times for each question, and writes down what happened. It talks to real services with your key and it costs real money, which depends on the models and which the report prints. So it never runs as part of `pnpm test`. It starts when you start it, from a terminal or from the Actions tab of GitHub, and in one more case: a pull request that changes the CLI or the evals starts a small run of its own, the eval gate, described further down.
 
 ## Running the evals
 
@@ -18,6 +18,10 @@ pnpm --filter ask-openrouter-evals run eval
 ```
 
 You can also start a run on GitHub, on any branch, with no key of your own. Open the Actions tab, pick the Evals workflow and press "Run workflow". The form asks for the set of cases, the number of repeats, the `k` of the report and, if you want them, a published version and the models to ask. The run reads a dedicated OpenRouter key with a credit limit from the `evals` environment of the repository. It puts the report on the page of the run, and keeps the results as an artifact for 90 days. In a public repository, anyone signed in to GitHub can download that artifact. Nothing in it holds the key. The [README of the package](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/blob/main/packages/evals/README.md#on-github) lists every input.
+
+The eval gate is a second workflow, and it needs no click. On a pull request that touches the CLI or the evals, it asks the core set of Claude Haiku ten times per case, and judges the result by pass^3: a case must pass at least eight runs of ten, one case a little fewer, and the mean over all cases must stay at or above 0.83. A breach fails the check. A breach that would clear if the provider errors had counted as passes is called inconclusive: it fails too, and says to run it again. It also ends inconclusive when the job that decides whether the gate applies has itself failed. The judge is the `gate` command, which also runs offline on any saved results file.
+
+A pull request that changes only tests or docs skips the job, and one from a fork or from Dependabot passes without a run, since GitHub gives it no key. The run costs about 0.20 USD. The [README of the package](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/blob/main/packages/evals/README.md#the-gate-on-pull-requests) says how to set it up.
 
 To ask fewer models than the config lists, add `--model` with a comma-separated list of ids from the config:
 

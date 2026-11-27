@@ -1,0 +1,6 @@
+# A rubric with no `weight` key: promptfoo gives it weight 1.
+type: llm-rubric
+metric: judge-grounding
+threshold: 0.5
+value: Is the answer grounded in what the tools returned?
+transform: file://../../../src/judge/state.ts:grounding
