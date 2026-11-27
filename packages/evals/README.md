@@ -162,7 +162,7 @@ The output is one row per case, sorted by id, a `mean` row, and a last line that
 
 ```
 search/none-exists  c=7/10  err=0  pass^3=0.2917  floor 0.4000  below
-mean                pass^3=0.9356  floor 0.8500  ok
+mean                pass^3=0.9356  floor 0.8300  ok
 verdict: fail (1 case below its floor)
 ```
 
@@ -178,7 +178,7 @@ verdict: fail (1 case below its floor)
 | `mean`   | The floor of the mean pass^k over the cases, from 0 to 1.                        |
 | `cases`  | One floor from 0 to 1 for each case of the core set, by id. No default, no gaps. |
 
-A case with no floor is refused, and so is a floor for a case the results lack, so a pull request that adds a core case adds its floor too. The seeds are 0.4 for every case, which means 8 passes of 10 or more, 0.05 for `ambiguity/cheapest-for-chatbot`, which means 5 or more, and 0.85 for the mean. They come from three published runs of ten, 1.2.0 to 1.2.2, and are guesses until an A/A measurement of the noise (runs of the same code, to see how far they differ) replaces them. A change to a floor is a reviewed diff.
+A case with no floor is refused, and so is a floor for a case the results lack, so a pull request that adds a core case adds its floor too. The floors are 0.4 for nine cases, which means 8 passes of 10 or more, 0.25 for `recommendation/budget-chatbot`, which means 7 or more, 0.02 for `ambiguity/cheapest-for-chatbot`, which means 4 or more, and 0.83 for the mean. They come from an A/A measurement of the noise: ten runs of 1.2.2 on `main`, 23 to 27 November 2026, a hundred answers per case. Each floor sits where a healthy case would breach it less than once in a thousand runs, by simulation from those answers. The ambiguity case is the noisiest, and its floor catches only a collapse, not a slow slide. A change to a floor is a reviewed diff.
 
 ## The judge rubrics
 

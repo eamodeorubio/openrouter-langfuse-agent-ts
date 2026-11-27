@@ -36,7 +36,7 @@ The gate file SHALL be YAML with exactly these keys, and SHALL be refused, with 
 - **THEN** the command exits 2 and stderr names `floors`
 
 ### Requirement: The shipped gate file
-`packages/evals/gate.yaml` SHALL hold `model: anthropic/claude-haiku-5.5`, `repeat: 10`, `k: 3` and `mean: 0.85`, and in `cases` one floor for each case of the `core` set: 0.05 for `ambiguity/cheapest-for-chatbot` and 0.4 for every other case. Every id in `cases` SHALL be a case of the `core` set, and every case of the `core` set SHALL have an id in `cases`.
+`packages/evals/gate.yaml` SHALL hold `model: anthropic/claude-haiku-5.5`, `repeat: 10`, `k: 3` and `mean: 0.83`, and in `cases` one floor for each case of the `core` set: 0.02 for `ambiguity/cheapest-for-chatbot`, 0.25 for `recommendation/budget-chatbot` and 0.4 for every other case. Every id in `cases` SHALL be a case of the `core` set, and every case of the `core` set SHALL have an id in `cases`.
 
 #### Scenario: Content
 - **WHEN** the config test loads `gate.yaml`

@@ -24,7 +24,7 @@ The figures that seed the floors come from the published runs of 1.2.0, 1.2.1 an
 
 **Non-Goals:**
 
-- Measuring the noise (A/A runs). The seeds stand until that is done.
+- Measuring the noise (A/A runs) is done: see "The A/A measurement". The seeds below are where the floors started.
 - Gating on the judge rubrics. They have weight 0, and the gated run does not ask them.
 - Gating Nemotron, the `judge` set or the `full` set.
 - A second, confirming run inside one job. One run of ten per case, then a verdict.
@@ -56,6 +56,8 @@ A floor sits between two values the estimator can take, never on one, so that ro
 | `ambiguity/cheapest-for-chatbot` | 0.05 | 5 of 10 or more | about 3 in 1,000 at 83 in 100 |
 | `mean` | 0.85 | | the three 1.2.x runs scored 0.92 to 1.00 |
 
+The A/A measurement, below, replaced three of these values before the merge.
+
 The ten cases at 0.4: `calculation/given-prices`, `discipline/parallel-lookups`, `discipline/typo-recovery`, `hostile/key-in-question`, `hostile/prompt-injection`, `lookup/known-model`, `recommendation/budget-chatbot`, `search/cheapest-blended`, `search/none-exists` and `search/single-search`. Each line of the file carries a comment with the minimum passes of 10 it stands for.
 
 A case whose true rate falls to one pass in two breaches its floor about 95 times in 100, and one that falls to seven in ten about 62 times. The seeds pass the three runs of 1.2.x and would have failed 1.1.0 on `search/single-search`. The chances assume independent runs, which only an A/A measurement can confirm.
@@ -64,7 +66,22 @@ A case whose true rate falls to one pass in two breaches its floor about 95 time
 
 Each case floor sits low enough to let noise through, so a change that costs every case a pass or two passes every case floor. If all eleven cases fall to 8 of 10, each sits at 0.4667, above its floor of 0.4, and the mean falls from about 0.95 to 0.4667. Noise seldom pulls many cases down in one run, so a low mean is evidence that one case cannot give. The case floors catch one case that collapses. The mean catches a slight fall everywhere.
 
-The mean is of the cases' pass^k, each case with equal weight, as the report's model row computes it. Its floor is set from the A/A data by simulation: draw many gate runs from the measured p of each case, compute the mean pass^k of each, and put the floor where the share of draws below it equals the false-alarm budget. The seed, 0.85, sits below the lowest of the three published runs.
+The mean is of the cases' pass^k, each case with equal weight, as the report's model row computes it. Its floor is set from the A/A data by simulation: draw many gate runs from the measured p of each case, compute the mean pass^k of each, and put the floor where the share of draws below it equals the false-alarm budget. The seed, 0.85, sat below the lowest of the three published runs.
+
+### The A/A measurement
+
+Ten runs of the Evals workflow on `main`, 23 to 27 November 2026, all of 1.2.2 on Haiku, n 10: a hundred answers per case. Nine cases passed all hundred. `recommendation/budget-chatbot` passed 98, and `ambiguity/cheapest-for-chatbot` 86, between 6 and 10 of 10 a run. The variance of each noisy case across runs matched a binomial (ratio 1.14 and 0.91), so the runs look independent.
+
+A case at 100 of 100 does not have a true rate of 1, so each case's rate carries a Jeffreys prior. The false-alarm budget is 1 in 1,000 for each case and for the mean. A floor is the largest count whose chance of being undercut by a healthy case stays within it, and the mean floor is the 0.1% quantile of 400,000 simulated gate runs (random seed 20261127).
+
+| Floor | Seed | Measured | Means at n 10 |
+| --- | --- | --- | --- |
+| the nine perfect cases | 0.4 | 0.4 | 8 of 10 or more |
+| `recommendation/budget-chatbot` | 0.4 | 0.25 | 7 or more |
+| `ambiguity/cheapest-for-chatbot` | 0.05 | 0.02 | 4 or more |
+| `mean` | 0.85 | 0.83 | simulated 0.1% quantile 0.833 |
+
+The ambiguity floor has little power: it stays quiet for a true rate down to about 0.6, so the 6 of 10 of 1.1.0 would pass. The case is too noisy to gate tighter at n 10. A larger n for that case is the lever.
 
 ### Haiku, ten repeats
 
@@ -165,7 +182,7 @@ Forks and Dependabot get no secrets on `pull_request`. Their job passes without 
 
 ## Risks / Trade-offs
 
-- [The seeds are guesses, not measurements] → They rest on three runs of ten. The proposal ships the gate, and a later change sets the floors from an A/A measurement. Until then, run the job without making it required.
+- [The floors rest on one version and ten runs] → They come from the A/A measurement of 1.2.2 over five days. A different model or a catalog shift can move the noise, and the measurement is then redone. Run the job without making it required for a few weeks.
 - [Anyone with write access can edit the workflow on a branch and read the key] → The key is dedicated and capped. The same gap exists for `evals.yml` and is documented there.
 - [A fork or a Dependabot pull request merges ungated] → The summary and the warning say the gate did not run. A maintainer can dispatch the Evals workflow on the branch.
 - [The catalog moves every week] → The oracle is computed per run from its own snapshot, so the checks stay valid. A catalog change can still make a case harder. That is noise the floors must absorb, and the A/A measurement should span several days to see it.
@@ -178,6 +195,6 @@ Forks and Dependabot get no secrets on `pull_request`. Their job passes without 
 
 1. Merge the pull request. The job runs on later pull requests and is not required.
 2. The maintainer creates the `eval-gate` environment and its key. Until then the job passes with the warning that no key is set.
-3. After a trial period, and after the A/A measurement has set the floors, the maintainer makes `eval gate` a required check. It is the only one needed: a failed `changes` job ends it inconclusive, and a skipped one means that no file matched.
+3. After a trial period, and after the floors have held, the maintainer makes `eval gate` a required check. It is the only one needed: a failed `changes` job ends it inconclusive, and a skipped one means that no file matched.
 
 Rollback: delete `eval-gate.yml`. Nothing else depends on it.

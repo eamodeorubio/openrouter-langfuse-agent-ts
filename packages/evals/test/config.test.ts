@@ -1299,16 +1299,18 @@ describe('the shipped gate file', () => {
       model: 'anthropic/claude-haiku-5.5',
       repeat: 10,
       k: 3,
-      mean: 0.85,
+      mean: 0.83,
     });
     expect(config.defaultTest.vars.model).toContain(gateFile.model);
   });
 
-  it('gives 0.05 to the ambiguity case and 0.4 to every other', () => {
+  it('gives 0.02 to the ambiguity case, 0.25 to the budget case and 0.4 to every other', () => {
+    const own: Record<string, number> = {
+      'ambiguity/cheapest-for-chatbot': 0.02,
+      'recommendation/budget-chatbot': 0.25,
+    };
     for (const [id, floor] of Object.entries(gateFile.cases)) {
-      expect(floor, id).toBe(
-        id === 'ambiguity/cheapest-for-chatbot' ? 0.05 : 0.4,
-      );
+      expect(floor, id).toBe(own[id] ?? 0.4);
     }
   });
 
