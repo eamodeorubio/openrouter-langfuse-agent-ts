@@ -67,6 +67,26 @@ export const shapePricing = ({ overrides, ...prices }: Pricing) => ({
   }),
 });
 
+/** The Artificial Analysis indexes that are retired. They are listed as text and not read as SDK properties, so the SDK can remove the deprecated fields without breaking this build. */
+const RETIRED_INDEXES = ['codingIndex', 'agenticIndex'];
+
+interface Benchmarks {
+  artificialAnalysis?: object | undefined;
+}
+
+/** The benchmarks of a model without the retired indexes. */
+export const currentBenchmarks = (benchmarks: Benchmarks | undefined) =>
+  benchmarks?.artificialAnalysis
+    ? {
+        ...benchmarks,
+        artificialAnalysis: Object.fromEntries(
+          Object.entries(benchmarks.artificialAnalysis).filter(
+            ([name]) => !RETIRED_INDEXES.includes(name),
+          ),
+        ),
+      }
+    : benchmarks;
+
 /** A Unix timestamp as `YYYY-MM-DD`. */
 export const isoDate = (seconds: number): string =>
   new Date(seconds * 1000).toISOString().slice(0, 10);

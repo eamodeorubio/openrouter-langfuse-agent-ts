@@ -1,6 +1,11 @@
 import { z } from 'zod';
 import { callCatalog } from './catalog.js';
-import { isoDate, shapePricing, snakeKeys } from './shape.js';
+import {
+  currentBenchmarks,
+  isoDate,
+  shapePricing,
+  snakeKeys,
+} from './shape.js';
 import { requestOptions, type Tool } from './types.js';
 
 const parameters = z
@@ -42,7 +47,7 @@ export const getModel: Tool<typeof parameters> = {
         supported_parameters: model.supportedParameters,
         pricing: shapePricing(model.pricing),
         reasoning: snakeKeys(model.reasoning),
-        benchmarks: snakeKeys(model.benchmarks),
+        benchmarks: snakeKeys(currentBenchmarks(model.benchmarks)),
       }),
       { notFound: `Model not found: ${slug}` },
     );

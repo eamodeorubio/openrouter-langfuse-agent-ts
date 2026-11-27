@@ -47,24 +47,26 @@ A model that keeps asking for lookups gets stopped. After eight rounds that end 
 
 `search_models` asks OpenRouter to filter and sort its catalog, so the model can request "the ten cheapest models with a 200k context window that can call tools" and receive just those, instead of the whole catalog. Every argument is optional, and the ones the model gives are passed to OpenRouter. The exceptions are the price sorts below, which the tool applies itself, and, in a search by category, the page and the required parameters, described after the table.
 
-| Argument                                                          | What it does                                                                |
-| ----------------------------------------------------------------- | --------------------------------------------------------------------------- |
-| `query`                                                           | free text over names and slugs                                              |
-| `category`                                                        | use case, such as `programming` or `translation`                            |
-| `sort`                                                            | the order: price, age, popularity, context size, speed, benchmark scores    |
-| `input_per_output`                                                | for a blended price sort: input tokens for each output token (3 by default) |
-| `paid_only`                                                       | with a price sort, drop free models and models with no price                |
-| `input_modalities`, `output_modalities`                           | kinds of input and output the model must handle                             |
-| `supported_parameters`                                            | request parameters the model must support, such as `tools`                  |
-| `min_context_length`                                              | smallest context window, in tokens                                          |
-| `min_prompt_price`, `max_prompt_price`                            | input price bounds, in USD per million tokens                               |
-| `min_completion_price`, `max_completion_price`                    | output price bounds, in USD per million tokens                              |
-| `architecture`, `authors`, `providers`                            | model family, author slugs, hosting providers                               |
-| `min_intelligence_index`, `min_coding_index`, `min_agentic_index` | Artificial Analysis benchmark floors                                        |
-| `min_tool_success_rate`                                           | tool-calling reliability floor, from 0 to 1                                 |
-| `max_age_days`                                                    | only recent models                                                          |
-| `zero_data_retention`                                             | only models with zero-data-retention endpoints                              |
-| `limit`, `offset`                                                 | the page: 1 to 50 entries (10 by default), and where it starts              |
+| Argument                                       | What it does                                                                |
+| ---------------------------------------------- | --------------------------------------------------------------------------- |
+| `query`                                        | free text over names and slugs                                              |
+| `category`                                     | use case, such as `programming` or `translation`                            |
+| `sort`                                         | the order: price, age, popularity, context size, speed, benchmark scores    |
+| `input_per_output`                             | for a blended price sort: input tokens for each output token (3 by default) |
+| `paid_only`                                    | with a price sort, drop free models and models with no price                |
+| `input_modalities`, `output_modalities`        | kinds of input and output the model must handle                             |
+| `supported_parameters`                         | request parameters the model must support, such as `tools`                  |
+| `min_context_length`                           | smallest context window, in tokens                                          |
+| `min_prompt_price`, `max_prompt_price`         | input price bounds, in USD per million tokens                               |
+| `min_completion_price`, `max_completion_price` | output price bounds, in USD per million tokens                              |
+| `architecture`, `authors`, `providers`         | model family, author slugs, hosting providers                               |
+| `min_intelligence_index`                       | lowest Artificial Analysis intelligence index                               |
+| `min_tool_success_rate`                        | tool-calling reliability floor, from 0 to 1                                 |
+| `max_age_days`                                 | only recent models                                                          |
+| `zero_data_retention`                          | only models with zero-data-retention endpoints                              |
+| `limit`, `offset`                              | the page: 1 to 50 entries (10 by default), and where it starts              |
+
+Artificial Analysis has retired its coding and agentic indexes, and the catalog held no score for either when this was written. So `search_models` offers no sort or floor on them, and neither it nor `get_model` returns them.
 
 Weaker models often send a number or a boolean as text: `"3"` for a number, `"true"` for a boolean. The tool reads either form for every numeric argument and for the two boolean ones, `paid_only` and `zero_data_retention`, and the schema it offers says so. A boolean's text is read in any letter case, so `"True"` and `"FALSE"` work as well as `"true"` and `"false"`. Anything else comes back to the model as an error: text that is not a number, a number the argument does not allow (a fraction where a whole number is needed, a value out of range), a boolean that is not true or false in any letter case, such as `"yes"`, `"1"` or `" true"` with a space. The error names the argument, shows what it sent and says what to send, such as `limit: must be a whole number from 1 to 50; got "many".`
 
@@ -84,7 +86,7 @@ To sort, the tool reads every match of the other filters from OpenRouter, up to 
 
 A model missing either price comes last in a blended sort. A model that asks for something the tool does not accept is told what to send instead. A request for `pricing-low-to-high` gets the three price sorts that replace it, `paid_only` without a price sort gets the list of price sorts, and `input_per_output` without a blended sort is refused with the two blended sorts to choose from.
 
-Each entry in the answer is compact: the slug and name, the creation date, the context window, the maximum output size, the input and output prices in USD per million tokens, the modalities, whether the model reasons, and its benchmark indices (or `null` when it has none). The description is left out; `get_model` gives it. The answer also carries the total number of matches and the offset of the next page, or `null` on the last one, so the model can ask for more when the first page is not enough.
+Each entry in the answer is compact: the slug and name, the creation date, the context window, the maximum output size, the input and output prices in USD per million tokens, the modalities, whether the model reasons, and its Artificial Analysis intelligence index (or `null` when it has none). The description is left out; `get_model` gives it. The answer also carries the total number of matches and the offset of the next page, or `null` on the last one, so the model can ask for more when the first page is not enough.
 
 Every result stays in the conversation and is sent again with each later request, so a large page costs tokens on every round. The run below, whose model asked for a page of 50, used 11,010 prompt tokens across its two rounds. The two-lookup comparison above used 2,678. The model chooses the page size; the limit of 50 caps it.
 

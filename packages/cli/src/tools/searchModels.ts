@@ -49,8 +49,6 @@ const API_SORTS = [
   'throughput-high-to-low',
   'latency-low-to-high',
   'intelligence-high-to-low',
-  'coding-high-to-low',
-  'agentic-high-to-low',
   'design-arena-elo-high-to-low',
 ] as const;
 
@@ -110,7 +108,7 @@ const PAID_ONLY_ADVICE =
 
 const SORT_DESCRIPTION = [
   'How to order the results.',
-  'Orders the API applies: most-popular, top-weekly, newest (creation date), context-high-to-low, throughput-high-to-low, latency-low-to-high, intelligence-high-to-low, coding-high-to-low, agentic-high-to-low, design-arena-elo-high-to-low. Models without a score come last.',
+  'Orders the API applies: most-popular, top-weekly, newest (creation date), context-high-to-low, throughput-high-to-low, latency-low-to-high, intelligence-high-to-low, design-arena-elo-high-to-low. Models without a score come last.',
   'Orders this tool applies over every match: input-price-low-to-high and input-price-high-to-low (by input price), output-price-low-to-high and output-price-high-to-low (by output price), blended-price-low-to-high and blended-price-high-to-low (input and output weighted by input_per_output). Prices are USD per million tokens. A free model has price 0 and comes first in a low-to-high order. A model with no price comes last. Equal prices come in id order.',
   `For the cheapest model by one price the user names, sort by it and set limit to 1. ${PAID_ONLY_ADVICE} When the user states no usage, use blended-price-low-to-high or blended-price-high-to-low; the default mix is ${DEFAULT_MIX}.`,
 ].join(' ');
@@ -182,14 +180,6 @@ const parameters = z
       score,
       `Lowest Artificial Analysis intelligence index. ${NUMERIC_NOTE}`,
     ),
-    min_coding_index: optional(
-      score,
-      `Lowest Artificial Analysis coding index. ${NUMERIC_NOTE}`,
-    ),
-    min_agentic_index: optional(
-      score,
-      `Lowest Artificial Analysis agentic index. ${NUMERIC_NOTE}`,
-    ),
     min_tool_success_rate: optional(
       numeric('a rate from 0 to 1', (n) => n >= 0 && n <= 1),
       `Lowest tool-calling success rate, from 0 to 1. ${NUMERIC_NOTE}`,
@@ -252,8 +242,6 @@ const toFilters = (args: Args): CatalogFilters => ({
   modelAuthors: joined(args.authors),
   providers: joined(args.providers),
   minIntelligenceIndex: args.min_intelligence_index,
-  minCodingIndex: args.min_coding_index,
-  minAgenticIndex: args.min_agentic_index,
   minToolSuccessRate: args.min_tool_success_rate,
   maxAgeDays: args.max_age_days,
   // The API knows only `true`; false means no filter.
@@ -293,8 +281,6 @@ const shapePage = (offset: number, { models, total, hasNext }: Page) => ({
     supports_reasoning: model.reasoning !== undefined,
     intelligence_index:
       model.benchmarks?.artificialAnalysis?.intelligenceIndex ?? null,
-    coding_index: model.benchmarks?.artificialAnalysis?.codingIndex ?? null,
-    agentic_index: model.benchmarks?.artificialAnalysis?.agenticIndex ?? null,
     created: isoDate(model.created),
   })),
 });
@@ -352,7 +338,7 @@ const priceSorted = async (
 export const searchModels: Tool<typeof parameters> = {
   name: 'search_models',
   description:
-    'Search the OpenRouter catalog with filters and a sort order. Returns one page of compact entries: id, context length, prices in USD per million tokens, modalities, reasoning support and benchmark indices. Price sorts and paid_only are applied by this tool over every match, so the first row of a price sort is the cheapest by that price. Use get_model for the details of one entry.',
+    'Search the OpenRouter catalog with filters and a sort order. Returns one page of compact entries: id, context length, prices in USD per million tokens, modalities, reasoning support and the intelligence index. Price sorts and paid_only are applied by this tool over every match, so the first row of a price sort is the cheapest by that price. Use get_model for the details of one entry.',
   parameters,
   run(args, context) {
     const { client } = context;

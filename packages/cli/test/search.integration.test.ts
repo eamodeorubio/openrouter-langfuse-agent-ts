@@ -123,8 +123,6 @@ describe('a question that needs a search', () => {
       output_modalities: ['text'],
       supports_reasoning: true,
       intelligence_index: 9.9,
-      coding_index: 36.5,
-      agentic_index: 1.1,
       created: '2026-06-17',
     });
     expect(page.models[1].intelligence_index).toBeNull();
