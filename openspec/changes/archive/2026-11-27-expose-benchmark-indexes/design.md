@@ -27,6 +27,8 @@ After `fix-retired-benchmark-indexes`, search entries hold one score, `intellige
 
 **Drop null scores from `get_model`.** Most are null for most models. The description states that absence means unscored.
 
+**Keep only listed indexes.** A score the list does not name would reach the model with no meaning or scale. An index the API adds stays hidden until the list names it. This also drops the retired ones.
+
 **The API ranks.** The new sorts pass through, like `intelligence-high-to-low`. No client-side sort.
 
 ## Risks / Trade-offs
