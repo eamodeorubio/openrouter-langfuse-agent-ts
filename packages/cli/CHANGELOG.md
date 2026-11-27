@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.3.0](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v1.2.3...v1.3.0) (2026-11-27)
+
+
+### Features
+
+* rank models by Artificial Analysis benchmark scores ([#68](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/issues/68)) ([5c65f79](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/commit/5c65f795f17d481dcb761b2f6a968bccdd61f380))
+
 ## [1.2.3](https://github.com/eamodeorubio/openrouter-langfuse-agent-ts/compare/v1.2.2...v1.2.3) (2026-11-27)
 
 
