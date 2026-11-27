@@ -5,10 +5,11 @@ import run110 from '../data/evals-1-1-0.json';
 import run120 from '../data/evals-1-2-0.json';
 import run121 from '../data/evals-1-2-1.json';
 import run122 from '../data/evals-1-2-2.json';
+import run130 from '../data/evals-1-3-0.json';
 
 interface Props {
   /** The version of ask-openrouter that the run measured. */
-  version: '1.1.0' | '1.2.0' | '1.2.1' | '1.2.2';
+  version: '1.1.0' | '1.2.0' | '1.2.1' | '1.2.2' | '1.3.0';
 }
 
 const runs = {
@@ -16,6 +17,7 @@ const runs = {
   '1.2.0': run120,
   '1.2.1': run121,
   '1.2.2': run122,
+  '1.3.0': run130,
 };
 const data = runs[Astro.props.version];
 const models = data.models;
