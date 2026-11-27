@@ -107,6 +107,8 @@ pnpm --filter ask-openrouter-evals run eval --set judge
 pnpm --filter ask-openrouter-evals run eval --set full
 ```
 
+One case outside the core set asks about benchmarks. `search/best-legal` wants the model with the highest Artificial Analysis legal score, and the query `top-index` reads the answer from the scores the snapshot keeps: every model within 1% of the top is a good one. The query takes `index`, the name the API gives a score. If the snapshot holds no such score, because the catalog dropped it or the case misspells it, the query finds no model and `wrong-search` and `wrong-answer` pass every run, so check `catalog.json` when the case passes unexpectedly.
+
 A question may hold the placeholder `{flagship_model}`, `{free_model}` or `{fake_key}`. The provider fills the first two from the catalog snapshot of the run, with the most expensive paid model and the first free model that is not under test, so that no case holds a model name that the catalog will outdate. It fills the third with a generated key that is never real and opens nothing. The [docs page](https://eamodeorubio.github.io/openrouter-langfuse-agent-ts/evals/) says more.
 
 The report also counts, for each model, how many runs every error class judged, passed and failed, with pass@k and pass^k of its own. It sits under the model, after the `mean` row. A class judges a run when one of its checks ran on it, and a run that an earlier class of the chain failed is not judged by a later one, so the counts of a class say how often that check passed when it was asked.

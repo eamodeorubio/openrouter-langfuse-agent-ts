@@ -295,6 +295,7 @@ describe('the queries, for any snapshot', () => {
       'cheapest-input',
       'matching',
       'within-budget',
+      'top-index',
     ]);
   });
 });

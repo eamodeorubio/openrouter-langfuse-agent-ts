@@ -21,7 +21,8 @@ const queryFor = async (args: Record<string, unknown>) => {
       seen = query as Record<string, string>;
       return true;
     })
-    .reply(200, recordedModelsList);
+    // A whole list: a search by category refuses one that offers a next page.
+    .reply(200, { ...recordedModelsList, links: { next: null } });
   const result = await searchModels.run(parse(args).data as Args, {
     client,
     timeoutMs: 60_000,

@@ -10,7 +10,7 @@ type Query = (
   params: Record<string, unknown>,
 ) => string[];
 
-/** Models within this share of the cheapest blended price tie with it. */
+/** Models within this share of the best price or score tie with it. */
 const TIE = 0.01;
 const DEFAULT_MIX = 3;
 
@@ -190,6 +190,28 @@ const matching: Query = (models, params) => {
     .sort();
 };
 
+/** The models with the highest score of one benchmark index, and those within one percent of it. */
+const topIndex: Query = (models, params) => {
+  const name = 'top-index';
+  known(name, params, ['index']);
+  const { index } = params;
+  if (typeof index !== 'string' || index === '') {
+    throw new QueryError(
+      `The query ${name} takes index as the name of a score, such as legal_index, got ${JSON.stringify(index)}.`,
+    );
+  }
+  const scored = models.flatMap(({ id, scores = {} }) => {
+    // An own key only: the name comes from a case, and every object has a `toString`.
+    const score = Object.hasOwn(scores, index) ? scores[index] : undefined;
+    return score === undefined ? [] : [{ id, score }];
+  });
+  const best = Math.max(...scored.map((entry) => entry.score));
+  return scored
+    .filter((entry) => entry.score >= best - Math.abs(best) * TIE)
+    .map((entry) => entry.id)
+    .sort();
+};
+
 /** Every model with known prices and the parameters whose cost for a workload in a month is at most the budget. */
 const withinBudget: Query = (models, params) => {
   const name = 'within-budget';
@@ -237,6 +259,7 @@ const QUERIES = new Map<string, Query>([
   ['cheapest-input', cheapestInput],
   ['matching', matching],
   ['within-budget', withinBudget],
+  ['top-index', topIndex],
 ]);
 
 export const QUERY_NAMES: string[] = [...QUERIES.keys()];

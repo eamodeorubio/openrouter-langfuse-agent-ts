@@ -90,6 +90,7 @@
     },
     {
       "id": "google/gemini-omni-1.2-flash",
+      "benchmarks": { "artificial_analysis": { "legal_index": 41.2 } },
       "name": "Google: Gemini Omni 1.2 Flash",
       "context_length": 131072,
       "architecture": {

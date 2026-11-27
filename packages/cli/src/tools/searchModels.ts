@@ -1,7 +1,11 @@
 import { z } from 'zod';
 import { callCatalog } from './catalog.js';
 import type { CatalogModel } from './catalogCache.js';
-import { allMatches, type CatalogFilters } from './catalogFetch.js';
+import {
+  allMatches,
+  type CatalogFilters,
+  categoryList,
+} from './catalogFetch.js';
 import { FLAG_NOTE, flag, NUMERIC_NOTE, numeric } from './lenientArgs.js';
 import {
   DEFAULT_MIX,
@@ -49,6 +53,8 @@ const API_SORTS = [
   'agentic-high-to-low',
   'design-arena-elo-high-to-low',
 ] as const;
+
+type ApiSort = (typeof API_SORTS)[number];
 
 export const SORTS = [...API_SORTS, ...PRICE_SORTS] as const;
 
@@ -117,7 +123,7 @@ const parameters = z
     ),
     category: optional(
       z.enum(CATEGORIES),
-      'The use case the models are used for.',
+      'The use case the models are used for. The API answers with a short list it picks for that use, so the cheapest or best model of that list may not be the cheapest or best of the catalog.',
     ),
     sort: optional(
       z.enum(SORTS, { error: (issue) => unknownSort(issue.input) }),
@@ -293,6 +299,29 @@ const shapePage = (offset: number, { models, total, hasNext }: Page) => ({
   })),
 });
 
+/** The page the arguments ask for, cut here from every match. */
+const localPage = (args: Args, matches: CatalogModel[]) => {
+  const models = matches.slice(args.offset, args.offset + args.limit);
+  return {
+    ok: true as const,
+    value: shapePage(args.offset, {
+      models,
+      total: matches.length,
+      hasNext: args.offset + models.length < matches.length,
+    }),
+  };
+};
+
+/** One page of a category in an order of the API, which sorts the whole list it gives. */
+const categorySearch = async (
+  args: Args,
+  sort: ApiSort | undefined,
+  context: ToolContext,
+) => {
+  const fetched = await categoryList(context, { ...toFilters(args), sort });
+  return fetched.ok ? localPage(args, fetched.value) : fetched;
+};
+
 /** One page of every match, ordered by price here, since the API has no order by one price. */
 const priceSorted = async (
   args: Args,
@@ -314,17 +343,10 @@ const priceSorted = async (
     sort,
     args.input_per_output ?? DEFAULT_MIX,
   );
-  const models = ranked
-    .slice(args.offset, args.offset + args.limit)
-    .map((entry) => entry.model);
-  return {
-    ok: true as const,
-    value: shapePage(args.offset, {
-      models,
-      total: ranked.length,
-      hasNext: args.offset + models.length < ranked.length,
-    }),
-  };
+  return localPage(
+    args,
+    ranked.map((entry) => entry.model),
+  );
 };
 
 export const searchModels: Tool<typeof parameters> = {
@@ -337,6 +359,9 @@ export const searchModels: Tool<typeof parameters> = {
     const { sort } = args;
     if (isPriceSort(sort)) {
       return priceSorted(args, sort, context);
+    }
+    if (args.category !== undefined) {
+      return categorySearch(args, sort, context);
     }
     return callCatalog(
       () =>

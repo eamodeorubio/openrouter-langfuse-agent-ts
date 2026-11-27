@@ -150,6 +150,7 @@ describe('the search cases of the full set', () => {
       'search/none-exists': 'core',
       'search/count': 'full',
       'search/single-search': 'core',
+      'search/best-legal': 'full',
     };
     for (const [id, set] of Object.entries(sets)) {
       expect(byId(id)?.family, id).toBe('search');
@@ -232,6 +233,24 @@ describe('the search cases of the full set', () => {
       supported_parameters: ['tools'],
     });
     expect(metrics('search/count')).toEqual(['wrong-search', 'wrong-value']);
+  });
+
+  it('search/best-legal asks for the model with the highest legal score, by any route', () => {
+    const spec = readCase({ test: byId('search/best-legal') });
+    expect(byId('search/best-legal')?.vars.question).toBe(
+      'Which model on OpenRouter has the highest Artificial Analysis legal benchmark score?',
+    );
+    expect(spec.set).toEqual(['judge', 'full']);
+    expect(spec.needsLookup).toBe(true);
+    expect(spec.oracle).toEqual({
+      query: 'top-index',
+      params: { index: 'legal_index' },
+    });
+    expect(spec.search).toBeUndefined();
+    expect(metrics('search/best-legal')).toEqual([
+      'wrong-answer',
+      'wrong-search',
+    ]);
   });
 
   it('search/single-search expects one sorted search that does the filtering on the server', () => {
@@ -554,6 +573,7 @@ describe('the core set', () => {
       'search/none-exists',
       'search/count',
       'search/single-search',
+      'search/best-legal',
     ]);
   });
 });
@@ -1253,6 +1273,8 @@ describe('the full set, run for real against a stub CLI', () => {
     expect(failed('search/single-search')).toBe(
       'wasteful-search=1 wrong-search=1',
     );
+    // The catalog of the fixtures scores one model for legal work, which the stub never reads.
+    expect(failed('search/best-legal')).toBe('wrong-search=1');
   });
 
   it('names the class each discipline case fails when the stub reads only a/b', () => {

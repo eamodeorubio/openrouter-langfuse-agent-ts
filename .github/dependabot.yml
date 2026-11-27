@@ -21,6 +21,33 @@ updates:
         update-types: ['version-update:semver-major']
       - dependency-name: '@vitest/coverage-v8'
         update-types: ['version-update:semver-major']
+      # @langfuse/otel requires OpenTelemetry core and sdk-trace-base 2.x and
+      # OTLP exporters below 0.300.0. The OpenTelemetry 2.x packages require an
+      # API below 1.10.0. Remove these rules once Langfuse supports
+      # OpenTelemetry 3, and upgrade the whole set together.
+      - dependency-name: '@opentelemetry/api'
+        update-types:
+          ['version-update:semver-minor', 'version-update:semver-major']
+      - dependency-name: '@opentelemetry/core'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@opentelemetry/resources'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@opentelemetry/sdk-trace-base'
+        update-types: ['version-update:semver-major']
+      - dependency-name: '@opentelemetry/sdk-trace-node'
+        update-types: ['version-update:semver-major']
+      # A version range, unlike an update type, also silences security updates
+      # for these two. Their 0.x versions leave no other way to say it, so read
+      # their Dependabot alerts.
+      - dependency-name: '@opentelemetry/exporter-trace-otlp-http'
+        versions: ['>=0.300.0']
+      - dependency-name: '@opentelemetry/otlp-exporter-base'
+        versions: ['>=0.300.0']
+      # The root keeps TypeScript 5 for the editor's language server, while the
+      # packages use a newer major. A rule cannot name one directory, so this
+      # one also hides the next major from the packages: move to it by hand.
+      - dependency-name: typescript
+        update-types: ['version-update:semver-major']
   - package-ecosystem: github-actions
     directory: /
     schedule:

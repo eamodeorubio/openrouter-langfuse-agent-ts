@@ -117,6 +117,16 @@ describe('get_model', () => {
       intelligence_index: 10,
       coding_index: null,
       agentic_index: null,
+      finance_and_accounting_index: null,
+      strategy_and_ops_index: null,
+      legal_index: null,
+      healthcare_and_medical_index: null,
+      engineering_index: null,
+      economics_index: null,
+      cyber_index: null,
+      openness_index: null,
+      multilingual_index: null,
+      decision_index: null,
     });
   });
 

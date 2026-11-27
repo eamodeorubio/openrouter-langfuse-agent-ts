@@ -2,6 +2,12 @@
   "data": [
     {
       "id": "cohere/north-mini-code:free",
+      "endpoints": [
+        "/api/v1/chat/completions",
+        "/api/v1/completions",
+        "/api/v1/messages",
+        "/api/v1/responses"
+      ],
       "canonical_slug": "cohere/north-mini-code-20260617",
       "hugging_face_id": "CohereLabs/North-Mini-Code-1.0",
       "name": "Cohere: North Mini Code (free)",
@@ -53,6 +59,16 @@
       "benchmarks": {
         "design_arena": [],
         "artificial_analysis": {
+          "finance_and_accounting_index": null,
+          "strategy_and_ops_index": null,
+          "legal_index": null,
+          "healthcare_and_medical_index": null,
+          "engineering_index": null,
+          "economics_index": null,
+          "cyber_index": null,
+          "openness_index": null,
+          "multilingual_index": null,
+          "decision_index": null,
           "intelligence_index": 9.9,
           "coding_index": 36.5,
           "agentic_index": 1.1
@@ -62,6 +78,12 @@
     },
     {
       "id": "dots-studio/dots-3-note-preview:free",
+      "endpoints": [
+        "/api/v1/chat/completions",
+        "/api/v1/completions",
+        "/api/v1/messages",
+        "/api/v1/responses"
+      ],
       "canonical_slug": "dots-studio/dots-3-note-preview-20260813",
       "hugging_face_id": null,
       "name": "Dots Studio: Dots3-Note Preview (free)",

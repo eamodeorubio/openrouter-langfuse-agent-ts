@@ -194,6 +194,7 @@ describe('the query within-budget', () => {
       'cheapest-input',
       'matching',
       'within-budget',
+      'top-index',
     ]);
   });
 });

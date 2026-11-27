@@ -484,7 +484,7 @@ describe('a snapshot file that is not a snapshot', () => {
   ])('is refused for %s, as not a snapshot', (_, model) => {
     const file = write(snapshot(model));
     expect(() => loadSnapshot(file)).toThrow(
-      `The snapshot ${file} is not a snapshot: it needs a fetch time and a list of models with their prices, parameters and modalities. A snapshot taken by an earlier version of the evals lacks the modalities: run the eval again to take a new one.`,
+      `The snapshot ${file} is not a snapshot: it needs a fetch time and a list of models with their prices, parameters and modalities, and numbers for any scores. A snapshot taken by an earlier version of the evals lacks the modalities: run the eval again to take a new one.`,
     );
   });
 
