@@ -123,8 +123,6 @@ describe('a question that needs a search', () => {
       output_modalities: ['text'],
       supports_reasoning: true,
       intelligence_index: 9.9,
-      coding_index: 36.5,
-      agentic_index: 1.1,
       created: '2026-06-17',
     });
     expect(page.models[1].intelligence_index).toBeNull();
@@ -215,5 +213,47 @@ describe('a question about the cheapest input price', () => {
     const result = await cli(['-q', 'Cheapest by input and by output?']);
     expect(result.code).toBe(0);
     expect(api.sent.filter((sent) => sent.method === 'GET')).toHaveLength(1);
+  });
+});
+
+describe('a question about the strongest model for a field of work', () => {
+  it('sorts by that index and shows the score the models are ranked by', async () => {
+    api.reply(
+      200,
+      toolRound([
+        {
+          id: 'c1',
+          name: 'search_models',
+          arguments: JSON.stringify({ sort: 'legal-high-to-low' }),
+        },
+      ]),
+    );
+    const first = recordedModelsList.data[0] as {
+      benchmarks: { artificial_analysis: object };
+    };
+    const legal = {
+      ...first,
+      benchmarks: {
+        design_arena: [],
+        artificial_analysis: {
+          ...first.benchmarks.artificial_analysis,
+          legal_index: 41.2,
+        },
+      },
+    };
+    api.replyGet('/models', 200, { ...recordedModelsList, data: [legal] });
+    api.reply(200, sseBody(contentChunk('It is.'), usageChunk()));
+
+    const result = await cli(['-q', 'The best model for legal work?']);
+
+    expect(result.code).toBe(0);
+    const [get] = api.sent.filter((sent) => sent.method === 'GET');
+    expect(get?.query.get('sort')).toBe('legal-high-to-low');
+    const [, second] = api.sent.filter((sent) => sent.method === 'POST');
+    const message = second?.body.messages?.find((m) => m.role === 'tool');
+    expect(JSON.parse(String(message?.content)).models[0]).toMatchObject({
+      intelligence_index: 9.9,
+      legal_index: 41.2,
+    });
   });
 });

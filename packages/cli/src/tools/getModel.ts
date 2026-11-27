@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { currentBenchmarks, SCORES_LEGEND } from './benchmarks.js';
 import { callCatalog } from './catalog.js';
 import { isoDate, shapePricing, snakeKeys } from './shape.js';
 import { requestOptions, type Tool } from './types.js';
@@ -16,8 +17,7 @@ const parameters = z
 
 export const getModel: Tool<typeof parameters> = {
   name: 'get_model',
-  description:
-    'Get the details of one OpenRouter model by its slug: description, context length, modalities, supported parameters, prices in USD per million tokens, reasoning support and benchmark scores.',
+  description: `Get the details of one OpenRouter model by its slug: description, context length, modalities, supported parameters, prices in USD per million tokens, reasoning support and benchmark scores. ${SCORES_LEGEND}`,
   parameters,
   run({ slug }, context) {
     const { client } = context;
@@ -42,7 +42,7 @@ export const getModel: Tool<typeof parameters> = {
         supported_parameters: model.supportedParameters,
         pricing: shapePricing(model.pricing),
         reasoning: snakeKeys(model.reasoning),
-        benchmarks: snakeKeys(model.benchmarks),
+        benchmarks: snakeKeys(currentBenchmarks(model.benchmarks)),
       }),
       { notFound: `Model not found: ${slug}` },
     );

@@ -115,19 +115,87 @@ describe('get_model', () => {
     });
     expect(value.benchmarks.artificial_analysis).toEqual({
       intelligence_index: 10,
-      coding_index: null,
-      agentic_index: null,
-      finance_and_accounting_index: null,
-      strategy_and_ops_index: null,
-      legal_index: null,
-      healthcare_and_medical_index: null,
-      engineering_index: null,
-      economics_index: null,
-      cyber_index: null,
-      openness_index: null,
-      multilingual_index: null,
-      decision_index: null,
     });
+  });
+
+  it('drops the retired coding and agentic indexes, scored or not, and keeps the rest', async () => {
+    const scored = {
+      data: {
+        ...(recordedModel.data as object),
+        benchmarks: {
+          artificial_analysis: {
+            ...(
+              recordedModel.data as {
+                benchmarks: { artificial_analysis: object };
+              }
+            ).benchmarks.artificial_analysis,
+            coding_index: 36.5,
+            agentic_index: null,
+            legal_index: 41.2,
+          },
+          design_arena: [
+            {
+              arena: 'models',
+              category: 'website',
+              elo: 853,
+              win_rate: 27.9,
+              rank: 141,
+            },
+          ],
+        },
+      },
+    };
+    nock(HOST).get('/api/v1/model/openai/gpt-oss-20b').reply(200, scored);
+
+    const result = await run({ slug: 'openai/gpt-oss-20b' });
+
+    if (!result.ok) {
+      throw new Error(result.message);
+    }
+    const { benchmarks } = JSON.parse(JSON.stringify(result.value));
+    expect(benchmarks.artificial_analysis).toMatchObject({
+      intelligence_index: 10,
+      legal_index: 41.2,
+    });
+    expect(benchmarks.artificial_analysis).not.toHaveProperty('coding_index');
+    expect(benchmarks.artificial_analysis).not.toHaveProperty('agentic_index');
+    expect(benchmarks.design_arena).toEqual([
+      {
+        arena: 'models',
+        category: 'website',
+        elo: 853,
+        win_rate: 27.9,
+        rank: 141,
+      },
+    ]);
+  });
+
+  it('passes on benchmarks without Artificial Analysis scores as they are', async () => {
+    const arenaOnly = {
+      design_arena: [
+        {
+          arena: 'models',
+          category: 'website',
+          elo: 853,
+          win_rate: 27.9,
+          rank: 141,
+        },
+      ],
+    };
+    nock(HOST)
+      .get('/api/v1/model/openai/gpt-oss-20b')
+      .reply(200, {
+        data: { ...(recordedModel.data as object), benchmarks: arenaOnly },
+      });
+
+    const result = await run({ slug: 'openai/gpt-oss-20b' });
+
+    if (!result.ok) {
+      throw new Error(result.message);
+    }
+    expect(JSON.parse(JSON.stringify(result.value)).benchmarks).toStrictEqual(
+      arenaOnly,
+    );
   });
 
   it('keeps token prices and overrides and drops the prices that are not per token', async () => {

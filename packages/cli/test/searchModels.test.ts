@@ -1,6 +1,7 @@
 import fc from 'fast-check';
 import nock from 'nock';
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 import { createClient } from '../src/client.js';
 import { nextOffset, searchModels } from '../src/tools/searchModels.js';
 import { recordedModelsList } from './fixtures.js';
@@ -52,13 +53,7 @@ describe('search_models arguments', () => {
     [{ min_prompt_price: 0, max_prompt_price: 2.5 }],
     [{ min_completion_price: 0.1, max_completion_price: 10 }],
     [{ architecture: 'Claude', authors: ['openai'], providers: ['Together'] }],
-    [
-      {
-        min_intelligence_index: 40,
-        min_coding_index: 30,
-        min_agentic_index: 20,
-      },
-    ],
+    [{ min_intelligence_index: 40 }],
     [{ min_tool_success_rate: 0.9 }],
     [{ max_age_days: 0 }],
     [{ zero_data_retention: true }],
@@ -92,6 +87,24 @@ describe('search_models arguments', () => {
     [{ frobnicate: 1 }, false],
   ])('%j is valid: %s', (args, valid) => {
     expect(parse(args).success).toBe(valid);
+  });
+
+  it.each([
+    [{ sort: 'coding-high-to-low' }],
+    [{ sort: 'agentic-high-to-low' }],
+    [{ min_coding_index: 30 }],
+    [{ min_agentic_index: 20 }],
+  ])('refuses the retired benchmark of %j', (args) => {
+    expect(parse(args).success).toBe(false);
+  });
+
+  it('offers no retired benchmark anywhere in what the model reads', () => {
+    const offered = JSON.stringify([
+      searchModels.description,
+      z.toJSONSchema(searchModels.parameters, { io: 'input' }),
+    ]);
+    // The text may say that no index measures coding alone.
+    expect(offered).not.toMatch(/coding_index|coding-high|agentic/i);
   });
 
   it('reads null as absent for every optional argument, because some providers fill them all', () => {
@@ -147,8 +160,6 @@ describe('search_models request', () => {
       { providers: 'Together,Fireworks' },
     ],
     [{ min_intelligence_index: 40 }, { min_intelligence_index: '40' }],
-    [{ min_coding_index: 30 }, { min_coding_index: '30' }],
-    [{ min_agentic_index: 20 }, { min_agentic_index: '20' }],
     [{ min_tool_success_rate: 0.9 }, { min_tool_success_rate: '0.9' }],
     [{ max_age_days: 30 }, { max_age_days: '30' }],
     [{ zero_data_retention: true }, { zdr: 'true' }],
@@ -246,8 +257,6 @@ describe('search_models result', () => {
           'output_modalities',
           'supports_reasoning',
           'intelligence_index',
-          'coding_index',
-          'agentic_index',
           'created',
         ].sort(),
       );
@@ -280,12 +289,10 @@ describe('search_models result', () => {
     ).toEqual([true, false]);
   });
 
-  it('gives null for the indices a model has no score for', async () => {
+  it('gives a null intelligence index to a model with no score', async () => {
     const page = await resultFor(recordedModelsList);
     expect(page.models[1]).toMatchObject({
       intelligence_index: null,
-      coding_index: null,
-      agentic_index: null,
     });
   });
 
@@ -317,7 +324,7 @@ describe('search_models result', () => {
     });
   });
 
-  it('gives null indices when the model has benchmarks but none from Artificial Analysis', async () => {
+  it('gives a null intelligence index when the model has benchmarks but none from Artificial Analysis', async () => {
     const arena = {
       ...recordedModelsList.data[0],
       benchmarks: { design_arena: [] },
@@ -325,8 +332,6 @@ describe('search_models result', () => {
     const page = await resultFor({ ...recordedModelsList, data: [arena] });
     expect(page.models[0]).toMatchObject({
       intelligence_index: null,
-      coding_index: null,
-      agentic_index: null,
     });
   });
 
